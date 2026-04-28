@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  profile         UserProfile?
+  recommendations Recommendation[]
+  savedOutfits    SavedOutfit[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+
+  heightCm  Int? @map("height_cm")
+  weightLbs Int? @map("weight_lbs")
+
+  bodyType        String? @map("body_type")
+  heatSensitivity String? @map("heat_sensitivity")
+  chafeProne      Boolean @default(false) @map("chafe_prone")
+
+  stylePreference String? @map("style_preference")
+  budgetLevel     String? @map("budget_level")
+  preferredFit    String? @map("preferred_fit")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model WeatherSnapshot {
+  id String @id @default(uuid())
+
+  location  String
+  latitude  Float?
+  longitude Float?
+
+  tempF               Float? @map("temp_f")
+  humidity            Float?
+  windSpeed           Float? @map("wind_speed")
+  precipitationChance Float? @map("precipitation_chance")
+  uvIndex             Float? @map("uv_index")
+
+  condition    String?
+  tempCategory String? @map("temp_category")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recommendations Recommendation[]
+
+  @@map("weather_snapshots")
+}
+
+model GearItem {
+  id String @id @default(uuid())
+
+  name  String
+  brand String
+
+  genderTarget String? @map("gender_target")
+
+  category    String?
+  subcategory String?
+
+  priceRange String? @map("price_range")
+
+  tags String[]
+
+  weatherSuitability Json? @map("weather_suitability")
+  bodyTypeFit        Json? @map("body_type_fit")
+
+  imageUrl     String? @map("image_url")
+  affiliateUrl String? @map("affiliate_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("gear_items")
+}
+
+model Brand {
+  id   String @id @default(uuid())
+  name String @unique
+
+  tier  String?
+  style String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("brands")
+}
+
+model Recommendation {
+  id String @id @default(uuid())
+
+  userId            String  @map("user_id")
+  weatherSnapshotId String? @map("weather_snapshot_id")
+
+  inputContext Json @map("input_context")
+  output       Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weatherSnapshot WeatherSnapshot? @relation(fields: [weatherSnapshotId], references: [id])
+
+  savedOutfits SavedOutfit[]
+
+  @@map("recommendations")
+}
+
+model SavedOutfit {
+  id String @id @default(uuid())
+
+  userId           String  @map("user_id")
+  recommendationId String? @map("recommendation_id")
+
+  name       String?
+  isFavorite Boolean @default(false) @map("is_favorite")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recommendation Recommendation? @relation(fields: [recommendationId], references: [id])
+
+  @@map("saved_outfits")
+}
+
+model RecommendationRule {
+  id String @id @default(uuid())
+
+  conditionKey String  @map("condition_key")
+  category     String?
+
+  weight Float
+
+  tags String[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("recommendation_rules")
+}
