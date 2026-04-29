@@ -101,14 +101,37 @@ Core entities:
 
 ## API Routes
 
-| Route | Purpose |
-|-------|---------|
-| \`GET /api/weather\` | Fetch weather for location |
-| \`POST /api/recommendation\` | Generate outfit recommendation |
-| \`GET /api/gear\` | Query gear catalog |
-| \`POST /api/outfit/save\` | Save an outfit |
-| \`GET/PUT /api/user/preferences\` | Manage user profile |
-| \`GET /api/profile\` | Fetch user profile data |
+### Weather
+| Method | Route | Description | Query/Body |
+|--------|-------|-------------|------------|
+| `GET` | `/api/weather` | Fetch current weather for a location | `?location={city}` |
+
+### Recommendations
+| Method | Route | Description | Body |
+|--------|-------|-------------|------|
+| `GET` | `/api/recommendation` | List all recommendations with user & weather data | — |
+| `POST` | `/api/recommendation` | Create a new recommendation | `{ userId, inputContext, output, weatherSnapshotId? }` |
+
+### Gear Catalog
+| Method | Route | Description | Body |
+|--------|-------|-------------|------|
+| `GET` | `/api/gear` | List all gear items | — |
+| `POST` | `/api/gear` | Add a new gear item | `{ name, brand, category, subcategory, genderTarget, priceRange, tags, weatherSuitability, bodyTypeFit, imageUrl?, affiliateUrl? }` |
+| `PUT` | `/api/gear` | Full update of gear item | `{ id, name, brand, ... }` |
+| `PATCH` | `/api/gear` | Partial update of gear item | `{ id, name?, brand?, ... }` |
+| `DELETE` | `/api/gear` | Remove a gear item | `{ id }` |
+
+### Saved Outfits
+| Method | Route | Description | Query/Body |
+|--------|-------|-------------|------------|
+| `GET` | `/api/outfit/save` | Get saved outfits for a user | `?userId={id}` |
+| `POST` | `/api/outfit/save` | Save an outfit | `{ userId, recommendationId?, name?, isFavorite? }` |
+
+### User Profile
+| Method | Route | Description | Query/Body |
+|--------|-------|-------------|------------|
+| `GET` | `/api/profile` | Get user profile | `?userId={id}` |
+| `PUT` | `/api/profile` | Update or create user profile | `{ userId, heightCm?, weightLbs?, bodyType?, heatSensitivity?, chafeProne?, stylePreference?, budgetLevel?, preferredFit? }` |
 
 ## Development Notes
 
