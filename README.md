@@ -101,6 +101,13 @@ Core entities:
 
 ## API Routes
 
+### Authentication
+| Method | Route | Description | Body |
+|--------|-------|-------------|------|
+| `POST` | `/api/auth/signup` | Register a new user | `{ email, password }` |
+| `POST` | `/api/auth/login` | Log in an existing user | `{ email, password }` |
+| `POST` | `/api/auth/logout` | Log out current user | — |
+
 ### Weather
 | Method | Route | Description | Query/Body |
 |--------|-------|-------------|------------|
@@ -149,5 +156,6 @@ Core entities:
 | \`npm run start\` | Start production server |
 | \`npm run lint\` | Run ESLint |
 
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
