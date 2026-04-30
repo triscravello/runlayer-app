@@ -2,6 +2,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+type GearItem = {
+    weatherSuitability: Record<string, number> | null;
+    tags: string[];
+    genderTarget: string | null;
+}
+
+type RankedItem = {
+    item: GearItem;
+    score: number;
+    reasons: string[];
+}
+
 export async function POST(req: Request) {
     try {
         const body = await req.json();
@@ -10,13 +22,13 @@ export async function POST(req: Request) {
 
         const gearItems = await prisma.gearItem.findMany()
 
-        const scored = gearItems.map((item) => {
+        const scored = (gearItems as GearItem[]).map((item: GearItem) => {
             let score = 0
             const reasons: string[] = []
 
             // Weather scoring
             if (weather && item.weatherSuitability) {
-                const value = (item.weatherSuitability as any)[weather]
+                const value = item.weatherSuitability[weather]
                 if (value) {
                     score += value * 5
                     reasons.push(`Good for ${weather} weather`)
@@ -45,7 +57,7 @@ export async function POST(req: Request) {
             return { item, score, reasons };
         })
 
-        const ranked = scored.sort((a, b) => b.score - a.score).slice(0, 5)
+        const ranked = scored.sort((a: RankedItem, b: RankedItem) => b.score - a.score).slice(0, 5)
 
         console.log("Incoming request:", body);
         console.log("Fetched gear:", gearItems.length);
