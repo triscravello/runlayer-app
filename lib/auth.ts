@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const AUTH_COOKIE_NAME = "runlayer_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
