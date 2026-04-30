@@ -1,17 +1,32 @@
 // prisma/seeds/user.seed.ts
+import { randomBytes, scryptSync } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+function hashPassword(password: string) {
+    const salt = randomBytes(16).toString("hex");
+    const hash = scryptSync(password, salt, 64).toString("hex");
+    return `${salt}:${hash}`;
+}
+
 async function main() {
-    const user = await prisma.user.upsert({
-        where: { email: "user@example.com"},
-        update: {},
-        create: {
-            id: "user-id-1",
-            email: "user@example.com",
-        }
-    });
+    const email = "user@example.com";
+    const hashedPassword = hashPassword("Password123");
+    
+    const users = await prisma.$queryRaw<Array<{ id: string; email: string }>>`
+        INSERT INTO users (id, email, password_hash, created_at, updated_at)
+        VALUES ('user-id-1', ${email}, ${hashedPassword}, NOW(), NOW())
+        ON CONFLICT (email)
+        DO UPDATE SET updated_at = NOW(), password_hash = EXCLUDED.password_hash
+        RETURNING id, email
+    `;
+    
+    const user = users[0];
+    
+    if (!user) {
+        throw new Error("Failed to seed user");
+    }
 
     const userProfile = await prisma.userProfile.upsert({
         where: { userId: user.id },
@@ -32,11 +47,11 @@ async function main() {
     console.log("Seeded user and profile:", { user, userProfile });
 };
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
-
-main().finally(async () => {
-    await prisma.$disconnect();
-});
+main()
+    .catch((e) => {
+        console.error(e);
+        process.exit(1);
+    })
+    .finally(async () => {
+        await prisma.$disconnect()
+    });
