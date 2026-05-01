@@ -25,39 +25,57 @@ export async function POST(req: Request) {
         const gearItems = await prisma.gearItem.findMany()
 
         const scored = (gearItems as GearItem[]).map((item: GearItem) => {
-            let score = 0
+            let score = 0;
+            let maxScore = 10;
             const reasons: string[] = []
 
-            // Weather scoring
+            // Weather scoring (0-5)
             if (weather && item.weatherSuitability) {
                 const value = item.weatherSuitability[weather]
-                if (value) {
+                
+                if (value !== undefined && value !== null) {
                     score += value * 5
-                    reasons.push(`Good for ${weather} weather`)
+                    reasons.push(`Fits ${weather} conditions`)
+                } else {
+                    score -= 1; // slight penalty for unknown suitability
                 }
             }
 
-            // Workout type: easy runs, intervals, long runs
-            if (item.tags.includes(workoutType)) {
-                score += 3
-                reasons.push(`Matches ${workoutType} runs`)
+            // Workout type: easy runs, intervals, long runs (0-3)
+            const normalizedWorkout = workoutType?.toLowerCase();
+
+            const matchWorkout = item.tags.some(tag => 
+                tag.toLowerCase().includes(normalizedWorkout)
+            );
+
+            if (matchWorkout) {
+                score += 3;
+                reasons.push(`Designed for ${workoutType} runs`);
             }
 
-            // Intensity
-            if (intensity === "high" && item.tags.includes("race-day")) {
-                score += 2
-                reasons.push("Optimized for high intensity")
+            // Intensity (0-2)
+            if (intensity === "high") {
+                if (item.tags.includes("race-day")) {
+                    score += 2;
+                    reasons.push("Great for race intensity")
+                } else {
+                    score -= 0.5; 
+                }
             }
 
             // Gender 
             if (item.genderTarget === gender) {
-                score += 2
+                score += 2;
+                reasons.push("Perfect for gender preference");
             } else if (item.genderTarget === "unisex") {
-                score += 1
+                score += 1;
+                reasons.push("Unisex fit");
             }
 
-            return { item, score, reasons };
-        })
+            const finalScore = Math.max(0, Math.min(100, (score / maxScore) * 100));
+
+            return { item, score: finalScore, reasons };
+        });
 
         const ranked = scored.sort((a: RankedItem, b: RankedItem) => b.score - a.score).slice(0, 5)
 
