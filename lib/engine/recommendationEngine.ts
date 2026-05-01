@@ -21,52 +21,53 @@ export type RankedGearItem = {
 
 export function scoreGear(userInput: UserInput, gearItem: GearItem): RankedGearItem {
     let score = 0;
-    const maxScore = 12;
     const reasons: string[] = [];
 
+    // WEATHER
     if (userInput.weather && gearItem.weatherSuitability) {
         const weatherScore = gearItem.weatherSuitability[userInput.weather];
+
         if (typeof weatherScore === "number") {
-            score += weatherScore * 5;
+            score += weatherScore * 3;
             reasons.push(`Fits ${userInput.weather} conditions`);
-        } else {
-            score -= 1;
         }
     }
 
-    const normalizedWorkout = userInput.workoutType?.toLowerCase();
-    if (normalizedWorkout) {
-        const workoutMatch = gearItem.tags.some((tag) => 
-            tag.toLowerCase().includes(normalizedWorkout),
+    // WORKOUT
+    const normalize = (s: string) =>
+        s.toLowerCase().replace(/[-_\s]/g, "");
+
+    const workout = userInput.workoutType;
+
+    if (workout) {
+        const match = gearItem.tags.some((tag) =>
+            normalize(tag).includes(normalize(workout))
         );
-        
-        if (workoutMatch) {
+
+        if (match) {
             score += 3;
-            reasons.push(`Designed for ${userInput.workoutType} runs`);
+            reasons.push(`Designed for ${workout} runs`);
         }
     }
 
-    if (userInput.intensity === "high") {
-        if (gearItem.tags.includes("race-day")) {
-            score += 2;
-            reasons.push("Great for race intensity");
-        } else {
-            score -= 0.5;
-        }
+    // INTENSITY
+    if (userInput.intensity === "high" && gearItem.tags.includes("race-day")) {
+        score += 2;
+        reasons.push("Great for high-intensity race efforts");
     }
 
+    // GENDER (soft logic)
     if (userInput.gender) {
         if (gearItem.genderTarget === userInput.gender) {
             score += 2;
-            reasons.push("Perfect for gender preference");
+            reasons.push("Matches your fit preference");
         } else if (gearItem.genderTarget === "unisex") {
             score += 1;
             reasons.push("Unisex fit");
         }
     }
 
-    const finalScore = Math.max(0, Math.min(100, (score / maxScore) * 100));
-    return { item: gearItem, score: finalScore, reasons };
+    return { item: gearItem, score, reasons };
 }
 
 export function rankGearList(userInput: UserInput, gearItems: GearItem[]): RankedGearItem[] {
