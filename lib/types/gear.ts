@@ -1,25 +1,43 @@
 // lib/types/gear.ts
+export type Category = "top" | "bottom" | "shoes" | "accessory";
+export type PriceRange = "budget" | "mid" | "premium";
+export type WeatherCondition = "hot" | "cold" | "rain" | "wind";
+export type BodyType = "slim" | "athletic" | "broad" | "plus";
+export type BrandTier = "entry" | "mid" | "elite";
+
 export interface Gear {
     id: number;
     name: string;
-    brand: string;
-    category: string;
+    brandId: number;
+    brand?: Brand;
+
+    category: Category;
     subcategory: string;
-    priceRange: string;
+
+    priceRange: PriceRange;
+
     tags: string[];
-    weatherSuitability: string[];
-    bodyTypeFit: string[];
+
+    weatherSuitability: Record<WeatherCondition, number>;
+    bodyTypeFit: BodyType[];
+
     imageUrl: string;
     affiliateUrl: string;
+
+    rating?: number;
+    reviewCount?: number;
+    isSponsored?: boolean;
+
     createdAt: Date;
     updatedAt: Date;
-};
+}
 
 export interface Brand {
     id: number;
     name: string;
-    tier: string;
+    tier: BrandTier;
     style: string;
+
     createdAt: Date;
     updatedAt: Date;
 }

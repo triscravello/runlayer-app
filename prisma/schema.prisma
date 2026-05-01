@@ -12,6 +12,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BodyType {
+  SLIM
+  ATHLETIC
+  BROAD
+  PLUS
+}
+
+enum BudgetLevel {
+  BUDGET
+  MID
+  PREMIUM
+}
+
+enum Category {
+  TOP
+  BOTTOM
+  ACCESSORY
+}
+
+enum PriceRange {
+  BUDGET
+  MID
+  PREMIUM
+}
+
+enum ConditionKey {
+  HOT
+  COLD
+  RAIN
+  WIND
+  HUMID
+  NIGHT
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -33,13 +67,13 @@ model UserProfile {
   heightCm  Int? @map("height_cm")
   weightLbs Int? @map("weight_lbs")
 
-  bodyType        String? @map("body_type")
-  heatSensitivity String? @map("heat_sensitivity")
-  chafeProne      Boolean @default(false) @map("chafe_prone")
+  bodyType        BodyType? @map("body_type")
+  heatSensitivity String?   @map("heat_sensitivity")
+  chafeProne      Boolean   @default(false) @map("chafe_prone")
 
-  stylePreference String? @map("style_preference")
-  budgetLevel     String? @map("budget_level")
-  preferredFit    String? @map("preferred_fit")
+  stylePreference String?      @map("style_preference")
+  budgetLevel     BudgetLevel? @map("budget_level")
+  preferredFit    String?      @map("preferred_fit")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
@@ -75,26 +109,32 @@ model WeatherSnapshot {
 model GearItem {
   id String @id @default(uuid())
 
-  name  String
-  brand String
+  name    String
+  brandId String @map("brand_id")
+  brand   Brand  @relation(fields: [brandId], references: [id])
 
   genderTarget String? @map("gender_target")
 
-  category    String?
+  category    Category?
   subcategory String?
 
-  priceRange String? @map("price_range")
+  priceRange PriceRange? @map("price_range")
 
   tags String[]
 
-  weatherSuitability Json? @map("weather_suitability")
-  bodyTypeFit        Json? @map("body_type_fit")
+  weatherHot  Float? @map("weather_hot")
+  weatherCold Float? @map("weather_cold")
+  weatherRain Float? @map("weather_rain")
+  weatherWind Float? @map("weather_wind")
+
+  bodyTypeFit String[] @map("body_type_fit")
 
   imageUrl     String? @map("image_url")
   affiliateUrl String? @map("affiliate_url")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @default(now()) @updatedAt @map("updated_at")
+  OutfitItem OutfitItem[]
 
   @@map("gear_items")
 }
@@ -106,8 +146,9 @@ model Brand {
   tier  String?
   style String?
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @default(now()) @updatedAt @map("updated_at")
+  GearItem  GearItem[]
 
   @@map("brands")
 }
@@ -118,8 +159,10 @@ model Recommendation {
   userId            String  @map("user_id")
   weatherSnapshotId String? @map("weather_snapshot_id")
 
-  inputContext Json @map("input_context")
-  output       Json
+  inputContext     Json    @map("input_context")
+  output           Json
+  topScore         Float?  @map("top_score")
+  algorithmVersion String? @map("algorithm_version")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -144,15 +187,30 @@ model SavedOutfit {
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   recommendation Recommendation? @relation(fields: [recommendationId], references: [id])
+  OutfitItem     OutfitItem[]
 
   @@map("saved_outfits")
+}
+
+model OutfitItem {
+  id String @id @default(uuid())
+
+  outfitId   String @map("outfit_id")
+  gearItemId String @map("gear_item_id")
+
+  category Category?
+
+  outfit   SavedOutfit @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+  gearItem GearItem    @relation(fields: [gearItemId], references: [id], onDelete: Cascade)
+
+  @@map("outfit_items")
 }
 
 model RecommendationRule {
   id String @id @default(uuid())
 
-  conditionKey String  @map("condition_key")
-  category     String?
+  conditionKey ConditionKey @map("condition_key")
+  category     Category?
 
   weight Float
 
