@@ -1,130 +1,133 @@
 'use client';
-
-import { useMemo, useState } from "react";
-
-const workoutTypes = ['Easy Run', 'Long Run', 'Tempo Run', 'Intervals'];
-const weatherConditions = ['Hot', 'Mild', 'Cold', 'Rain'];
-const intensityLevels = ['Low', 'Moderate', 'High'];
-
-function Chip({ label, selected, onClick}: any) {
-    return (
-        <button 
-            type="button" 
-            onClick={onClick} 
-            className={`px-3 py-1.5 rounded-full text-sm border transition ${selected ? "bg-black text-white border-black" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"}`}
-        >
-            {label}
-        </button>
-    )
-}
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { MapPin, Cloud, Droplets, Wind } from "lucide-react";
 
 export default function DashboardPage() {
-    const [workoutType, setWorkoutType] = useState('');
-    const [weatherCondition, setWeatherCondition] = useState('');
-    const [intensity, setIntensity] = useState('');
-    const [submitted, setSubmitted] = useState(false);
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-3xl">Command Center</h1>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <MapPin className="w-4 h-4" />
+            <input
+              type="text"
+              defaultValue="San Francisco, CA"
+              className="bg-transparent border-none outline-none"
+            />
+          </div>
+        </div>
 
-    const canSubmit = useMemo(
-        () => Boolean(workoutType && weatherCondition && intensity),
-        [workoutType, weatherCondition, intensity],
-    )
+        {/* Run Type Selector */}
+        <div className="flex gap-3">
+          <Button variant="default" className="bg-[#10B981] hover:bg-[#059669] text-white">
+            Easy
+          </Button>
+          <Button variant="outline">Long</Button>
+          <Button variant="outline">Intervals</Button>
+        </div>
 
-    const handleGetRecommendations = () => {
-        if (!canSubmit) return
-        setSubmitted(true)
-    }
+        {/* Primary Recommendation Card */}
+        <Card className="p-6 border-2 border-[#10B981]/20 shadow-lg">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2>Recommended Outfit for Today</h2>
+              <div className="px-3 py-1 bg-[#10B981]/10 text-[#10B981] rounded-full text-sm">
+                Optimized for conditions
+              </div>
+            </div>
 
-    return (
-        <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 p-6">
-            <header className="space-y-2">
-                <h1 className="text-3xl font-semibold">Command Center</h1>
-                <p className="text-sm text-gray-600">Complete each step to get recommendations.</p>
-            </header>
-
-            <section className="space-y-5 rounded-xl border border-gray-200 p-5 shadow-sm">
-                
-                {/* Workout */}
-                <div className="space-y-2">
-                    <p className="text-sm font-semibold">1. Select workout</p>
-                    <div className="flex flex-wrap gap-2">
-                        {workoutTypes.map((type) => (
-                            <Chip 
-                                key={type} 
-                                label={type} 
-                                selected={workoutType === type}
-                                onClick={() => {
-                                    setWorkoutType(type);
-                                    setSubmitted(false);
-                                }}
-                            />
-                        ))}
-                    </div>
+            {/* Weather Summary */}
+            <div className="flex gap-6 py-3 px-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <div className="text-sm text-muted-foreground">Temperature</div>
+                  <div>72°F</div>
                 </div>
-
-                <div className="space-y-2">
-                    <p className="text-sm font-semibold">2. Select weather</p>
-                    <div className="flex flex-wrap gap-2">
-                        {weatherConditions.map((condition) => (
-                            <Chip 
-                                key={condition}
-                                label={condition}
-                                selected={weatherCondition === condition}
-                                onClick={() => {
-                                    setWeatherCondition(condition);
-                                    setSubmitted(false);
-                                }}
-                            />
-                        ))}
-                    </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Droplets className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <div className="text-sm text-muted-foreground">Humidity</div>
+                  <div>65%</div>
                 </div>
-
-                <div className="space-y-2">
-                    <p className="text-sm font-semibold">3. Select intensity</p>
-                    <div className="flex flex-wrap gap-2">
-                        {intensityLevels.map((level) => (
-                            <Chip
-                                key={level}
-                                label={level}
-                                selected={intensity === level}
-                                onClick={() => {
-                                    setIntensity(level);
-                                    setSubmitted(false);
-                                }}
-                            />
-                        ))}
-                    </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Wind className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <div className="text-sm text-muted-foreground">Wind</div>
+                  <div>8 mph</div>
                 </div>
+              </div>
+            </div>
 
-                <button type="button" className="w-full rounded-md bg-black px-2 py-2 font-medium text-white disabled:opacity-50" disabled={!canSubmit} onClick={handleGetRecommendations}>
-                    Generate My Fit
-                </button>
-            </section>
+            {/* Outfit Preview */}
+            <div className="grid grid-cols-3 gap-4 py-4">
+              <div className="space-y-2">
+                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-4xl">👕</div>
+                    <div className="text-sm text-muted-foreground mt-2">Top</div>
+                  </div>
+                </div>
+                <div className="text-sm">
+                  Lightweight Tank
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-4xl">🩳</div>
+                    <div className="text-sm text-muted-foreground mt-2">Bottom</div>
+                  </div>
+                </div>
+                <div className="text-sm">
+                  Split Shorts
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-4xl">🧢</div>
+                    <div className="text-sm text-muted-foreground mt-2">Accessories</div>
+                  </div>
+                </div>
+                <div className="text-sm">
+                  Performance Cap
+                </div>
+              </div>
+            </div>
 
-            <section className="rounded-xl border p-4 text-sm">
-                {workoutType && weatherCondition && intensity ? (
-                    <>
-                        <p className="text-gray-500 mb-2">Preview</p>
-                        <p className="font-medium">
-                            {workoutType} • {weatherCondition} • {intensity}
-                        </p>
-                        
-                        <ul className="mt-3 space-y-1 text-gray-700">
-                            <li>Top: Bandit Mircromesh Run Tee</li>
-                            <li>Bottom: Nike Aeroswift Running Shorts</li>
-                        </ul>
-                    </>
-                ) : (
-                    <p className="text-gray-400">
-                        Select options to preview your run outfit
-                    </p>
-                )}
-            </section>
-            
-            {submitted ? (
-                <section className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-                    Recommendations coming up for {workoutType} in {weatherCondition.toLowerCase()} weather at {intensity.toLowerCase()} intensity.
-                </section>
-            ) : null}
-        </main>
-    )
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <Button className="flex-1 bg-[#10B981] hover:bg-[#059669]">
+                View Full Breakdown
+              </Button>
+              <Button variant="outline">Save Outfit</Button>
+              <Button variant="outline">Adjust Preferences</Button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="p-4">
+            <div className="text-2xl">12</div>
+            <div className="text-sm text-muted-foreground">Saved Outfits</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-2xl">5</div>
+            <div className="text-sm text-muted-foreground">Brands Tracked</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-2xl">98%</div>
+            <div className="text-sm text-muted-foreground">Accuracy</div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
