@@ -8,8 +8,10 @@ import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
 
 export default function SignupForm() {
+    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [location, setLocation] = useState("");
     const [error, setError] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,22 +56,22 @@ export default function SignupForm() {
                         {successMessage && <p className="text-emerald-600 mb-4">{successMessage}</p>}
                         <div className="space-y-2">
                             <Label htmlFor="name">Full Name</Label>
-                            <Input id="name" type="text" placeholder="John Doe" required className="bg-input-background" />
+                            <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" required className="bg-input-background" />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
-                            <Input id="email" type="email" placeholder="you@example.com" required className="bg-input-background" />
+                            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required className="bg-input-background" />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="password">Password</Label>
-                            <Input id="password" type="password" placeholder="••••••••" required className="bg-input-background" />
+                            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="bg-input-background" />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="location">Location</Label>
-                            <Input id="location" type="text" placeholder="St. Petersburg, FL" required className="bg-input-background" />
+                            <Input id="location" type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="St. Petersburg, FL" required className="bg-input-background" />
                             <p className="text-xs text-muted-foreground">We'll use this for real-time weather data.</p>
                         </div>
 
