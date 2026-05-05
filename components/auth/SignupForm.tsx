@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
+import { authService } from "@/services/authService";
 
 export default function SignupForm() {
     const [name, setName] = useState("");
@@ -29,7 +30,7 @@ export default function SignupForm() {
         setIsSubmitting(true);
 
         try {
-            //await authService.signup({ email, password });
+            await authService.signup({ email, password });
             setSuccessMessage("Account created successfully. Redirecting...");
             router.push("/dashboard");
         } catch (err) {
