@@ -75,7 +75,7 @@ export default function SignupForm() {
                             <p className="text-xs text-muted-foreground">We'll use this for real-time weather data.</p>
                         </div>
 
-                        <Button type="submit" className="w-full bg-[#10B981] hover:bg[#059669] text-white h-12">Create Account</Button>
+                        <Button type="submit" className="w-full bg-[#10B981] hover:bg[#059669] text-white h-12">{isSubmitting ? "Creating account..." : "Create Account"}</Button>
 
                         <p className="text-xs text-center text-muted-foreground">
                             By creating an account, you agree to our Terms of Service and Privacy Policy.
