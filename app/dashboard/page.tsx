@@ -1,7 +1,8 @@
 'use client';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { MapPin, Cloud, Droplets, Wind } from "lucide-react";
+import { OutfitCard } from "@/components/recommendation/OutfitCard";
+import { MapPin } from "lucide-react";
 
 export default function DashboardPage() {
   return (
@@ -14,7 +15,7 @@ export default function DashboardPage() {
             <MapPin className="w-4 h-4" />
             <input
               type="text"
-              defaultValue="San Francisco, CA"
+              defaultValue="St. Petersburg, FL"
               className="bg-transparent border-none outline-none"
             />
           </div>
@@ -30,88 +31,49 @@ export default function DashboardPage() {
         </div>
 
         {/* Primary Recommendation Card */}
-        <Card className="p-6 border-2 border-[#10B981]/20 shadow-lg">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2>Recommended Outfit for Today</h2>
-              <div className="px-3 py-1 bg-[#10B981]/10 text-[#10B981] rounded-full text-sm">
-                Optimized for conditions
-              </div>
-            </div>
-
-            {/* Weather Summary */}
-            <div className="flex gap-6 py-3 px-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Temperature</div>
-                  <div>72°F</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Droplets className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Humidity</div>
-                  <div>65%</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Wind className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Wind</div>
-                  <div>8 mph</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Outfit Preview */}
-            <div className="grid grid-cols-3 gap-4 py-4">
-              <div className="space-y-2">
-                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-4xl">👕</div>
-                    <div className="text-sm text-muted-foreground mt-2">Top</div>
-                  </div>
-                </div>
-                <div className="text-sm">
-                  Lightweight Tank
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-4xl">🩳</div>
-                    <div className="text-sm text-muted-foreground mt-2">Bottom</div>
-                  </div>
-                </div>
-                <div className="text-sm">
-                  Split Shorts
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-4xl">🧢</div>
-                    <div className="text-sm text-muted-foreground mt-2">Accessories</div>
-                  </div>
-                </div>
-                <div className="text-sm">
-                  Performance Cap
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-2">
-              <Button className="flex-1 bg-[#10B981] hover:bg-[#059669]">
-                View Full Breakdown
-              </Button>
-              <Button variant="outline">Save Outfit</Button>
-              <Button variant="outline">Adjust Preferences</Button>
-            </div>
-          </div>
-        </Card>
-
+        <OutfitCard 
+          title="Recommended Outfit for Today"
+          tags={[
+            { label: "Hot", tone: "weather" },
+            { label: "Tempo Run", tone: "workout" },
+            { label: "Lightweight", tone: "attribute" }
+          ]}
+          items={[
+            {
+              id: "lightweight-tank",
+              label: "Lightweight Tank",
+              category: "Top",
+              description: "Open-knit singlet for heat release.",
+              attributes: ["breathable", "no chafe"],
+              icon: "👕"
+            },
+            {
+              id: "split-shorts",
+              label: "Split Shorts",
+              category: "Bottom",
+              description: "Short inseam keeps stride unrestricted",
+              attributes: ["relaxed fit", "quick dry"],
+              icon: "🩳"
+            },
+            {
+              id: "performance-cap",
+              label: "Performance Cap",
+              category: "Accessories",
+              description: "Shields sun without trapping heat",
+              attributes: ["packable", "sweat-wicking"],
+              icon: "🧢"
+            },
+          ]}
+          attributes={[
+            { label: "Breathability", value: "High airflow fabric" },
+            { label: "Layering", value: "Single-layer heat setup" },
+            { label: "Fit", value: "Trim top, free-moving bottom" },
+          ]}
+          why="Built for warm tempo miles with minimal layering, fast-drying pieces, and a cap for sun control"
+          onSave={(outfit) => console.log("Save outfit", outfit)}
+          onViewDetails={(outfit) => console.log("View outfit details", outfit)}
+        />
+        
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="p-4">
