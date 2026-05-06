@@ -3,7 +3,7 @@ import { User } from "./user";
 import { Weather } from "./weather";
 
 export interface Recommendation {
-    id: number;
+    id: string;
     userId: User["id"];
     weather: Weather;
     inputContext: string;
@@ -13,7 +13,7 @@ export interface Recommendation {
 };
 
 export interface UserSavedOutfits {
-    id: number;
+    id: string;
     userId: User["id"];
     recommendationId: Recommendation["id"];
     name: string;
@@ -23,7 +23,7 @@ export interface UserSavedOutfits {
 };
 
 export interface RecommendationRules {
-    id: number;
+    id: string;
     conditionKey: string;
     category: string;
     weight: number;

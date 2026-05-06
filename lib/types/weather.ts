@@ -1,6 +1,6 @@
 // lib/types/weather.ts
 export interface Weather {
-    id: number;
+    id: string;
     location: string;
     latitude: number;
     longitude: number;

@@ -6,9 +6,9 @@ export type BodyType = "slim" | "athletic" | "broad" | "plus";
 export type BrandTier = "entry" | "mid" | "elite";
 
 export interface Gear {
-    id: number;
+    id: string;
     name: string;
-    brandId: number;
+    brandId: string;
     brand?: Brand;
 
     category: Category;
@@ -33,7 +33,7 @@ export interface Gear {
 }
 
 export interface Brand {
-    id: number;
+    id: string;
     name: string;
     tier: BrandTier;
     style: string;
