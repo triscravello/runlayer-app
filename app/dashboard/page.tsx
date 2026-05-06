@@ -2,6 +2,7 @@
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { OutfitCard } from "@/components/recommendation/OutfitCard";
+import { WeatherSummary } from "@/components/recommendation/WeatherSummary";
 import { MapPin } from "lucide-react";
 
 export default function DashboardPage() {
@@ -29,6 +30,21 @@ export default function DashboardPage() {
           <Button variant="outline">Long</Button>
           <Button variant="outline">Intervals</Button>
         </div>
+
+        {/* Weather Context */}
+        <WeatherSummary 
+          location="St. Petersburg, FL"
+          temperature={89}
+          feelsLike={96}
+          condition="Humid and sunny"
+          humidity={72}
+          precipitationChance={0.18}
+          windSpeed={10}
+          uvIndex={8}
+          impactLabel="High sweat risk"
+          labels={["Hot conditions", "High humidity"]}
+          recommendationNote="Recommendations lean into breathable, fast-drying pieces and sun coverage because heat and humidity will increase sweat load."
+        />
 
         {/* Primary Recommendation Card */}
         <OutfitCard 
@@ -73,7 +89,7 @@ export default function DashboardPage() {
           onSave={(outfit) => console.log("Save outfit", outfit)}
           onViewDetails={(outfit) => console.log("View outfit details", outfit)}
         />
-        
+
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="p-4">
