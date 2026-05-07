@@ -22,7 +22,7 @@ export type WhyReasonInput =
 
 export type WhyThisExplanationProps = {
   reasons?: WhyReasonInput | WhyReasonInput[];
-  maxReasons?: 2 | 3 | 4;
+  maxReasons?: 1 | 2 | 3 | 4;
   className?: string;
 };
 
