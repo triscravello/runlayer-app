@@ -59,9 +59,14 @@ export type OutfitCardProps = {
   items: OutfitItem[];
   attributes?: Array<string | OutfitAttribute>;
   why?: WhyReasonInput | WhyReasonInput[];
+  eyebrow?: React.ReactNode;
+  maxReasons?: 1 | 2 | 3 | 4;
   saveLabel?: string;
   viewDetailsLabel?: string;
   saved?: boolean;
+  showActions?: boolean;
+  showSaveAction?: boolean;
+  showViewDetailsAction?: boolean;
   onSave?: (outfit: OutfitCardPayload) => void;
   onViewDetails?: (outfit: OutfitCardPayload) => void;
   className?: string;
@@ -96,9 +101,14 @@ export function OutfitCard({
   items,
   attributes = [],
   why,
+  eyebrow,
+  maxReasons,
   saveLabel = "Save",
   viewDetailsLabel = "View Details",
   saved = false,
+  showActions = true,
+  showSaveAction = true,
+  showViewDetailsAction = true,
   onSave,
   onViewDetails,
   className,
@@ -116,6 +126,7 @@ export function OutfitCard({
       <CardHeader className="space-y-4 border-b bg-gradient-to-br from-white to-emerald-50/50 pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
+            {eyebrow ? <div>{eyebrow}</div> : null}
             <CardTitle className="text-xl font-semibold text-slate-950">
               {title}
             </CardTitle>
@@ -220,34 +231,40 @@ export function OutfitCard({
           </div>
         ) : null}
 
-        <WhyThisExplanation reasons={why} />
+        <WhyThisExplanation reasons={why} maxReasons={maxReasons} />
       </CardContent>
 
-      <CardFooter className="flex flex-col gap-3 border-t bg-slate-50/60 pt-4 sm:flex-row">
-        <Button
-          type="button"
-          className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:flex-1"
-          onClick={() => onSave?.(outfitPayload)}
-          disabled={!onSave || saved}
-        >
-          {saved ? (
-            <Check className="size-4" />
-          ) : (
-            <Bookmark className="size-4" />
-          )}
-          {saved ? "Saved" : saveLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full sm:flex-1"
-          onClick={() => onViewDetails?.(outfitPayload)}
-          disabled={!onViewDetails}
-        >
-          {viewDetailsLabel}
-          <ChevronRight className="size-4" />
-        </Button>
-      </CardFooter>
+      {showActions && (showSaveAction || showViewDetailsAction) ? (
+        <CardFooter className="flex flex-col gap-3 border-t bg-slate-50/60 pt-4 sm:flex-row">
+          {showSaveAction ? (
+            <Button 
+              type="button"
+              className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:flex-1"
+              onClick={() => onSave?.(outfitPayload)}
+              disabled={!onSave || saved}
+            >
+              {saved ? (
+                <Check className="size-4" />
+              ) : (
+                <Bookmark className="size-4" />
+              )}
+              {saved ? "Saved" : saveLabel}
+            </Button>
+          ) : null}
+          {showViewDetailsAction ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:flex-1"
+              onClick={() => onViewDetails?.(outfitPayload)}
+              disabled={!onViewDetails}
+            >
+              {viewDetailsLabel}
+              <ChevronRight className="size-4" />
+            </Button>
+          ) : null}
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }
