@@ -85,7 +85,11 @@ export default function DashboardPage() {
             { label: "Layering", value: "Single-layer heat setup" },
             { label: "Fit", value: "Trim top, free-moving bottom" },
           ]}
-          why="Built for warm tempo miles with minimal layering, fast-drying pieces, and a cap for sun control"
+          why={[
+            "Fits hot conditions",
+            "Designed for tempo runs",
+            { tags: ["quick-dry", "anti-chafe", "performance-fit"] },
+          ]}
           onSave={(outfit) => console.log("Save outfit", outfit)}
           onViewDetails={(outfit) => console.log("View outfit details", outfit)}
         />

@@ -1,11 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Bookmark, Check, ChevronRight, Info } from "lucide-react";
+import { Bookmark, Check, ChevronRight } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 import { Badge } from "@/components/ui/Badge";
+import { 
+  WhyThisExplanation,
+  type WhyReasonInput,
+} from "@/components/recommendation/WhyThisExplanation";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -46,7 +50,7 @@ export type OutfitCardPayload = {
   tags: Array<string | OutfitTag>;
   items: OutfitItem[];
   attributes: Array<string | OutfitAttribute>;
-  why?: string;
+  why?: WhyReasonInput | WhyReasonInput[];
 };
 
 export type OutfitCardProps = {
@@ -54,7 +58,7 @@ export type OutfitCardProps = {
   tags: Array<string | OutfitTag>;
   items: OutfitItem[];
   attributes?: Array<string | OutfitAttribute>;
-  why?: string;
+  why?: WhyReasonInput | WhyReasonInput[];
   saveLabel?: string;
   viewDetailsLabel?: string;
   saved?: boolean;
@@ -216,15 +220,7 @@ export function OutfitCard({
           </div>
         ) : null}
 
-        {why ? (
-          <div className="flex gap-2 rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-sm text-emerald-900">
-            <Info className="mt-0.5 size-4 shrink-0" />
-            <p>
-              <span className="font-medium">Why: </span>
-              {why}
-            </p>
-          </div>
-        ) : null}
+        <WhyThisExplanation reasons={why} />
       </CardContent>
 
       <CardFooter className="flex flex-col gap-3 border-t bg-slate-50/60 pt-4 sm:flex-row">
