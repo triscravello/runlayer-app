@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { OutfitCard } from "@/components/recommendation/OutfitCard";
 import { WeatherSummary } from "@/components/recommendation/WeatherSummary";
+import { BrandList } from "@/components/recommendation/BrandList";
 import { MapPin } from "lucide-react";
 
 export default function DashboardPage() {
@@ -92,6 +93,41 @@ export default function DashboardPage() {
           ]}
           onSave={(outfit) => console.log("Save outfit", outfit)}
           onViewDetails={(outfit) => console.log("View outfit details", outfit)}
+        />
+
+        {/* Brand Enrichment */}
+        <BrandList 
+          layout="horizontal"
+          filterTags={["hot-weather", "tempo", "quick-dry"]}
+          brands={[
+            {
+              id: "tracksmith",
+              name: "Tracksmith",
+              rank: 1,
+              score: 94,
+              summary: "Lightweight performance staples with race-day fits.",
+              tags: ["tempo", "lightweight", "performance-fit"],
+              why: "Matches the tempo content and trim, fast-moving outfit profile.",
+            },
+            {
+              id: "janji",
+              name: "Janji",
+              rank: 2,
+              score: 89,
+              summary: "Breathable warm-weather pieces with quick-dry fabrics.",
+              tags: ["hot-weather", "quick-dry", "sun-coverage"],
+              why: "Useful for humid runs where moisture management matters",
+            },
+            {
+              id: "satisfy",
+              name: "Satisfy",
+              rank: 3,
+              score: 84,
+              summary: "Premium run gear focused on freedom of movement",
+              tags: ["anti-chafe", "tempo", "lightweight"],
+              why: "Pairs with split shorts and low-friction hot-weather layers."
+            },
+          ]}
         />
 
         {/* Quick Stats */}
