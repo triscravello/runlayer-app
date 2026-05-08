@@ -1,8 +1,6 @@
 // prisma/seeds/user.seed.ts
 import { randomBytes, scryptSync } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 function hashPassword(password: string) {
     const salt = randomBytes(16).toString("hex");
@@ -35,11 +33,11 @@ async function main() {
             userId: user.id,
             heightCm: 180,
             weightLbs: 170,
-            bodyType: "athletic",
+            bodyType: "ATHLETIC",
             heatSensitivity: "high",
             chafeProne: true,
             stylePreference: "performance",
-            budgetLevel: "mid",
+            budgetLevel: "MID",
             preferredFit: "slim"
         }
     });
@@ -53,5 +51,5 @@ main()
         process.exit(1);
     })
     .finally(async () => {
-        await prisma.$disconnect()
+        await prisma.$disconnect();
     });

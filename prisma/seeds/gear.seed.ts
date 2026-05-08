@@ -1,10 +1,47 @@
 // prisma/seeds/gear.seed.ts
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../../lib/prisma";
 
-const prisma = new PrismaClient();
+type GearCategory = "TOP" | "BOTTOM" | "ACCESSORY";
+type GearPriceRange = "BUDGET" | "MID" | "PREMIUM";
+type BodyTypeFitScores = Record<"lean" | "average" | "larger", number>;
+
+const bodyTypeFitThreshold = 0.8;
+
+function toGearCategory(category: string): GearCategory {
+    switch (category) {
+        case "top":
+            return "TOP";
+        case "bottom": 
+            return "BOTTOM";
+        case "accessory":
+            return "ACCESSORY";
+        default: 
+            throw new Error(`Unsupported gear category: ${category}`);
+    }
+}
+
+function toGearPriceRange(priceRange: string): GearPriceRange {
+    switch (priceRange) {
+        case "budget":
+            return "BUDGET";
+        case "mid":
+            return "MID";
+        case "premium":
+            return "PREMIUM";
+        default:
+            throw new Error(`Unsupported gear price range: ${priceRange}`);
+    }
+}
+
+function toBodyTypeFit(bodyTypeFit: BodyTypeFitScores) {
+    return Object.entries(bodyTypeFit)
+        .filter(([, score]) => score >= bodyTypeFitThreshold)
+        .map(([bodyType]) => bodyType);
+}
 
 async function main() {
     // Clear existing data
+    await prisma.outfitItem.deleteMany();
     await prisma.gearItem.deleteMany();
 
     // Seed data
@@ -369,15 +406,44 @@ async function main() {
         }
     ]
 
+    const gearItems = await Promise.all(
+        gear.map(async (item) => {
+            const brand = await prisma.brand.upsert({
+                where: { name: item.brand },
+                update: {},
+                create: { name: item.brand },
+            });
+
+            return {
+                name: item.name,
+                brandId: brand.id,
+                genderTarget: item.genderTarget,
+                category: toGearCategory(item.category),
+                subcategory: item.subcategory,
+                priceRange: toGearPriceRange(item.priceRange),
+                tags: item.tags,
+                weatherHot: item.weatherSuitability.hot,
+                weatherCold: item.weatherSuitability.cold,
+                weatherRain: item.weatherSuitability.rain,
+                bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
+                imageUrl: item.imageUrl,
+                affiliateUrl: item.affiliateUrl,
+            };
+        })
+    )
+
     await prisma.gearItem.createMany({
-        data: gear
+        data: gearItems,
     })
 
     console.log("Gear seed completed!");
 }
 
 main()
-    .catch(console.error)
+    .catch((e) => {
+        console.error(e);
+        process.exit(1);
+    })
     .finally(async () => {
         await prisma.$disconnect();
-    })
+    });

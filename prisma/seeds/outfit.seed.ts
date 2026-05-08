@@ -1,7 +1,5 @@
 // prisma/seeds/outfit.seed.ts
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../../lib/prisma";
 
 async function main() {
     const outfit = await prisma.savedOutfit.upsert({
@@ -18,11 +16,11 @@ async function main() {
     console.log("Seeded outfit:", outfit);
 };
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
-
-main().finally(async () => {
-    await prisma.$disconnect();
-});
+main()
+    .catch((e) => {
+        console.error(e);
+        process.exit(1);
+    })
+    .finally(async () => {
+        await prisma.$disconnect();
+    })
