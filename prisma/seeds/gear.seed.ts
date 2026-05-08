@@ -1,33 +1,32 @@
 // prisma/seeds/gear.seed.ts
+import { PrismaClient, Category, PriceRange } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 
-type GearCategory = "TOP" | "BOTTOM" | "ACCESSORY";
-type GearPriceRange = "BUDGET" | "MID" | "PREMIUM";
 type BodyTypeFitScores = Record<"lean" | "average" | "larger", number>;
 
 const bodyTypeFitThreshold = 0.8;
 
-function toGearCategory(category: string): GearCategory {
+function toGearCategory(category: string): Category {
     switch (category) {
         case "top":
-            return "TOP";
+            return Category.TOP;
         case "bottom": 
-            return "BOTTOM";
+            return Category.BOTTOM;
         case "accessory":
-            return "ACCESSORY";
+            return Category.ACCESSORY;
         default: 
             throw new Error(`Unsupported gear category: ${category}`);
     }
 }
 
-function toGearPriceRange(priceRange: string): GearPriceRange {
+function toGearPriceRange(priceRange: string): PriceRange {
     switch (priceRange) {
         case "budget":
-            return "BUDGET";
+            return PriceRange.BUDGET;
         case "mid":
-            return "MID";
+            return PriceRange.MID;
         case "premium":
-            return "PREMIUM";
+            return PriceRange.PREMIUM;
         default:
             throw new Error(`Unsupported gear price range: ${priceRange}`);
     }
@@ -41,7 +40,7 @@ function toBodyTypeFit(bodyTypeFit: BodyTypeFitScores) {
 
 async function main() {
     // Clear existing data
-    await prisma.outfitItem.deleteMany();
+    await prisma.$executeRaw`DELETE FROM outfit_items`;
     await prisma.gearItem.deleteMany();
 
     // Seed data
@@ -406,7 +405,7 @@ async function main() {
         }
     ]
 
-    const gearItems = await Promise.all(
+    await Promise.all(
         gear.map(async (item) => {
             const brand = await prisma.brand.upsert({
                 where: { name: item.brand },
@@ -414,27 +413,25 @@ async function main() {
                 create: { name: item.brand },
             });
 
-            return {
-                name: item.name,
-                brandId: brand.id,
-                genderTarget: item.genderTarget,
-                category: toGearCategory(item.category),
-                subcategory: item.subcategory,
-                priceRange: toGearPriceRange(item.priceRange),
-                tags: item.tags,
-                weatherHot: item.weatherSuitability.hot,
-                weatherCold: item.weatherSuitability.cold,
-                weatherRain: item.weatherSuitability.rain,
-                bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
-                imageUrl: item.imageUrl,
-                affiliateUrl: item.affiliateUrl,
-            };
+            return prisma.gearItem.create({
+                data: {
+                    name: item.name,
+                    brandId: brand.id,
+                    genderTarget: item.genderTarget,
+                    category: toGearCategory(item.category),
+                    subcategory: item.subcategory,
+                    priceRange: toGearPriceRange(item.priceRange),
+                    tags: item.tags,
+                    weatherHot: item.weatherSuitability.hot,
+                    weatherCold: item.weatherSuitability.cold,
+                    weatherRain: item.weatherSuitability.rain,
+                    bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
+                    imageUrl: item.imageUrl,
+                    affiliateUrl: item.affiliateUrl,
+                },
+            });
         })
     )
-
-    await prisma.gearItem.createMany({
-        data: gearItems,
-    })
 
     console.log("Gear seed completed!");
 }
