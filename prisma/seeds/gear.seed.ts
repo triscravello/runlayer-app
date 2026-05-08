@@ -1,5 +1,5 @@
 // prisma/seeds/gear.seed.ts
-import { PrismaClient, Category, PriceRange } from "@prisma/client";
+import { Category, PriceRange } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 
 type BodyTypeFitScores = Record<"lean" | "average" | "larger", number>;
@@ -422,14 +422,14 @@ async function main() {
                         },
                     },
                     genderTarget: item.genderTarget,
-                    category: item.category,
+                    category: toGearCategory(item.category),
                     subcategory: item.subcategory,
-                    priceRange: item.priceRange,
+                    priceRange: toGearPriceRange(item.priceRange),
                     tags: item.tags,
                     weatherHot: item.weatherSuitability.hot,
                     weatherCold: item.weatherSuitability.cold,
                     weatherRain: item.weatherSuitability.rain,
-                    bodyTypeFit: item.bodyTypeFit,
+                    bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
                     imageUrl: item.imageUrl,
                     affiliateUrl: item.affiliateUrl,
                 },
