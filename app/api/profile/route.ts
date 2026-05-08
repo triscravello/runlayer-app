@@ -1,6 +1,6 @@
 // app/api/profile/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getUserProfile, upsertUserProfile, type UpsertUserProfileInput } from "@/services/userService";
 
 // GET user profile
 export async function GET(request: Request) {
@@ -15,11 +15,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const profile = await prisma.userProfile.findUnique({
-      where: {
-        userId,
-      },
-    });
+    const profile = await getUserProfile(userId);
 
     if (!profile) {
       return NextResponse.json(
@@ -62,32 +58,18 @@ export async function PUT(request: Request) {
       );
     }
 
-    const updatedProfile = await prisma.userProfile.upsert({
-      where: {
-        userId,
-      },
-      update: {
-        heightCm,
-        weightLbs,
-        bodyType,
-        heatSensitivity,
-        chafeProne,
-        stylePreference,
-        budgetLevel,
-        preferredFit,
-      },
-      create: {
-        userId,
-        heightCm,
-        weightLbs,
-        bodyType,
-        heatSensitivity,
-        chafeProne: chafeProne ?? false,
-        stylePreference,
-        budgetLevel,
-        preferredFit,
-      },
-    });
+    const updatedProfile = await upsertUserProfile({
+      userId,
+      heightCm,
+      weightLbs,
+      bodyType,
+      heatSensitivity,
+      chafeProne,
+      stylePreference,
+      budgetLevel,
+      preferredFit
+    } as UpsertUserProfileInput);
+    
 
     return NextResponse.json(updatedProfile);
   } catch (error) {

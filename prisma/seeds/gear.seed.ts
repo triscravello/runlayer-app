@@ -110,7 +110,7 @@ async function main() {
             category: "top",
             subcategory: "singlet",
             priceRange: "mid",
-            tages: ["daily-run", "training", "breathable", "lightweight", "moisture-wicking", "anti-chafe"],
+            tags: ["daily-run", "training", "breathable", "lightweight", "moisture-wicking", "anti-chafe"],
             weatherSuitability: {
                 hot: 0.9,
                 warm: 0.85,

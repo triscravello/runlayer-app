@@ -1,19 +1,11 @@
 // app/api/recommendation/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { createRecommendation, CreateRecommendationInput, listRecommendations } from "@/services/recommendationService";
 
 // GET all recommendations
 export async function GET() {
   try {
-    const recommendations = await prisma.recommendation.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        user: true,
-        weatherSnapshot: true,
-      },
-    });
+    const recommendations = await listRecommendations();
 
     return NextResponse.json(recommendations);
   } catch (error) {
@@ -30,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { userId, weatherSnapshotId, inputContext, output } = body;
+    const { userId, weatherSnapshotId, inputContext, output, topScore, algorithmVersion } = body;
 
     if (!userId || !inputContext || !output) {
       return NextResponse.json(
@@ -39,14 +31,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const recommendation = await prisma.recommendation.create({
-      data: {
-        userId,
-        weatherSnapshotId: weatherSnapshotId ?? null,
-        inputContext,
-        output,
-      },
-    });
+    const recommendation = await createRecommendation({
+      userId,
+      weatherSnapshotId: weatherSnapshotId ?? null,
+      inputContext,
+      output,
+      topScore: topScore ?? null,
+      algorithmVersion: algorithmVersion ?? null,
+    } as CreateRecommendationInput);
 
     return NextResponse.json(recommendation);
   } catch (error) {
