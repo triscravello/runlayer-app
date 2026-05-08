@@ -24,7 +24,10 @@ export async function POST(request: Request) {
                 subcategory: data.subcategory,
                 priceRange: data.priceRange,
                 tags: data.tags,
-                weatherSuitability: data.weatherSuitability,
+                weatherHot: data.weatherSuitability?.hot,
+                weatherCold: data.weatherSuitability?.cold,
+                weatherRain: data.weatherSuitability?.rain,
+                weatherWind: data.weatherSuitability?.wind,
                 bodyTypeFit: data.bodyTypeFit,
                 imageUrl: data.imageUrl,
                 affiliateUrl: data.affiliateUrl
