@@ -115,10 +115,10 @@ model GearItem {
 
   genderTarget String? @map("gender_target")
 
-  category    Category?
+  category    Category
   subcategory String?
 
-  priceRange PriceRange? @map("price_range")
+  priceRange PriceRange
 
   tags String[]
 

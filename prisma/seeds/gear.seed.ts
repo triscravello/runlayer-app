@@ -416,16 +416,20 @@ async function main() {
             return prisma.gearItem.create({
                 data: {
                     name: item.name,
-                    brandId: brand.id,
+                    brand: {
+                        connect: {
+                            id: brand.id,
+                        },
+                    },
                     genderTarget: item.genderTarget,
-                    category: toGearCategory(item.category),
+                    category: item.category,
                     subcategory: item.subcategory,
-                    priceRange: toGearPriceRange(item.priceRange),
+                    priceRange: item.priceRange,
                     tags: item.tags,
                     weatherHot: item.weatherSuitability.hot,
                     weatherCold: item.weatherSuitability.cold,
                     weatherRain: item.weatherSuitability.rain,
-                    bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
+                    bodyTypeFit: item.bodyTypeFit,
                     imageUrl: item.imageUrl,
                     affiliateUrl: item.affiliateUrl,
                 },
