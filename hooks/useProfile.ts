@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { UserProfile, UserProfilePayload } from "@/lib/types/user";
+import { userService } from "@/services/userService";
 
 type UseProfileResult = {
     profile: UserProfile | null;
@@ -12,14 +13,12 @@ type UseProfileResult = {
     saveProfile: (payload: UserProfilePayload) => Promise<UserProfile | null>;
 };
 
-async function readProfileResponse(response: Response): Promise<UserProfile> {
-    const data = (await response.json()) as UserProfile | { error?: string };
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
 
-    if (!response.ok) {
-        throw new Error("error" in data && data.error ? data.error : "Unable to load profile.")
-    }
-
-    return data as UserProfile;
+function isAbortError(error: unknown) {
+    return error instanceof DOMException && error.name === "AbortError";
 }
 
 export function useProfile(userId?: string): UseProfileResult {
@@ -30,9 +29,11 @@ export function useProfile(userId?: string): UseProfileResult {
     const [successMessage, setSuccessMessage] = useState("");
 
     useEffect(() => {
-        if (!userId) return;
+        if (!userId) {
+            return;
+        }
 
-        const activateUserId = userId;
+        const activeUserId = userId;
         const controller = new AbortController();
 
         async function loadProfile() {
@@ -41,27 +42,19 @@ export function useProfile(userId?: string): UseProfileResult {
             setSuccessMessage("");
 
             try {
-                const response = await fetch(`/api/profile?userId=${encodeURIComponent(activateUserId)}`, {
-                    credentials: "include",
+                const nextProfile = await userService.getProfile(activeUserId, {
                     signal: controller.signal,
                 });
 
-                if (response.status === 404) {
-                    setProfile(null);
-                    return;
-                }
-
-                const nextProfile = await readProfileResponse(response);
                 setProfile(nextProfile);
             } catch (err) {
-                if (err instanceof DOMException && err.name === "AbortError") {
-                    return;
+                if (!isAbortError(err)) {
+                    setError(getErrorMessage(err, "Unable to load profile."));
                 }
-
-                const message = err instanceof Error ? err.message : "Unable to load profile.";
-                setError(message);
             } finally {
-                setIsLoading(false);
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
             }
         }
 
@@ -82,25 +75,12 @@ export function useProfile(userId?: string): UseProfileResult {
             setSuccessMessage("");
 
             try {
-                const response = await fetch("/api/profile", {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        userId,
-                        ...payload,
-                    }),
-                });
-
-                const nextProfile = await readProfileResponse(response);
+                const nextProfile = await userService.updateProfile(userId, payload);
                 setProfile(nextProfile);
                 setSuccessMessage("Profile saved successfully.");
                 return nextProfile;
             } catch (err) {
-                const message = err instanceof Error ? err.message : "Unable to save profile.";
-                setError(message);
+                setError(getErrorMessage(err, "Unable to save profile."));
                 return null;
             } finally {
                 setIsSaving(false);
@@ -110,11 +90,11 @@ export function useProfile(userId?: string): UseProfileResult {
     );
 
     return {
-        profile, 
+        profile: userId ? profile: null, 
         isLoading,
         isSaving,
         error,
         successMessage,
-        saveProfile
+        saveProfile,
     };
 }
