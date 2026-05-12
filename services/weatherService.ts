@@ -1,8 +1,7 @@
 // services/weatherService.ts
-import { weatherClient } from "@/lib/weather/weatherClient";
-import { weatherNormalizer } from "@/lib/weather/weatherNormalizer";
+import { readJsonResponse, type ServiceRequestOptions } from "./apiResponse";
 
-export type TempCategory = | "cold" | "cool" | "mild" | "warm" | "hot";
+export type TempCategory = "cold" | "cool" | "mild" | "warm" | "hot";
 
 export type NormalizedWeather = {
     location: string;
@@ -12,23 +11,16 @@ export type NormalizedWeather = {
     precipitationChance: number;
     uvIndex: number;
     condition: string;
-    tempCategory: string;
+    tempCategory: TempCategory;
 };
 
 export const weatherService = {
-    async getWeather(location: string): Promise<NormalizedWeather> {
-        try {
-            // Fetch raw weather data
-            const rawWeather = await weatherClient.fetchWeather(location);
+    async getWeather(location: string, options: ServiceRequestOptions = {}): Promise<NormalizedWeather> {
+        const response = await fetch(`/api/weather?location=${encodeURIComponent(location)}`, {
+            credentials: "include",
+            signal: options.signal,
+        })
 
-            // Normalize into consistent internal format
-            const normalized = weatherNormalizer.normalize(rawWeather);
-
-            // Return clean object for recommendation engine
-            return normalized as NormalizedWeather;
-        } catch (error) {
-            console.error("WeatherService error:", error);
-            throw new Error("Failed to process weather data");
-        }
+        return readJsonResponse<NormalizedWeather>(response, "Unable to load weather.");
     }
-}
+};
