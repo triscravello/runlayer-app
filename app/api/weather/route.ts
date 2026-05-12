@@ -1,6 +1,6 @@
 // app/api/weather/route.ts
 import { NextResponse } from "next/server";
-import { weatherService } from "@/services/weatherService";
+import { getWeather } from "@/services/weatherServerService";
 
 export async function GET(request: Request) {
     try {
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
             );
         }
 
-        const weather = await weatherService.getWeather(location);
+        const weather = await getWeather(location);
 
         return NextResponse.json(weather);
     } catch (error) {

@@ -1,6 +1,6 @@
 // app/api/outfit/save/route.ts
 import { NextResponse } from "next/server";
-import { listSavedOutfitsByUserId, saveOutfit } from "@/lib/db/outfitRepository";
+import { listSavedOutfitsByUserId, saveOutfit } from "@/services/savedOutfitServerService";
 
 // GET saved outfits for a user
 export async function GET(request: Request) {

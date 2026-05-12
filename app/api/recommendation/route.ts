@@ -1,6 +1,6 @@
 // app/api/recommendation/route.ts
 import { NextResponse } from "next/server";
-import { createRecommendation, CreateRecommendationInput, listRecommendations } from "@/services/recommendationService";
+import { createRecommendation, CreateRecommendationInput, listRecommendations } from "@/services/recommendationServerService";
 
 // GET all recommendations
 export async function GET() {

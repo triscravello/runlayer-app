@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateGearRecommendations } from "@/services/recommendationService";
+import { generateGearRecommendations } from "@/services/recommendationServerService";
 import type { UserInput } from "@/lib/engine/recommendationEngine";
 
 export const runtime = "nodejs";

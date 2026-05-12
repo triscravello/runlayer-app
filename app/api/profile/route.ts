@@ -1,6 +1,6 @@
 // app/api/profile/route.ts
 import { NextResponse } from "next/server";
-import { getUserProfile, upsertUserProfile, type UpsertUserProfileInput } from "@/services/userService";
+import { getUserProfile, upsertUserProfile, type UpsertUserProfileInput } from "@/services/userServerService";
 
 // GET user profile
 export async function GET(request: Request) {
