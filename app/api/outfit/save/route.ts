@@ -1,6 +1,6 @@
 // app/api/outfit/save/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { listSavedOutfitsByUserId, saveOutfit } from "@/lib/db/outfitRepository";
 
 // GET saved outfits for a user
 export async function GET(request: Request) {
@@ -11,18 +11,11 @@ export async function GET(request: Request) {
         if (!userId) {
             return NextResponse.json(
                 { error: "Missing userId" },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
-        const outfits = await prisma.savedOutfit.findMany({
-            where: {
-                userId
-            },
-            orderBy: {
-                createdAt: "desc"
-            },
-        });
+        const outfits = await listSavedOutfitsByUserId(userId);
 
         return NextResponse.json(outfits);
     } catch (error) {
@@ -41,17 +34,15 @@ export async function POST(request: Request) {
         if (!userId) {
             return NextResponse.json(
                 { error: "Missing userId" },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
-        const savedOutfit = await prisma.savedOutfit.create({
-            data: {
-                userId,
-                recommendationId: recommendationId ?? null,
-                name: name ?? "Saved Outfit",
-                isFavorite: isFavorite ?? false,
-            }
+        const savedOutfit = await saveOutfit({
+            userId,
+            recommendationId,
+            name,
+            isFavorite,
         });
 
         return NextResponse.json(savedOutfit, { status: 201 });
