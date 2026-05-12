@@ -1,15 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { 
-    filterByCategory, 
-    rankGearList,
-    type GearItem,
-    type RankedGearItem,
-    type UserInput
-} from "@/lib/engine/recommendationEngine";
+import type { GearItem } from "../engine/recommendationEngine";
 
-const DEFAULT_RECOMMENDATION_LIMIT = 5;
-
-type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
+export type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
 
 type CreateGearInput = {
     name: string;
@@ -29,22 +21,6 @@ type UpdateGearInput = Partial<Omit<CreateGearInput, "weatherSuitability">> & {
     id: string;
     weatherSuitability?: CreateGearInput["weatherSuitability"];
 };
-
-export type GearRecommendationResult = {
-    recommendations: RankedGearItem[];
-};
-
-export function mapGearItemForScoring(gearItem: GearItemRow): GearItem {
-    return {
-        ...gearItem,
-        weatherSuitability: {
-            hot: gearItem.weatherHot ?? 0,
-            cold: gearItem.weatherCold ?? 0,
-            rain: gearItem.weatherRain ?? 0,
-            wind: gearItem.weatherWind ?? 0,
-        },
-    };
-}
 
 export async function listGearItems() {
     return prisma.gearItem.findMany({
@@ -99,21 +75,22 @@ export async function deleteGearItem(id: string) {
     });
 }
 
-export async function listScorableGearItems(category?: string): Promise<GearItem[]> {
-    const gearItems = await prisma.gearItem.findMany();
-    const scoreableGear = gearItems.map(mapGearItemForScoring);
-
-    return filterByCategory(scoreableGear, category);
+function mapGearItemForRecommendation(gearItem: GearItemRow): GearItem {
+    return {
+        ...gearItem,
+        weatherSuitability: {
+            hot: gearItem.weatherHot ?? 0,
+            cold: gearItem.weatherCold ?? 0,
+            rain: gearItem.weatherRain ?? 0,
+            wind: gearItem.weatherWind ?? 0,
+        },
+    };
 }
 
-export async function getRankedGearRecommendations(
-    input: UserInput,
-    limit = DEFAULT_RECOMMENDATION_LIMIT,
-) : Promise<GearRecommendationResult> {
-    const filteredGear = await listScorableGearItems(input.category);
-    const recommendations = rankGearList(input, filteredGear).slice(0, limit);
+export async function listGearRecommendationCandidates(): Promise<GearItem[]> {
+    const gearItems = await prisma.gearItem.findMany();
 
-    return { recommendations };
+    return gearItems.map(mapGearItemForRecommendation);
 }
 
 export async function listWardrobeByUserId(userId: string) {
