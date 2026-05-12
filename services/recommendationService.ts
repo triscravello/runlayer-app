@@ -1,8 +1,14 @@
-import { getRankedGearRecommendations, type GearRecommendationResult } from "@/lib/db/gearRepository";
+import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { createGeneratedOutfit, listGeneratedOutfits, type CreateRecommendationInput } from "@/lib/db/outfitRepository";
-import type { UserInput } from "@/lib/engine/recommendationEngine";
+import {
+    rankGearRecommendations,
+    type GearRecommendationResult,
+    type UserInput,
+} from "@/lib/engine/recommendationEngine";
 
-export type { GearRecommendationResult };
+const DEFAULT_RECOMMENDATION_LIMIT = 5;
+
+export type { CreateRecommendationInput, GearRecommendationResult};
 
 export async function listRecommendations() {
     return listGeneratedOutfits();
@@ -14,7 +20,10 @@ export async function createRecommendation(input: CreateRecommendationInput) {
 
 export async function generateGearRecommendations(
     input: UserInput,
-    limit?: number,
+    limit = DEFAULT_RECOMMENDATION_LIMIT
 ): Promise<GearRecommendationResult> {
-    return getRankedGearRecommendations(input, limit);
+    const recommendationCandidates = await listGearRecommendationCandidates();
+    const recommendations = rankGearRecommendations(input, recommendationCandidates).slice(0, limit);
+
+    return { recommendations };
 }
