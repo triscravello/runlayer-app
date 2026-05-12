@@ -11,13 +11,21 @@ export type GearItem = {
     weatherSuitability: Record<string, number> | null;
     tags: string[];
     genderTarget: string | null;
-}
+};
 
 export type RankedGearItem = {
     item: GearItem;
     score: number;
     reasons: string[];
 };
+
+export type GearRecommendationResult = {
+    recommendations: RankedGearItem[];
+};
+
+function normalizeMatchValue(value: string) {
+    return value.toLowerCase().replace(/[-_\s]/g, "");
+}
 
 export function scoreGear(userInput: UserInput, gearItem: GearItem): RankedGearItem {
     let score = 0;
@@ -34,14 +42,11 @@ export function scoreGear(userInput: UserInput, gearItem: GearItem): RankedGearI
     }
 
     // WORKOUT
-    const normalize = (s: string) =>
-        s.toLowerCase().replace(/[-_\s]/g, "");
-
     const workout = userInput.workoutType;
 
     if (workout) {
         const match = gearItem.tags.some((tag) =>
-            normalize(tag).includes(normalize(workout))
+            normalizeMatchValue(tag).includes(normalizeMatchValue(workout)),
         );
 
         if (match) {
@@ -70,11 +75,7 @@ export function scoreGear(userInput: UserInput, gearItem: GearItem): RankedGearI
     return { item: gearItem, score, reasons };
 }
 
-export function rankGearList(userInput: UserInput, gearItems: GearItem[]): RankedGearItem[] {
-    return gearItems.map((gearItem) => scoreGear(userInput, gearItem)).sort((a, b) => b.score - a.score)
-}
-
-export function filterByCategory(
+export function filterGearByCategory(
     gearItems: GearItem[],
     category?: string,
 ): GearItem[] {
@@ -86,4 +87,13 @@ export function filterByCategory(
     return gearItems.filter((gearItem) =>
         gearItem.category?.toLowerCase() === normalizedCategory,
     );
+}
+
+export function rankGearRecommendations(
+    userInput: UserInput,
+    gearItems: GearItem[],
+): RankedGearItem[] {
+    const filteredGear = filterGearByCategory(gearItems, userInput.category);
+
+    return filteredGear.map((gearItem) => scoreGear(userInput, gearItem)).sort((a, b) => b.score - a.score);
 }
