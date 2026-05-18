@@ -1,6 +1,6 @@
 // app/api/outfit/save/route.ts
 import { NextResponse } from "next/server";
-import { listSavedOutfitsByUserId, saveOutfit } from "@/services/savedOutfitServerService";
+import { listSavedOutfitsByUserId, saveOutfit, deleteSavedOutfitById } from "@/services/savedOutfitServerService";
 
 // GET saved outfits for a user
 export async function GET(request: Request) {
@@ -49,5 +49,28 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error("Error creating outfit:", error);
         return NextResponse.json({ error: "Failed to create outfit" }, { status: 500 });
+    }
+}
+
+// DELETE saved outfit for a user
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const userId = searchParams.get("userId");
+        const outfitId = searchParams.get("outfitId");
+
+        if (!userId || !outfitId) {
+            return NextResponse.json(
+                { error: "Missing userId or outfitId" },
+                { status: 400 },
+            );
+        }
+
+        const result = await deleteSavedOutfitById(userId, outfitId);
+        
+        return NextResponse.json({ deletedCount: result.count });
+    } catch (error) {
+        console.error("Error deleting outfit:", error);
+        return NextResponse.json({ error: "Failed to delete outfit" }, { status: 500 });
     }
 }

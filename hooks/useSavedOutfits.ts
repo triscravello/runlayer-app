@@ -6,6 +6,7 @@ import {
     type SavedOutfit,
     type SavedOutfitRecord,
     type SaveOutfitInput,
+    type DeleteSavedOutfitInput,
 } from "@/services/savedOutfitService";
 
 type UseSavedOutfitsResult = {
@@ -17,6 +18,7 @@ type UseSavedOutfitsResult = {
     successMessage: string;
     refreshSavedOutfits: () => Promise<SavedOutfit[]>;
     saveOutfit: (input: SaveOutfitInput) => Promise<SavedOutfitRecord | null>;
+    deleteSavedOutfit: (input: DeleteSavedOutfitInput) => Promise<boolean>;
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -109,6 +111,29 @@ export function useSavedOutfits(userId?: string): UseSavedOutfitsResult {
         }
     }, []);
 
+    const deleteSavedOutfit = useCallback(async (input: DeleteSavedOutfitInput) => {
+        setError("");
+        setSuccessMessage("");
+
+        try {
+            const result = await savedOutfitService.deleteSavedOutfit(input);
+
+            if (result.deletedCount > 0) {
+                setSavedOutfits((currentOutfits) =>
+                    currentOutfits.filter((outfit) => outfit.id !== input.outfitId)
+                );
+                setSuccessMessage("Saved outfit deleted.");
+                return true;
+            }
+
+            setError("Saved outfit was not found.");
+            return false;
+        } catch (err) {
+            setError(getErrorMessage(err, "Unable to delete saved outfit."));
+            return false;
+        }
+    }, []);
+
     return {
         savedOutfits: userId ? savedOutfits : [],
         savedOutfit,
@@ -118,5 +143,6 @@ export function useSavedOutfits(userId?: string): UseSavedOutfitsResult {
         successMessage,
         refreshSavedOutfits,
         saveOutfit,
+        deleteSavedOutfit,
     };
 }
