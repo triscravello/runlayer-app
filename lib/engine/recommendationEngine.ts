@@ -1,3 +1,6 @@
+import { buildOutfits, type OutfitBuilderResult, type OutfitBuildUserProfile, type OutfitGearItem } from "./outfitBuilder";
+import type { WeatherInput } from "./conditionScorer";
+
 export type UserInput = {
     weather?: string;
     workoutType?: string;
@@ -96,4 +99,16 @@ export function rankGearRecommendations(
     const filteredGear = filterGearByCategory(gearItems, userInput.category);
 
     return filteredGear.map((gearItem) => scoreGear(userInput, gearItem)).sort((a, b) => b.score - a.score);
+}
+
+export type OutfitRecommendationInput<TItem extends OutfitGearItem> = {
+    weather: WeatherInput;
+    userProfile?: OutfitBuildUserProfile;
+    gearItems: readonly TItem[];
+};
+
+export function buildOutfitRecommendations<TItem extends OutfitGearItem>(
+    input: OutfitRecommendationInput<TItem>,
+): OutfitBuilderResult<TItem> {
+    return buildOutfits(input.gearItems, input.weather, input.userProfile ?? {});
 }
