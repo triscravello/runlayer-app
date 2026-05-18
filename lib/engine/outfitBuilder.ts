@@ -222,6 +222,42 @@ export function buildOutfits<TItem extends OutfitGearItem>(
                 [],
                 ...accessories.slice(0, OUTFIT_RULES.maxAccessories).map((accessory) => [accessory]),
             ];
+
+            for (const accessorySet of accessorySets) {
+                const scoredCombination = [top, bottom, ...accessorySet];
+
+                const key = combinationKey(
+                    scoredCombination.map((item) => item.item),
+                );
+
+                if (seen.has(key)) {
+                    continue;
+                }
+
+                seen.add(key);
+                
+                const averageScore = getAverageScore(
+                    scoredCombination as Array<ScoredOutfitItem<OutfitGearItem>>,
+                );
+
+                const accessoryBonus = accessorySet.length ? OUTFIT_RULES.accessoryBonusMultiplier : 1;
+
+                const finalScore = roundTo(
+                    averageScore * accessoryBonus,
+                    1,
+                );
+
+                candidates.push({
+                    items: {
+                        top: top.item,
+                        bottom: bottom.item,
+                        accessories: accessorySet.length ? accessorySet.map((item) => item.item) : undefined,
+                    },
+                    score: finalScore,
+                    explanation: buildExplanation(scoredCombination, weather),
+                    itemScores: scoredCombination.map((item) => toItemScore(item)),
+                });
+            }
         }
     }
 

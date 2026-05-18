@@ -32,6 +32,7 @@ export const OUTFIT_RULES = {
     maxOutfits: 6,
     servereRainMinimumSuitability: 0.45,
     severeWindMinimumSuitability: 0.35,
+    accessoryBonusMultiplier: 1.03,
 } as const;
 
 export const LAYERING_TAGS = ["layer", "layering", "long-sleeve", "jacket", "vest", "thermal", "fleece"] as const;
