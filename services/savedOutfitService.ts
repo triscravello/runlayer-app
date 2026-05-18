@@ -20,9 +20,14 @@ export type SavedOutfit = SaveOutfitInput & {
 
 export type SavedOutfitRecord = Omit<SavedOutfit, "recommendation" | "OutfitItem">;
 
+export type DeleteSavedOutfitInput = {
+    userId: string;
+    outfitId: string;
+}
+
 export const savedOutfitService = {
     async listSavedOutfits(userId: string, options: ServiceRequestOptions = {}): Promise<SavedOutfit[]> {
-        const response = await fetch(`api/outfit/save?userId=${encodeURIComponent(userId)}`, {
+        const response = await fetch(`/api/outfit/save?userId=${encodeURIComponent(userId)}`, {
             credentials: "include",
             signal: options.signal,
         });
@@ -41,5 +46,18 @@ export const savedOutfitService = {
         });
 
         return readJsonResponse<SavedOutfitRecord>(response, "Unable to save outfits.");
+    },
+
+    async deleteSavedOutfit(input: DeleteSavedOutfitInput): Promise<{ deletedCount: number }> {
+        const params = new URLSearchParams({
+            userId: input.userId,
+            outfitId: input.outfitId,
+        });
+        const response = await fetch(`/api/outfit/save?${params.toString()}`, {
+            method: "DELETE",
+            credentials: "include",
+        });
+
+        return readJsonResponse<{ deletedCount: number }>(response, "Unable to delete saved outfit.");
     }
 };

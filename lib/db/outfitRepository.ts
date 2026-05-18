@@ -53,6 +53,15 @@ export async function saveOutfit(input: SaveOutfitInput) {
     });
 }
 
+export async function deleteSavedOutfitById(userId: string, outfitId: string) {
+    return prisma.savedOutfit.deleteMany({
+        where: {
+            id: outfitId,
+            userId,
+        },
+    });
+}
+
 export async function listGeneratedOutfits() {
     return prisma.recommendation.findMany({
         orderBy: {
