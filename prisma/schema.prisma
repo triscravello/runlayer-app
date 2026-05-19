@@ -136,6 +136,7 @@ model GearItem {
   updatedAt  DateTime     @default(now()) @updatedAt @map("updated_at")
   OutfitItem OutfitItem[]
 
+  @@unique([name, brandId])
   @@map("gear_items")
 }
 
