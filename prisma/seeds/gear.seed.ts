@@ -101,7 +101,23 @@ function buildGearRecords(items: GearSeedItem[], brandCache: Map<string, Brand>)
 }
 
 async function seedGearItems(records: ReturnType<typeof buildGearRecords>) {
-    await prisma.$transaction(records.map((record) => prisma.gearItem.upsert(record)));
+    for (const record of records) {
+        const existing = await prisma.gearItem.findFirst({
+            where: record.where,
+            select: { id: true },
+        });
+
+        if (existing) {
+            await prisma.gearItem.update({
+                where: { id: existing.id },
+                data: record.update,
+            });
+        } else {
+            await prisma.gearItem.create({
+                data: record.create,
+            });
+        }
+    }
 }
 
 async function main() {
