@@ -1,0 +1,2 @@
+import type { RecommendationGearItem, RecommendationUserInput } from "../types/recommendationEngine";
+export function categoryFilter(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[]) { if (!userInput.category || userInput.category==="all") return gearItems; return gearItems.filter(i => i.category?.toLowerCase()===userInput.category); }
