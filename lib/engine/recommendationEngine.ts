@@ -1,114 +1,27 @@
-import { buildOutfits, type OutfitBuilderResult, type OutfitBuildUserProfile, type OutfitGearItem } from "./outfitBuilder";
-import type { WeatherInput } from "./conditionScorer";
+import { listGearRecommendationCandidates } from "../db/gearRepository";
+import { weatherFilter } from "./filters/weatherFilter";
+import { categoryFilter } from "./filters/categoryFilter";
+import { intensityFilter } from "./filters/intensityFilter";
+import { preferenceFilter } from "./filters/preferenceFilter";
+import { recommendationRanker } from "./rankers/recommendationRanker";
+import { outfitBuilder } from "./builders/outfitBuilder";
+import type { RecommendationGearItem, RecommendationUserInput, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
 
-export type UserInput = {
-    weather?: string;
-    workoutType?: string;
-    intensity?: string;
-    gender?: string;
-    category?: string;
-};
-
-export type GearItem = {
-    category?: string | null;
-    weatherSuitability: Record<string, number> | null;
-    tags: string[];
-    genderTarget: string | null;
-};
-
-export type RankedGearItem = {
-    item: GearItem;
-    score: number;
-    reasons: string[];
-};
-
+export type UserInput = RecommendationUserInput;
+export type GearItem = RecommendationGearItem;
+export type RankedGearItem = ScoredRecommendationItem;
 export type GearRecommendationResult = {
-    recommendations: RankedGearItem[];
-};
-
-function normalizeMatchValue(value: string) {
-    return value.toLowerCase().replace(/[-_\s]/g, "");
+    recommendations: RankedGearItem[],
+    outfits?: ReturnType<typeof outfitBuilder>;
 }
 
-export function scoreGear(userInput: UserInput, gearItem: GearItem): RankedGearItem {
-    let score = 0;
-    const reasons: string[] = [];
-
-    // WEATHER
-    if (userInput.weather && gearItem.weatherSuitability) {
-        const weatherScore = gearItem.weatherSuitability[userInput.weather];
-
-        if (typeof weatherScore === "number") {
-            score += weatherScore * 3;
-            reasons.push(`Fits ${userInput.weather} conditions`);
-        }
-    }
-
-    // WORKOUT
-    const workout = userInput.workoutType;
-
-    if (workout) {
-        const match = gearItem.tags.some((tag) =>
-            normalizeMatchValue(tag).includes(normalizeMatchValue(workout)),
-        );
-
-        if (match) {
-            score += 3;
-            reasons.push(`Designed for ${workout} runs`);
-        }
-    }
-
-    // INTENSITY
-    if (userInput.intensity === "high" && gearItem.tags.includes("race-day")) {
-        score += 2;
-        reasons.push("Great for high-intensity race efforts");
-    }
-
-    // GENDER (soft logic)
-    if (userInput.gender) {
-        if (gearItem.genderTarget === userInput.gender) {
-            score += 2;
-            reasons.push("Matches your fit preference");
-        } else if (gearItem.genderTarget === "unisex") {
-            score += 1;
-            reasons.push("Unisex fit");
-        }
-    }
-
-    return { item: gearItem, score, reasons };
+export function rankGearRecommendations(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[], preferences: UserPreferenceInput = {}): RankedGearItem[] {
+  const filtered = preferenceFilter(preferences, intensityFilter(userInput, categoryFilter(userInput, weatherFilter(userInput, gearItems))));
+  return recommendationRanker(userInput, preferences, filtered);
 }
 
-export function filterGearByCategory(
-    gearItems: GearItem[],
-    category?: string,
-): GearItem[] {
-    if (!category) {
-        return gearItems;
-    }
-
-    const normalizedCategory = category.toLowerCase();
-    return gearItems.filter((gearItem) =>
-        gearItem.category?.toLowerCase() === normalizedCategory,
-    );
-}
-
-export function rankGearRecommendations(
-    userInput: UserInput,
-    gearItems: GearItem[],
-): RankedGearItem[] {
-    const filteredGear = filterGearByCategory(gearItems, userInput.category);
-
-    return filteredGear.map((gearItem) => scoreGear(userInput, gearItem)).sort((a, b) => b.score - a.score);
-}
-
-export type OutfitRecommendationInput<TItem extends OutfitGearItem> = {
-    weather: WeatherInput;
-    userProfile?: OutfitBuildUserProfile;
-    gearItems: readonly TItem[];
-};
-
-export function buildOutfitRecommendations<TItem extends OutfitGearItem>(
-    input: OutfitRecommendationInput<TItem>,
-): OutfitBuilderResult<TItem> {
-    return buildOutfits(input.gearItems, input.weather, input.userProfile ?? {});
+export async function generateOutfitRecommendations(userInput: RecommendationUserInput, preferences: UserPreferenceInput = {}) {
+  const items = await listGearRecommendationCandidates();
+  const ranked = rankGearRecommendations(userInput, items as RecommendationGearItem[], preferences);
+  return { outfits: outfitBuilder(ranked), recommendations: ranked };
 }
