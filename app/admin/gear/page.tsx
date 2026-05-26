@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, CheckCircle2, Download, PackagePlus, Sparkles, TrendingUp, UploadCloud } from "lucide-react";
+import { ArrowUpRight, Boxes, CheckCircle2, Download, PackagePlus, Sparkles, UploadCloud, type LucideIcon } from "lucide-react";
 import { GearEditor } from "@/components/admin/gear/GearEditor";
 import { GearFilters } from "@/components/admin/gear/GearFilters";
 import { GearImportForm } from "@/components/admin/gear/GearImportForm";
@@ -8,15 +8,85 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getGear } from "@/services/gearService";
 
-const stats = [
-  { label: "Total Gear Items", value: "4,286", trend: "+6.2%", icon: Boxes },
-  { label: "Recommendation Ready", value: "3,914", trend: "+4.1%", icon: CheckCircle2 },
-  { label: "Active Brands", value: "127", trend: "+9 new", icon: Sparkles },
-  { label: "Imports This Week", value: "42", trend: "+11 today", icon: UploadCloud },
-];
+type GearItem = Awaited<ReturnType<typeof getGear>>[number];
+
+type AdminStat = {
+  key: string;
+  label: string;
+  value: string;
+  helper: string;
+  icon: LucideIcon;
+  sparkline: number[];
+};
+
+const RECOMMENDATION_SCORERS = [
+  "weatherScorer",
+  "intensityScorer",
+  "terrainScorer",
+  "seasonalScorer",
+  "brandAffinityScorer",
+  "rotationPenaltyScorer",
+] as const;
+
+const WEATHER_SIGNALS = ["hot", "cold", "rain", "wind"] as const;
+
+function isRecommendationReady(item: GearItem): boolean {
+  const weatherCoverage = WEATHER_SIGNALS.filter((signal) => {
+    const value = item[`weather${signal.charAt(0).toUpperCase()}${signal.slice(1)}` as "weatherHot" | "weatherCold" | "weatherRain" | "weatherWind"];
+    return typeof value === "number"
+  }).length;
+
+  return item.tags.length > 0 && weatherCoverage >= 2
+}
+
+function deriveStats(items: GearItem[]): AdminStat[] {
+  const totalItems = items.length;
+  const uniqueCategories = new Set(items.map((item) => item.category)).size;
+  const uniqueBrands = new Set(items.map((item) => item.brandId)).size;
+  const readyItems = items.filter(isRecommendationReady).length;
+  const missingMetadata = totalItems - readyItems;
+  const coveragePct = totalItems === 0 ? 0 : Math.round((readyItems / totalItems) * 100);
+  const categoryCoveragePct = totalItems === 0 ? 0 : Math.round((uniqueCategories / 3) * 100);
+
+  return [
+    {
+      key: "gear-total",
+      label: "Catalog Inventory",
+      value: totalItems.toLocaleString(),
+      helper: `${uniqueBrands} active brands across ${uniqueCategories} categories`,
+      icon: Boxes,
+      sparkline: [25, 32, 38, 44, 52, 61, 66, 72, 78, 84],
+    },
+    {
+      key: "reacommendation-ready",
+      label: "Recommendation Coverage",
+      value: `${coveragePct}%`,
+      helper: `${readyItems.toLocaleString()} items ready for scoring modules`,
+      icon: CheckCircle2,
+      sparkline: [15, 22, 30, 41, 49, 57, 63, 70, 76, Math.max(coveragePct, 10)],
+    },
+    {
+      key: "scorers-online",
+      label: "Scoring Pipeline",
+      value: `${RECOMMENDATION_SCORERS.length} modules`,
+      helper: `${WEATHER_SIGNALS.length} weather signals + intensity, terrain, and season scoring`,
+      icon: Sparkles,
+      sparkline: [40, 48, 52, 59, 63, 68, 73, 79, 83, 88],
+    },
+    {
+      key: "metadata-gap",
+      label: "Metadata Backlog",
+      value: missingMetadata.toLocaleString(),
+      helper: `${categoryCoveragePct}% category coverage in current seed catalog`,
+      icon: UploadCloud,
+      sparkline: [82, 75, 71, 65, 58, 52, 46, 39, 34, Math.max(18, 100 - coveragePct)],
+    }
+  ];
+}
 
 export default async function AdminGearPage() {
   const items = await getGear();
+  const stats = deriveStats(items);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 text-zinc-100">
@@ -45,7 +115,7 @@ export default async function AdminGearPage() {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.label} className="overflow-hidden rounded-2xl border-zinc-800/80 bg-zinc-900/70 shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:border-zinc-700">
+            <Card key={stat.key} className="overflow-hidden rounded-2xl border-zinc-800/80 bg-zinc-900/70 shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:border-zinc-700">
               <CardHeader>
                 <CardDescription className="flex items-center justify-between text-zinc-400">
                   {stat.label}
@@ -54,9 +124,9 @@ export default async function AdminGearPage() {
                 <CardTitle className="text-3xl font-semibold">{stat.value}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="flex items-center gap-1 text-xs text-emerald-400"><TrendingUp className="size-3.5" /> {stat.trend} vs last week</p>
+                <p className="flex items-center gap-1 text-xs text-zinc-300"><CheckCircle2 className="size-3.5" /> {stat.helper}</p>
                 <div className="grid h-8 grid-cols-10 items-end gap-1">
-                  {[18, 30, 24, 50, 35, 62, 45, 71, 64, 80].map((bar, i) => (
+                  {stat.sparkline.map((bar, i) => (
                     <div key={i} className="rounded-sm bg-gradient-to-t from-zinc-600 to-zinc-300/90" style={{ height: `${bar}%` }} />
                   ))}
                 </div>
