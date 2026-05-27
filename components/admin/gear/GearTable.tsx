@@ -27,6 +27,7 @@ type SortKey = "recommendationScore" | "updatedAt" | "status";
 type SortDirection = "asc" | "desc";
 
 type SortState = { key: SortKey; direction: SortDirection };
+type GearTableProps = { items: GearTableItem[]; onSelectItem?: (itemId: string) => void  };
 
 const statusStyle: Record<GearStatus, string> = {
   Ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
@@ -34,6 +35,13 @@ const statusStyle: Record<GearStatus, string> = {
   "Needs Scoring": "border-sky-500/30 bg-sky-500/10 text-sky-200",
   Hidden: "border-zinc-600 bg-zinc-800 text-zinc-200",
 };
+
+const statusOrder: Record<GearStatus, number> = {
+  Ready: 0,
+  "Needs Scoring": 1,
+  "Missing Metadata": 2,
+  Hidden: 3,
+}
 
 function StatusBadge({ status }: { status?: GearStatus }) {
   if (!status) return <EmptyStateCell message="No status" />;
@@ -53,12 +61,13 @@ function getScoreColor(score: number) {
 
 function ScoreCell({ score }: { score?: number }) {
   if (typeof score !== "number") return <EmptyStateCell message="No score" />;
+  const clampedScore = Math.max(0, Math.min(score, 100));
   return (
     <div className="space-y-1">
       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-800">
-        <div className={`h-full ${getScoreColor(score)}`} style={{ width: `${score}%` }} />
+        <div className={`h-full ${getScoreColor(clampedScore)}`} style={{ width: `${clampedScore}%` }} />
       </div>
-      <p className="text-xs font-semibold text-zinc-200">{score}</p>
+      <p className="text-xs font-semibold text-zinc-200">{clampedScore}</p>
     </div>
   );
 }
@@ -106,8 +115,8 @@ function getInitials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join("");
 }
 
-export function GearTable({ items }: { items: GearTableItem[] }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+export function GearTable({ items, onSelectItem }: GearTableProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState>({ key: "updatedAt", direction: "desc" });
 
   const sortedItems = useMemo(() => {
@@ -120,12 +129,22 @@ export function GearTable({ items }: { items: GearTableItem[] }) {
       if (sort.key === "updatedAt") {
         return ((a.updatedAt?.getTime() ?? 0) - (b.updatedAt?.getTime() ?? 0)) * directionMultiplier;
       }
-      return (String(a.status ?? "")).localeCompare(String(b.status ?? "")) * directionMultiplier;
+      return ((statusOrder[a.status ?? "Hidden"] - statusOrder[b.status ?? "Hidden"]) * directionMultiplier);
     });
     return cloned;
   }, [items, sort]);
 
-  const hasSelected = selectedIds.length > 0;
+  const hasSelected = selectedIds.size > 0;
+
+  const toggleSelection = (itemId: string, shouldSelect?: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const select = typeof shouldSelect === "boolean" ? shouldSelect : !next.has(itemId);
+      if (select) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+  };
 
   const toggleSort = (key: SortKey) => {
     setSort((prev) => {
@@ -141,7 +160,7 @@ export function GearTable({ items }: { items: GearTableItem[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm">
         {hasSelected ? (
           <>
-            <span className="text-zinc-200">{selectedIds.length} selected</span>
+            <span className="text-zinc-200">{selectedIds.size} selected</span>
             <div className="flex flex-wrap gap-2">{["Publish", "Hide", "Delete", "Re-score", "Export"].map((action) => <Button key={action} size="sm" variant="outline" className="border-zinc-700 bg-zinc-900">{action}</Button>)}</div>
           </>
         ) : (
@@ -176,7 +195,9 @@ export function GearTable({ items }: { items: GearTableItem[] }) {
                 </tr>
               ) : (
                 sortedItems.map((item) => {
-                  const selected = selectedIds.includes(item.id);
+                  const selected = selectedIds.has(item.id);
+                  const updatedLabel = formatRelativeDate(item.updatedAt);
+                  const hasValidImageUrl = typeof item.imageUrl === "string" && item.imageUrl.trim().length > 0;
                   return (
                     <tr key={item.id} className={`border-t border-zinc-800/60 bg-zinc-900/40 transition-colors ${selected ? "bg-zinc-800/70" : "hover:bg-zinc-800/50"}`}>
                       <td className="px-3 py-3">
@@ -185,15 +206,15 @@ export function GearTable({ items }: { items: GearTableItem[] }) {
                           aria-label={`Select ${item.name}`}
                           checked={selected}
                           onChange={(event) => {
-                            if (event.target.checked) setSelectedIds((prev) => [...prev, item.id]);
-                            else setSelectedIds((prev) => prev.filter((id) => id !== item.id));
+                            toggleSelection(item.id, event.target.checked);
                           }}
+                          onClick={(event) => event.stopPropagation()}
                           className="rounded border-zinc-700 bg-zinc-900 accent-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                         />
                       </td>
                       <td className="px-3 py-3">
-                        {item.imageUrl ? (
-                          <Image src={item.imageUrl} alt={item.name} width={36} height={36} className="size-9 rounded-md object-cover" />
+                        {hasValidImageUrl ? (
+                          <Image src={item.imageUrl ?? ""} alt={item.name} width={36} height={36} className="size-9 rounded-md object-cover" />
                         ) : (
                           <div className="flex size-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-semibold text-zinc-300">
                             {getInitials(item.name)}
@@ -201,7 +222,14 @@ export function GearTable({ items }: { items: GearTableItem[] }) {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <button type="button" className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                        <button 
+                          type="button" 
+                          className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelectItem?.(item.id);
+                          }}
+                        >
                           <p className="font-semibold text-zinc-500">{item.name}</p>
                           <p className="text-xs text-zinc-500">ID: {item.id}</p>
                         </button>
