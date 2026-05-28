@@ -1,4 +1,5 @@
 "use client";
+
 import { useMemo, useState } from "react";
 import { Filter, RotateCcw, Save, Search, LayoutGrid, List, Table, X } from "lucide-react";
 
@@ -14,7 +15,16 @@ type FilterDefinition = {
     label: string;
     value: string;
     isWarning?: boolean;
-}
+};
+
+const TOTAL_GEAR_ITEMS = 317;
+const FILTER_BY_REDUCTION_BY_KEY: Record<FilterKey, number> = {
+    brand: 93,
+    category: 58, 
+    weather: 41,
+    intensity: 34,
+    status: 49,
+};
 
 const PRIMARY_FILTERS: FilterDefinition[] = [
     { key: "brand", label: "Brand", value: "Nike" },
@@ -32,6 +42,7 @@ const VIEW_OPTIONS: Array<{ key: ViewMode; label: string; icon: typeof LayoutGri
 
 export function GearFilters() {
     const [activeFilterKeys, setActiveFilterKeys] = useState<FilterKey[]>(["brand", "category", "weather", "status"]);
+    const [searchQuery, setSearchQuery] = useState("");
     const [viewMode, setViewMode] = useState<ViewMode>("compact");
 
     const activeFilters = useMemo(
@@ -39,120 +50,179 @@ export function GearFilters() {
         [activeFilterKeys],
     );
 
+    const visibleItemCount = useMemo(() => {
+        if (!activeFilterKeys.length && !searchQuery.trim()) {
+            return TOTAL_GEAR_ITEMS;
+        }
+
+        const filterReduction = activeFilterKeys.reduce(
+            (count, key) => count + FILTER_BY_REDUCTION_BY_KEY[key],
+            0,
+        );
+        const searchReduction = searchQuery.trim() ? 28 : 0;
+
+        return Math.max(TOTAL_GEAR_ITEMS - filterReduction - searchReduction, 12);
+    }, [activeFilterKeys, searchQuery]);
+
+    const toggleFilter = (key: FilterKey) => {
+        setActiveFilterKeys((current) => 
+            current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+        );
+    };
+
     const removeFilter = (key: FilterKey) => {
         setActiveFilterKeys((current) => current.filter((item) => item !== key));
-    }
+    };
 
     const clearFilters = () => {
         setActiveFilterKeys([]);
-    }
+        setSearchQuery("");
+    };
+
+    const hasActiveState = activeFilters.length > 0 || Boolean(searchQuery.trim());
 
     return (
         <section className="sticky top-24 z-20 rounded-2xl border border-zinc-800/80 bg-zinc-900/75 p-4 shadow-lg backdrop-blur-xl">
             <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-zinc-500" />
-                    <Input className="border-zinc-700 bg-zinc-950/70 pl-9 text-zinc-100" placeholder="Search gear ID, tags, terrain, notes, metadata..." />
-                </div>
+                    <div className="relative min-w-72 flex-1 lg:max-w-xl">
+                        <label className="sr-only" htmlFor="gear-filter-search">
+                            Search gear inventory
+                        </label>
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
+                        <Input
+                            id="gear-filter-search"
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            className="border-zinc-700 bg-zinc-950/70 pl-9 pr-3 text-zinc-100 placeholder:text-zinc-500"
+                            placeholder="Search gear ID, tags, terrain, notes, metadata..."
+                        />
+                    </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    {PRIMARY_FILTERS.map((filter) => {
-                        const isActive = activeFilterKeys.includes(filter.key);
-                        const warningStyles = isActive && filter.isWarning ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20" : "";
-                        
-                        return (
-                            <Button 
-                                key={filter.key}
-                                variant="outline" 
-                                className={[
-                                    "h-9 border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800",
-                                    isActive ? "border-zinc-500 bg-zinc-800/80 text-zinc-100" : "text-zinc-400",
-                                    warningStyles
-                                ].join(" ")}
-                            >
-                                <span className="text-zinc-400">{filter.label}</span>
-                                <span className="ml-1 text-zinc-100">{filter.value}</span>
-                            </Button>
-                        );
-                    })}
+                    <div className="flex-wrap items-center gap-1.5" role="group" aria-label="Primary gear filters">
+                        {PRIMARY_FILTERS.map((filter) => {
+                            const isActive = activeFilterKeys.includes(filter.key);
+                            const activeStyles = filter.isWarning ? "border-amber-500/45 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15" : "border-zinc-500 bg-zinc-800/90 text-zinc-100 hover:bg-zinc-800";
+                            const inactiveStyles = "border-zinc-700/80 bg-zinc-900/70 text-zinc-400 hover:border-zinc-800/60 hover:text-zinc-200";
 
-                    <Button 
-                        variant="outline"
-                        className="h-9 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                            return (
+                                <Button 
+                                    key={filter.key}
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => toggleFilter(filter.key)}
+                                    aria-pressed={isActive}
+                                    className={[
+                                        "h-9 gap-1.5 px-3 text-sm focus-visible:ring-zinc-500/60",
+                                        isActive ? activeStyles : inactiveStyles,
+                                    ].join(" ")}
+                                >
+                                    <span className={filter.isWarning && isActive ? "text-amber-200/80" : "text-zinc-500"}>{filter.label}</span>
+                                    <span className={isActive ? "font-medium" : "text-zinc-300"}>{filter.value}</span>
+                                </Button>
+                            );
+                        })}
+                    </div>
+
+                    <div 
+                        className="ml-auto flex items-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950/50"
+                        role="group"
+                        aria-label="Inventory view mode"
                     >
-                        Sort: Last Updated
-                    </Button>
+                        {VIEW_OPTIONS.map((option) => {
+                            const Icon = option.icon;
+                            const isSelected = viewMode === option.key;
+
+                            return (
+                                <Button
+                                    key={option.key}
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setViewMode(option.key)}
+                                    className={[
+                                        "h-9 rounded-none border-0 px-3 text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200 focus-visible:ring-zinc-500/60",
+                                        isSelected ? "bg-zinc-800 text-zinc-100 shadow-inner hover:bg-zinc-800 hover:text-zinc-100" : "",
+                                    ].join(" ")}
+                                    aria-pressed={isSelected}
+                                >
+                                    <Icon className="size-4" aria-hidden="true" />
+                                    <span className="sr-only md:not-sr-only md:ml-1.5">{option.label}</span>
+                                </Button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="ml-auto flex items-center overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900/90">
-                    {VIEW_OPTIONS.map((option) => {
-                        const Icon = option.icon;
-                        const isSelected = viewMode === option.key;
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-zinc-800/80 pt-3">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className="border-zinc-700 bg-zinc-800/50 text-zinc-300">
+                            <Filter className="size-3" aria-hidden="true" />
+                            Active filters
+                        </Badge>
 
-                        return (
-                            <Button
-                                key={option.key}
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setViewMode(option.key)}
-                                className={[
-                                    "h-9 rounded-none border-0 px-3 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100",
-                                    isSelected ? "bg-zinc-800 text-zinc-100" : "",
-                                ].join(" ")}
-                                aria-pressed={isSelected}
-                            >
-                                <Icon className="size-4" />
-                                <span className="sr-only md:not-sr-only md:ml-1">{option.label}</span>
-                            </Button>
-                        );
-                    })}
-                </div>
-            </div>
+                        {activeFilters.length ? (
+                            activeFilters.map((filter) => {
+                                const chipStyles = filter.isWarning ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 focus-visible:ring-amber-500/40" : "border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 focus-visible:ring-zinc-500/60";
+                                const labelStyles = filter.isWarning ? "text-amber-200/80" : "text-zinc-400";
 
-            <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3">
-                <Badge variant="outline" className="border-zinc-700 bg-zinc-800/60 text-zinc-200">
-                    <Filter className="mr-1 size-3" />
-                    Active filters
-                </Badge>
+                                return (
+                                    <button
+                                        key={filter.key}
+                                        type="button"
+                                        onClick={() => removeFilter(filter.key)}
+                                        className={[
+                                            "inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs transition-colors outline-none focus-visible:ring-[3px]",
+                                            chipStyles
+                                        ].join(" ")}
+                                        aria-label={`Remove ${filter.label} filter: ${filter.value}`}
+                                    >
+                                        <span className={labelStyles}>{filter.label}</span>
+                                        <span className="font-medium">{filter.value}</span>
+                                        <X className="size-3.5 opacity-75" aria-hidden="true" />
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <span className="text-xs text-zinc-500">No active filters</span>
+                        )}
+                    </div>
 
-                <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                    {activeFilters.length ? (
-                        activeFilters.map((filter) => (
-                            <button
-                                key={filter.key}
-                                type="button"
-                                onClick={() => removeFilter(filter.key)}
-                                className={[
-                                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-                                    filter.isWarning ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20" : "border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700",
-                                ].join(" ")}
-                            >
-                                <span className="text-zinc-300">{filter.label}:</span>
-                                <span>{filter.value}</span>
-                                <X className="size-3.5" aria-hidden="true" />
-                                <span className="sr-only">Remove {filter.label} filter</span>
-                            </button>
-                        ))
-                    ) : (
-                        <span className="text-xs text-zinc-500">No active filters</span>
-                    )}
-                </div>
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <span>
+                            {hasActiveState ? `Showing ${visibleItemCount} of ${TOTAL_GEAR_ITEMS} items` : `${TOTAL_GEAR_ITEMS} total items`}
+                        </span>
+                    </div>
 
-                <div className="ml-auto flex items-center gap-3 text-xs text-zinc-400">
-                    <span>Showing 42 of 317 items</span>
-                    <span className="text-zinc-600">•</span>
-                    <span>Updated 3m ago</span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="text-zinc-300" onClick={clearFilters}>
-                        <RotateCcw className="size-4" />
-                        Clear
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-zinc-300">
-                        <Save className="size-4" />
-                        Save Preset
-                    </Button>
+                    <div className="flex items-center gap-1">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:ring-zinc-500/60"
+                        >
+                            Sort: Last Updated
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:ring-zinc-500/60"
+                            onClick={clearFilters}
+                            disabled={!hasActiveState}
+                        >
+                            <RotateCcw className="size-4" aria-hidden="true" />
+                            Clear
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:ring-zinc-500/60"
+                        >
+                            <Save className="size-4" aria-hidden="true" />
+                            Save preset
+                        </Button>
+                    </div>
                 </div>
             </div>
         </section>
