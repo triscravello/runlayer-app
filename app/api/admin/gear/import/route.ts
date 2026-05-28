@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { importGear } from "@/lib/ingestion/importGear";
 import { bulkUpsertGearItems } from "@/services/gearService";
+import { requireAdmin } from "@/lib/auth";
 
 export async function POST(request: Request) {
+    await requireAdmin();
     const contentType = request.headers.get("content-type") || "";
     try {
         if (contentType.includes("application/json")) {
