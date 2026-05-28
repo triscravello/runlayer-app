@@ -1,4 +1,9 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+import { verifySessionToken } from "./auth/crypto";
+import { prisma } from "./prisma";
+
+
 
 const AUTH_COOKIE_NAME = "runlayer_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -44,3 +49,46 @@ export function getAuthCookies() {
         }
     };
 }
+
+export async function getSessionUser() {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+
+    if (!token) return null;
+
+    const session = verifySessionToken(token);
+    if (!session) return null;
+
+    return prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+            id: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    })
+}
+
+export async function requireAuth() {
+    const user = await getSessionUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    return user;
+}
+
+export async function requireRole(role: "ADMIN" | "USER") {
+    const user = await requireAuth();
+
+    if (user.role !== role) {
+        throw new Error("Forbidden");
+    }
+
+    return user;
+}
+
+export const requireAdmin = () => requireRole("ADMIN");
