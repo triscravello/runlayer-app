@@ -85,7 +85,7 @@ function mapGearItem(item: NonNullable<RecommendationOutput["outfits"]>[number][
             label: getString(gear.name) ?? "Saved gear item",
             category: slot === "accessories" ? "Accessories" : slot,
             description: getString(isRecord(gear.brand) ? gear.brand.name : undefined) ?? getString(gear.category),
-            attributes: Array.isArray(gear.tags) ? gear.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 3) : [],
+            attributes: Array.isArray(gear.tags) ? gear.tags.filter((tag: unknown): tag is string => typeof tag === "string").slice(0, 3) : [],
             group: slot === "accessories" ? "Accessories" : undefined,
         }));
     });

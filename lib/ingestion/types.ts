@@ -4,7 +4,7 @@ export type RawGearItemInput = {
     externalId?: string;
     name: string;
     brand: string;
-    brandId?: string;
+    brandId: string;
     category: string;
     subcategory?: string;
     price?: number;
@@ -19,10 +19,10 @@ export type RawGearItemInput = {
 export type NormalizedGearItem = {
     externalId?: string;
     name: string;
-    brandId?: string;
+    brandId: string;
     category: Category;
     subcategory?: string | null;
-    priceRange?: PriceRange;
+    priceRange: PriceRange;
     tags?: string[];
     bodyTypeFit: string[];
     imageUrl?: string | null;
