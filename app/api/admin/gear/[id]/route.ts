@@ -1,18 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { withAdmin } from "@/lib/auth/api";
+import { parseJsonBody } from "@/lib/http/validation";
 import { updateGearItem } from "@/services/gearService";
 import { deleteGearItem } from "@/lib/db/gearRepository";
-import { requireAdmin } from "@/lib/auth";
+import { updateGearItemSchema } from "@/lib/validation/adminGear";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    await requireAdmin();
-    const {id} = await params;
-    const body = await request.json();
+type GearItemRouteContext = { params: Promise<{ id: string }> };
+
+export const PATCH = withAdmin<GearItemRouteContext>(async (request: NextRequest, { params }) => {
+    const { id } = await params;
+    const body = await parseJsonBody(request, updateGearItemSchema);
     return NextResponse.json(await updateGearItem(id, body));
-}
+})
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    await requireAdmin();
-    const {id} = await params;
+export const DELETE = withAdmin<GearItemRouteContext>(async (_request: NextRequest, { params }) => {
+    const { id } = await params;
     await deleteGearItem(id);
     return NextResponse.json({ success: true });
-}
+});
