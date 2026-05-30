@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getGear } from "@/services/gearService";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 type GearItem = Awaited<ReturnType<typeof getGear>>[number];
 
@@ -86,7 +86,7 @@ function deriveStats(items: GearItem[]): AdminStat[] {
 }
 
 export default async function AdminGearPage() {
-  await requireRole("ADMIN");
+  await requireAdmin();
   
   const items = await getGear();
   const stats = deriveStats(items);
