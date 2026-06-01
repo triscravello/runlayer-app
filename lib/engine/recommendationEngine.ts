@@ -11,8 +11,9 @@ export type UserInput = RecommendationUserInput;
 export type GearItem = RecommendationGearItem;
 export type RankedGearItem = ScoredRecommendationItem;
 export type GearRecommendationResult = {
-    recommendations: RankedGearItem[],
-    outfits?: ReturnType<typeof outfitBuilder>;
+  historyId?: string;
+  recommendations: RankedGearItem[],
+  outfits?: ReturnType<typeof outfitBuilder>;
 }
 
 export function rankGearRecommendations(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[], preferences: UserPreferenceInput = {}): RankedGearItem[] {
