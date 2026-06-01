@@ -1,3 +1,5 @@
+import { RecommendationFeedbackControls } from "@/components/recommendation/RecommendationFeedbackControls";
+import { RecommendationScoreBreakdown } from "@/components/recommendation/RecommendationScoreBreakdown";
 import { Badge } from "@/components/ui/Badge";
 import {
   Card,
@@ -22,10 +24,19 @@ type RecommendationSignal = {
 
 type RankedGearRecommendation = {
   rank: number;
+  recommendationId?: string;
   name: string;
   brand: string;
   category: string;
   score: number;
+  breakdown: {
+    weather: number;
+    intensity: number;
+    terrain: number;
+    seasonality: number;
+    brandAffinity: number;
+    rotationAdjustment: number;
+  };
   matchLabel: string;
   description: string;
   why: string;
@@ -46,6 +57,14 @@ const rankedGear: RankedGearRecommendation[] = [
     brand: "Tracksmith",
     category: "Base layer",
     score: 96,
+    breakdown: {
+      weather: 35, 
+      intensity:25,
+      terrain: 12,
+      seasonality: 14,
+      brandAffinity: 10,
+      rotationAdjustment: 0,
+    },
     matchLabel: "Best overall match",
     description:
       "A warm-but-breathable first layer that can handle faster winter miles without feeling bulky.",
@@ -64,6 +83,14 @@ const rankedGear: RankedGearRecommendation[] = [
     brand: "Bandit",
     category: "Bottom",
     score: 91,
+    breakdown: {
+      weather: 32,
+      intensity: 24,
+      terrain: 10,
+      seasonality: 15,
+      brandAffinity: 0,
+      rotationAdjustment: 10,
+    },
     matchLabel: "Most efficient warmth",
     description:
       "Light compression and brushed warmth protect large muscle groups while preserving stride freedom.",
@@ -82,6 +109,14 @@ const rankedGear: RankedGearRecommendation[] = [
     brand: "Janji",
     category: "Outer layer",
     score: 88,
+    breakdown: {
+      weather: 35,
+      intensity: 18,
+      terrain: 12,
+      seasonality: 13,
+      brandAffinity: 10,
+      rotationAdjustment: 0,
+    },
     matchLabel: "Best weather buffer",
     description:
       "A featherweight shell blocks exposed wind at the chest and packs down if the pace heats up.",
@@ -212,11 +247,15 @@ export default function RecommendationPage() {
                       </div>
                     </div>
 
-                    <aside className="rounded-3xl border border-emerald-100 bg-emerald-50/80 p-5">
-                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
-                        <Sparkles className="size-4" /> Why this was recommended
+                    <aside className="space-y-4 rounded-3xl border border-emerald-100 bg-emerald-50/80 p-5">
+                      <div>
+                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
+                          <Sparkles className="size-4" /> Why this was recommended
+                        </div>
+                        <p className="text-base leading-7 text-emerald-950">{gear.why}</p>
                       </div>
-                      <p className="text-base leading-7 text-emerald-950">{gear.why}</p>
+                      <RecommendationScoreBreakdown totalScore={gear.score} breakdown={gear.breakdown} />
+                      <RecommendationFeedbackControls recommendationId={gear.recommendationId} />
                     </aside>
                   </div>
                 </div>
