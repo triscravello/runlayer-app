@@ -51,6 +51,11 @@ enum UserRole {
   ADMIN
 }
 
+enum RecommendationFeedbackType {
+  HELPFUL
+  NOT_HELPFUL
+}
+
 model User {
   id           String @id @default(uuid())
   email        String @unique
@@ -61,9 +66,10 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  profile         UserProfile?
-  recommendations Recommendation[]
-  savedOutfits    SavedOutfit[]
+  profile                UserProfile?
+  recommendations        Recommendation[]
+  savedOutfits           SavedOutfit[]
+  recommendationFeedback RecommendationFeedback[]
 
   @@map("users")
 }
@@ -140,9 +146,10 @@ model GearItem {
   imageUrl     String? @map("image_url")
   affiliateUrl String? @map("affiliate_url")
 
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @default(now()) @updatedAt @map("updated_at")
-  OutfitItem OutfitItem[]
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @default(now()) @updatedAt @map("updated_at")
+  OutfitItem         OutfitItem[]
+  RecommendationItem RecommendationItem[]
 
   @@unique([name, brandId])
   @@map("gear_items")
@@ -179,8 +186,45 @@ model Recommendation {
   weatherSnapshot WeatherSnapshot? @relation(fields: [weatherSnapshotId], references: [id])
 
   savedOutfits SavedOutfit[]
+  items        RecommendationItem[]
 
   @@map("recommendations")
+}
+
+model RecommendationItem {
+  id String @id @default(uuid())
+
+  recommendationId String @map("recommendation_id")
+  gearItemId       String @map("gear_item_id")
+
+  rank       Int
+  totalScore Float @map("total_score")
+  breakdown  Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recommendation Recommendation           @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  gearItem       GearItem                 @relation(fields: [gearItemId], references: [id], onDelete: Cascade)
+  feedback       RecommendationFeedback[]
+
+  @@unique([recommendationId, gearItemId])
+  @@map("recommendation_items")
+}
+
+model RecommendationFeedback {
+  id String @id @default(uuid())
+
+  recommendationId String                     @map("recommendation_id")
+  userId           String                     @map("user_id")
+  feedbackType     RecommendationFeedbackType @map("feedback_type")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recommendation RecommendationItem @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([recommendationId, userId])
+  @@map("recommendation_feedback")
 }
 
 model SavedOutfit {
