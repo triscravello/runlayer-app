@@ -4,12 +4,13 @@ import { createGeneratedOutfit, CreateRecommendationInput, listGeneratedOutfits 
 import { createRecommendationHistory, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
 import { rankGearRecommendations, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
+import { getUserProfile } from "@/lib/db/userRepository";
 
-import type { ScoredRecommendationItem } from "@/lib/engine/types/recommendationEngine";
+import type { ScoredRecommendationItem, UserPreferenceInput } from "@/lib/engine/types/recommendationEngine";
 
 const DEFAULT_RECOMMENDATION_LIMIT = 5;
 const DEFAULT_HISTORY_LIMIT = 20;
-const ALGORITHM_VERSION = "recommendation-score-breakdown-v1";
+const ALGORITHM_VERSION = "recommendation-personalization-v2";
 
 export type { CreateRecommendationInput, GearRecommendationResult, UserInput };
 
@@ -33,14 +34,47 @@ function withPersistedRecommendationIds(
     }));
 }
 
+function toBudgetRange(value?: string | null): UserPreferenceInput["budgetRange"] {
+    const normalized = value?.toLowerCase();
+    if (normalized === "budget" || normalized === "mid" || normalized === "premium") return normalized;
+    return undefined;
+}
+
+function toSensitivity(value?: string | null): UserPreferenceInput["budgetSensitivity"] {
+    const normalized = value?.toLowerCase();
+    if (normalized === "low" || normalized === "medium" || normalized === "high") return normalized;
+    return undefined;
+}
+
+async function getRecommendationPreferences(userId?: string | null): Promise<UserPreferenceInput> {
+    if (!userId) return {};
+
+    const profile = await getUserProfile(userId);
+
+    if (!profile) return {};
+
+    return {
+        favoriteBrands: profile.preferredBrands,
+        preferredBrands: profile.preferredBrands,
+        avoidedBrands: profile.avoidedBrands,
+        budgetRange: toBudgetRange(profile.budgetLevel),
+        budgetSensitivity: toSensitivity(profile.budgetSensitivity),
+        heatSensitivity: profile.heatSensitivity?.toLowerCase(),
+        heatTolerance: profile.heatTolerance?.toLowerCase(),
+        coldTolerance: profile.coldTolerance?.toLowerCase(),
+        terrainPreference: profile.terrainPreference?.toLowerCase(),
+    };
+}
+
 export async function generateGearRecommendations(
     input: UserInput,
     limit = DEFAULT_RECOMMENDATION_LIMIT,
     userId?: string | null,
 ): Promise<GearRecommendationResult> {
-    const recommendationCandidates = await listGearRecommendationCandidates();
-    const recommendations = rankGearRecommendations(input, recommendationCandidates).slice(0, limit);
     const ownerUserId = userId ?? input.userId ?? null;
+    const recommendationCandidates = await listGearRecommendationCandidates();
+    const preferences = await getRecommendationPreferences(ownerUserId);
+    const recommendations = rankGearRecommendations(input, recommendationCandidates, preferences).slice(0, limit);
 
     if (!ownerUserId) {
         return { recommendations };
@@ -61,6 +95,7 @@ export async function generateGearRecommendations(
             workoutType: input.workoutType ?? null,
             terrain: input.terrain ?? null,
             category: input.category ?? null,
+            preferences,
         } as Prisma.InputJsonValue,
         output: output as Prisma.InputJsonValue,
         topScore: recommendations[0]?.totalScore ?? null,
