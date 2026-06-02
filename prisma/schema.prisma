@@ -83,11 +83,17 @@ model UserProfile {
 
   bodyType        BodyType? @map("body_type")
   heatSensitivity String?   @map("heat_sensitivity")
+  heatTolerance   String?   @map("heat_tolerance")
+  coldTolerance   String?   @map("cold_tolerance")
   chafeProne      Boolean   @default(false) @map("chafe_prone")
 
-  stylePreference String?      @map("style_preference")
-  budgetLevel     BudgetLevel? @map("budget_level")
-  preferredFit    String?      @map("preferred_fit")
+  stylePreference   String?      @map("style_preference")
+  budgetLevel       BudgetLevel? @map("budget_level")
+  budgetSensitivity String?      @map("budget_sensitivity")
+  preferredFit      String?      @map("preferred_fit")
+  terrainPreference String?      @map("terrain_preference")
+  preferredBrands   String[]     @default([]) @map("preferred_brands")
+  avoidedBrands     String[]     @default([]) @map("avoided_brands")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
@@ -233,10 +239,13 @@ model SavedOutfit {
   userId           String  @map("user_id")
   recommendationId String? @map("recommendation_id")
 
-  name       String?
-  isFavorite Boolean @default(false) @map("is_favorite")
+  name        String?
+  description String?
+  type        String  @default("custom")
+  isFavorite  Boolean @default(false) @map("is_favorite")
 
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   recommendation Recommendation? @relation(fields: [recommendationId], references: [id])
