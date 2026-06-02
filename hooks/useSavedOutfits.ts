@@ -7,6 +7,7 @@ import {
     type SavedOutfitRecord,
     type SaveOutfitInput,
     type DeleteSavedOutfitInput,
+    type UpdateSavedOutfitInput,
 } from "@/services/savedOutfitService";
 
 type UseSavedOutfitsResult = {
@@ -19,6 +20,7 @@ type UseSavedOutfitsResult = {
     refreshSavedOutfits: () => Promise<SavedOutfit[]>;
     saveOutfit: (input: SaveOutfitInput) => Promise<SavedOutfitRecord | null>;
     deleteSavedOutfit: (input: DeleteSavedOutfitInput) => Promise<boolean>;
+    updateSavedOutfit: (input: UpdateSavedOutfitInput) => Promise<SavedOutfit | null>;
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -111,6 +113,24 @@ export function useSavedOutfits(userId?: string): UseSavedOutfitsResult {
         }
     }, []);
 
+    const updateSavedOutfit = useCallback(async (input: UpdateSavedOutfitInput) => {
+        setIsSaving(true);
+        setError("");
+        setSuccessMessage("");
+
+        try {
+            const updated = await savedOutfitService.updateSavedOutfit(input);
+            setSavedOutfits((currentOutfits) => currentOutfits.map((outfit) => outfit.id === updated.id ? updated : outfit));
+            setSuccessMessage("Saved kit updated.");
+            return updated;
+        } catch (err) {
+            setError(getErrorMessage(err, "Unable to update saved kit."));
+            return null;
+        } finally {
+            setIsSaving(false);
+        }
+    }, []);
+
     const deleteSavedOutfit = useCallback(async (input: DeleteSavedOutfitInput) => {
         setError("");
         setSuccessMessage("");
@@ -144,5 +164,6 @@ export function useSavedOutfits(userId?: string): UseSavedOutfitsResult {
         refreshSavedOutfits,
         saveOutfit,
         deleteSavedOutfit,
+        updateSavedOutfit,
     };
 }
