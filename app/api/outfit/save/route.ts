@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        const { userId, recommendationId, name, isFavorite } = body;
+        const { userId, recommendationId, name, description, type, isFavorite, gearItemIds } = body;
 
         if (!userId) {
             return NextResponse.json(
@@ -42,7 +42,10 @@ export async function POST(request: Request) {
             userId,
             recommendationId,
             name,
+            description,
+            type,
             isFavorite,
+            gearItemIds,
         });
 
         return NextResponse.json(savedOutfit, { status: 201 });

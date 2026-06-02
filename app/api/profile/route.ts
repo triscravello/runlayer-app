@@ -45,10 +45,16 @@ export async function PUT(request: Request) {
       weightLbs,
       bodyType,
       heatSensitivity,
+      heatTolerance,
+      coldTolerance,
       chafeProne,
       stylePreference,
       budgetLevel,
+      budgetSensitivity,
       preferredFit,
+      terrainPreference,
+      preferredBrands,
+      avoidedBrands,
     } = body;
 
     if (!userId) {
@@ -64,10 +70,16 @@ export async function PUT(request: Request) {
       weightLbs,
       bodyType,
       heatSensitivity,
+      heatTolerance,
+      coldTolerance,
       chafeProne,
       stylePreference,
       budgetLevel,
-      preferredFit
+      budgetSensitivity,
+      preferredFit,
+      terrainPreference,
+      preferredBrands,
+      avoidedBrands,
     } as UpsertUserProfileInput);
     
 
