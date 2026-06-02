@@ -3,16 +3,31 @@ import { prisma } from "../prisma";
 type BodyTypeValue = "SLIM" | "ATHLETIC" | "BROAD" | "PLUS";
 type BudgetLevelValue = "BUDGET" | "MID" | "PREMIUM";
 
+type ToleranceValue = "low" | "medium" | "high";
+type TerrainPreferenceValue = "road" | "trail" | "mixed";
+type BudgetSensitivityValue = "low" | "medium" | "high";
+
 export type UpsertUserProfileInput = {
     userId: string;
     heightCm?: number | null;
     weightLbs?: number | null;
     bodyType?: BodyTypeValue | null;
     heatSensitivity?: string | null;
+    heatTolerance?: ToleranceValue | string | null;
+    coldTolerance?: ToleranceValue | string | null;
     chafeProne?: boolean | null;
     stylePreference?: string | null;
     budgetLevel?: BudgetLevelValue | null;
+    budgetSensitivity?: BudgetSensitivityValue | string | null;
     preferredFit?: string | null;
+    terrainPreference?: TerrainPreferenceValue | string | null;
+    preferredBrands?: string[] | null;
+    avoidedBrands?: string[] | null;
+}
+
+function normalizeBrandList(brands?: string[] | null) {
+    if (!brands) return;
+    return [...new Set(brands.map((brand) => brand.trimEnd()).filter(Boolean))];
 }
 
 export async function getUserProfile(userId: string) {
@@ -29,10 +44,16 @@ export async function upsertUserProfile(input: UpsertUserProfileInput) {
         weightLbs: input.weightLbs,
         bodyType: input.bodyType,
         heatSensitivity: input.heatSensitivity,
+        heatTolerance: input.heatTolerance,
+        coldTolerance: input.coldTolerance,
         chafeProne: input.chafeProne ?? false,
         stylePreference: input.stylePreference,
-        budgetLeve: input.budgetLevel,
+        budgetLevel: input.budgetLevel,
+        budgetSensitivity: input.budgetSensitivity,
         preferredFit: input.preferredFit,
+        terrainPreference: input.terrainPreference,
+        preferredBrands: normalizeBrandList(input.preferredBrands),
+        avoidedBrands: normalizeBrandList(input.avoidedBrands),
     };
 
     return prisma.userProfile.upsert({
@@ -77,7 +98,10 @@ export async function getFitnessProfile(userId: string) {
         bodyType: profile.bodyType,
         preferredFit: profile.preferredFit,
         heatSensitivity: profile.heatSensitivity,
+        heatTolerance: profile.heatTolerance,
+        coldTolerance: profile.coldTolerance,
         chafeProne: profile.chafeProne,
+        terrainPreference: profile.terrainPreference,
     };
 }
 
@@ -90,6 +114,9 @@ export async function getUserSettings(userId: string) {
         userId: profile.userId,
         stylePreference: profile.stylePreference,
         budgetLevel: profile.budgetLevel,
+        budgetSensitivity: profile.budgetSensitivity,
         preferredFit: profile.preferredFit,
+        preferredBrands: profile.preferredBrands,
+        avoidedBrands: profile.avoidedBrands,
     };
 }

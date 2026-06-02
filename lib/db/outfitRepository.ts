@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 
 type JsonInputValue = Prisma.InputJsonValue;
+export type SavedKitType = "race_day" | "training" | "custom";
 
 export type CreateRecommendationInput = {
     userId: string;
@@ -16,61 +17,125 @@ export type SaveOutfitInput = {
     userId: string;
     recommendationId?: string | null;
     name?: string | null;
+    description?: string | null;
+    type?: SavedKitType | string | null;
     isFavorite?: boolean | null;
+    gearItemIds?: string[] | null;
 };
+
+export type UpdateSavedOutfitInput = {
+    userId: string;
+    outfitId: string;
+    name?: string | null;
+    description?: string | null;
+    type?: SavedKitType | string | null;
+    isFavorite?: boolean | null;
+    gearItemIds?: string[] | null;
+};
+
+function normalizeKitType(type?: string | null): SavedKitType {
+    if (type === "race_day" || type === "training" || type === "custom") return type;
+    return "custom";
+}
+
+function toUniqueGearIds(gearItemIds?: string[] | null) {
+    return [...new Set((gearItemIds ?? []).map((id) => id.trim()).filter(Boolean))];
+}
+
+async function replaceOutfitItems(outfitId: string, gearItemIds?: string[] | null) {
+    if (!gearItemIds) return;
+
+    const uniqueIds = toUniqueGearIds(gearItemIds);
+    await prisma.outfitItem.deleteMany({ where: { outfitId } });
+
+    if (!uniqueIds.length) return;
+
+    const gearItems = await prisma.gearItem.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true, category: true },
+    });
+
+    await prisma.outfitItem.createMany({
+        data: gearItems.map((gearItem) => ({
+            outfitId,
+            gearItemId: gearItem.id,
+            category: gearItem.category,
+        })),
+    });
+}
 
 export async function listSavedOutfitsByUserId(userId: string) {
     return prisma.savedOutfit.findMany({
-        where: {
-            userId
-        },
+        where: { userId },
         include: {
             recommendation: true,
             OutfitItem: {
                 include: {
                     gearItem: {
-                        include: {
-                            brand: true,
-                        },
+                        include: { brand: true },
                     },
                 },
             },
         },
-        orderBy: {
-            createdAt: "desc",
+        orderBy: { createdAt: "desc" },
+    });
+}
+
+export async function getSavedOutfitById(userId: string, outfitId: string) {
+    return prisma.savedOutfit.findFirst({
+        where: { id: outfitId, userId },
+        include: {
+            recommendation: true,
+            OutfitItem: {
+                include: {
+                    gearItem: { include: { brand: true } },
+                },
+            },
         },
     });
 }
 
 export async function saveOutfit(input: SaveOutfitInput) {
-    return prisma.savedOutfit.create({
+    const savedOutfit = await prisma.savedOutfit.create({
         data: {
             userId: input.userId,
             recommendationId: input.recommendationId ?? null,
-            name: input.name ?? "Saved Outfit",
+            name: input.name ?? "Saved Kit",
+            description: input.description ?? null,
+            type: normalizeKitType(input.type),
             isFavorite: input.isFavorite ?? false,
         },
     });
+
+    await replaceOutfitItems(savedOutfit.id, input.gearItemIds);
+    return getSavedOutfitById(input.userId, savedOutfit.id) ?? savedOutfit;
+}
+
+export async function updateSavedOutfit(input: UpdateSavedOutfitInput) {
+    const updated = await prisma.savedOutfit.updateMany({
+        where: { id: input.outfitId, userId: input.userId },
+        data: {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.description !== undefined ? { description: input.description} : {}),
+            ...(input.type !== undefined ? { type: normalizeKitType(input.type) } : {}),
+            ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite ?? false }: {}),
+        }
+    });
+
+    if (!updated.count) return null;
+
+    await replaceOutfitItems(input.outfitId, input.gearItemIds);
+    return getSavedOutfitById(input.userId, input.outfitId);
 }
 
 export async function deleteSavedOutfitById(userId: string, outfitId: string) {
-    return prisma.savedOutfit.deleteMany({
-        where: {
-            id: outfitId,
-            userId,
-        },
-    });
+    return prisma.savedOutfit.deleteMany({ where: { id: outfitId, userId } });
 }
 
 export async function listGeneratedOutfits() {
     return prisma.recommendation.findMany({
-        orderBy: {
-            createdAt: "desc",
-        },
-        include: {
-            user: true,
-            weatherSnapshot: true,
-        },
+        orderBy: { createdAt: "desc" },
+        include: { user: true, weatherSnapshot: true },
     });
 }
 
@@ -89,15 +154,8 @@ export async function createGeneratedOutfit(input: CreateRecommendationInput) {
 
 export async function listOutfitHistoryByUserId(userId: string) {
     return prisma.recommendation.findMany({
-        where: {
-            userId,
-        },
-        include: {
-            savedOutfits: true,
-            weatherSnapshot: true,
-        },
-        orderBy: {
-            createdAt: "desc",
-        },
+        where: { userId },
+        include: { savedOutfits: true, weatherSnapshot: true },
+        orderBy: { createdAt: "desc" },
     });
 }

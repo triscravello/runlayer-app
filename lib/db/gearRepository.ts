@@ -88,9 +88,16 @@ function mapGearItemForRecommendation(gearItem: GearItemRow): GearItem {
 }
 
 export async function listGearRecommendationCandidates(): Promise<GearItem[]> {
-    const gearItems = await prisma.gearItem.findMany();
+    const gearItems = await prisma.gearItem.findMany({
+        include: {
+            brand: true,
+        },
+    });
 
-    return gearItems.map(mapGearItemForRecommendation);
+    return gearItems.map((gearItem) => ({
+        ...mapGearItemForRecommendation(gearItem),
+        brandName: gearItem.brand.name,
+    }));
 }
 
 export async function listWardrobeByUserId(userId: string) {
