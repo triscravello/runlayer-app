@@ -7,6 +7,9 @@ const breakdownRows: Array<{ key: keyof ScoreBreakdown; label: string }> = [
     { key: "terrain", label: "Terrain Match" },
     { key: "seasonality", label: "Seasonality" },
     { key: "brandAffinity", label: "Brand Affinity" },
+    { key: "brandPenalty", label: "Brand Penalty" },
+    { key: "budget", label: "Budget Fit" },
+    { key: "temperatureTolerance", label: "Temperature Tolerance" },
     { key: "rotationAdjustment", label: "Rotation Bonus" },
 ];
 

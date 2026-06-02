@@ -34,7 +34,7 @@ const preferredFitOptions: SelectOption[] = [
   { value: "relaxed", label: "Relaxed" },
 ];
 
-const heatSensitivityOptions: SelectOption[] = [
+const toleranceOptions: SelectOption[] = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
@@ -54,6 +54,18 @@ const budgetLevelOptions: SelectOption[] = [
   { value: "PREMIUM", label: "High" },
 ];
 
+const budgetSensitivityOptions: SelectOption[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const terrainPreferenceOptions: SelectOption[] = [
+  { value: "mixed", label: "Mixed" },
+  { value: "road", label: "Road" },
+  { value: "trail", label: "Trail" },
+];
+
 const selectClassName =
   "border-input bg-input-background focus-visible:border-ring focus-visible:ring-ring/50 flex h-9 w-full rounded-md border px-3 py-1 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
 
@@ -63,9 +75,15 @@ const initialFormState = {
   bodyType: "",
   preferredFit: "regular",
   heatSensitivity: "medium",
+  heatTolerance: "medium",
+  coldTolerance: "medium",
   chafeProne: false,
   stylePreference: "performance",
   budgetLevel: "MID",
+  budgetSensitivity: "medium",
+  terrainPreference: "mixed",
+  preferredBrands: "",
+  avoidedBrands: "",
 };
 
 type ProfileFormState = typeof initialFormState;
@@ -76,9 +94,15 @@ function createFormState(profile: {
   bodyType?: string | null;
   preferredFit?: string | null;
   heatSensitivity?: string | null;
+  heatTolerance?: string | null;
+  coldTolerance?: string | null;
   chafeProne: boolean;
   stylePreference?: string | null;
   budgetLevel?: string | null;
+  budgetSensitivity?: string | null;
+  terrainPreference?: string | null;
+  preferredBrands?: string[] | null;
+  avoidedBrands?: string[] | null;
 } | null): ProfileFormState {
   if (!profile) {
     return initialFormState;
@@ -90,9 +114,15 @@ function createFormState(profile: {
     bodyType: profile.bodyType ?? "",
     preferredFit: profile.preferredFit ?? "regular",
     heatSensitivity: profile.heatSensitivity ?? "medium",
+    heatTolerance: profile.heatTolerance ?? "medium",
+    coldTolerance: profile.coldTolerance ?? "medium",
     chafeProne: profile.chafeProne,
     stylePreference: profile.stylePreference ?? "performance",
     budgetLevel: profile.budgetLevel ?? "MID",
+    budgetSensitivity: profile.budgetSensitivity ?? "medium",
+    terrainPreference: profile.terrainPreference ?? "mixed",
+    preferredBrands: profile.preferredBrands?.join(", ") ?? "",
+    avoidedBrands: profile.avoidedBrands?.join(", ") ?? "",
   };
 }
 
@@ -117,6 +147,10 @@ function toOptionalNumber(value: string) {
 
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function toBrandList(value: string) {
+  return value.split(",").map((brand) => brand.trim()).filter(Boolean);
 }
 
 type ProfileFormFieldsProps = {
@@ -163,9 +197,15 @@ function ProfileFormFields({
       bodyType: formState.bodyType || undefined,
       preferredFit: formState.preferredFit,
       heatSensitivity: formState.heatSensitivity,
+      heatTolerance: formState.heatTolerance,
+      coldTolerance: formState.coldTolerance,
       chafeProne: formState.chafeProne,
       stylePreference: formState.stylePreference,
       budgetLevel: formState.budgetLevel,
+      budgetSensitivity: formState.budgetSensitivity,
+      terrainPreference: formState.terrainPreference,
+      preferredBrands: toBrandList(formState.preferredBrands),
+      avoidedBrands: toBrandList(formState.avoidedBrands),
     };
 
     await saveProfile(payload);
@@ -286,7 +326,41 @@ function ProfileFormFields({
                   onChange={(event) => handleFieldChange("heatSensitivity", event.target.value)}
                   disabled={isDisabled}
                 >
-                  {heatSensitivityOptions.map((option) => (
+                  {toleranceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="heatTolerance">Heat Tolerance</Label>
+                <select
+                  id="heatTolerance"
+                  className={selectClassName}
+                  value={formState.heatTolerance}
+                  onChange={(event) => handleFieldChange("heatTolerance", event.target.value)}
+                  disabled={isDisabled}
+                >
+                  {toleranceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="coldTolerance">Cold Tolerance</Label>
+                <select
+                  id="coldTolerance"
+                  className={selectClassName}
+                  value={formState.coldTolerance}
+                  onChange={(event) => handleFieldChange("coldTolerance", event.target.value)}
+                  disabled={isDisabled}
+                >
+                  {toleranceOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -354,6 +428,62 @@ function ProfileFormFields({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="budgetSensitivity">Budget Sensitivity</Label>
+                <select
+                  id="budgetSensitivity"
+                  className={selectClassName}
+                  value={formState.budgetSensitivity}
+                  onChange={(event) => handleFieldChange("budgetSensitivity", event.target.value)}
+                  disabled={isDisabled}
+                >
+                  {budgetSensitivityOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="terrainPreference">Terrain Preference</Label>
+                <select
+                  id="terrainPreference"
+                  className={selectClassName}
+                  value={formState.terrainPreference}
+                  onChange={(event) => handleFieldChange("terrainPreference", event.target.value)}
+                  disabled={isDisabled}
+                >
+                  {terrainPreferenceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="preferredBrands">Preferred Brands</Label>
+                <Input
+                  id="preferredBrands"
+                  value={formState.preferredBrands}
+                  onChange={(event) => handleFieldChange("preferredBrands", event.target.value)}
+                  placeholder="Nike, Tracksmith"
+                  disabled={isDisabled}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="avoidedBrands">Avoided Brands</Label>
+                <Input
+                  id="avoidedBrands"
+                  value={formState.avoidedBrands}
+                  onChange={(event) => handleFieldChange("avoidedBrands", event.target.value)}
+                  placeholder="Brands to down-rank"
+                  disabled={isDisabled}
+                />
               </div>
             </div>
           </section>
