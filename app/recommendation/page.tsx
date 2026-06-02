@@ -35,6 +35,9 @@ type RankedGearRecommendation = {
     terrain: number;
     seasonality: number;
     brandAffinity: number;
+    brandPenalty: number;
+    budget: number;
+    temperatureTolerance: number;
     rotationAdjustment: number;
   };
   matchLabel: string;
@@ -63,6 +66,9 @@ const rankedGear: RankedGearRecommendation[] = [
       terrain: 12,
       seasonality: 14,
       brandAffinity: 10,
+      brandPenalty: 0,
+      budget: 4,
+      temperatureTolerance: 7,
       rotationAdjustment: 0,
     },
     matchLabel: "Best overall match",
@@ -89,6 +95,9 @@ const rankedGear: RankedGearRecommendation[] = [
       terrain: 10,
       seasonality: 15,
       brandAffinity: 0,
+      brandPenalty: 0,
+      budget: 6,
+      temperatureTolerance: 5,
       rotationAdjustment: 10,
     },
     matchLabel: "Most efficient warmth",
@@ -115,6 +124,9 @@ const rankedGear: RankedGearRecommendation[] = [
       terrain: 12,
       seasonality: 13,
       brandAffinity: 10,
+      brandPenalty: 0,
+      budget: 4,
+      temperatureTolerance: 7,
       rotationAdjustment: 0,
     },
     matchLabel: "Best weather buffer",

@@ -23,6 +23,9 @@ const emptyBreakdown: ScoreBreakdown = {
     terrain: 0,
     seasonality: 0,
     brandAffinity: 0,
+    brandPenalty: 0,
+    budget: 0,
+    temperatureTolerance: 0,
     rotationAdjustment: 0,
 };
 
@@ -54,6 +57,9 @@ function getBreakdown(value: unknown): ScoreBreakdown {
         terrain: Number(record.terrain ?? 0),
         seasonality: Number(record.seasonality ?? 0),
         brandAffinity: Number(record.brandAffinity ?? 0),
+        brandPenalty: Number(record.brandPenalty ?? 0),
+        budget: Number(record.budget ?? 0),
+        temperatureTolerance: Number(record.temperatureTolerance ?? 0),
         rotationAdjustment: Number(record.rotationAdjustment ?? 0),
     };
 }
