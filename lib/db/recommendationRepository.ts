@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 import { prisma } from "../prisma";
 import type { ScoredRecommendationItem } from "../engine/types/recommendationEngine";
 
@@ -9,6 +10,8 @@ export type CreateRecommendationHistoryInput = {
     output: Prisma.InputJsonValue;
     topScore?: number | null;
     algorithmVersion?: string | null;
+    engineVersion?: string | null;
+    generatedAt?: Date | string | null;
     recommendations: ScoredRecommendationItem[];
 };
 
@@ -19,6 +22,8 @@ export type RecommendationHistoryListOptions = {
 };
 
 export async function createRecommendationHistory(input: CreateRecommendationHistoryInput) {
+    const engineVersion = input.engineVersion ?? input.algorithmVersion ?? RECOMMENDATION_ENGINE_VERSION;
+
     return prisma.recommendation.create({
         data: {
             userId: input.userId,
@@ -26,7 +31,15 @@ export async function createRecommendationHistory(input: CreateRecommendationHis
             inputContext: input.inputContext,
             output: input.output,
             topScore: input.topScore ?? null,
-            algorithmVersion: input.algorithmVersion ?? null,
+            algorithmVersion: input.algorithmVersion ?? engineVersion,
+            engineVersion,
+            generatedAt: input.generatedAt ? new Date(input.generatedAt) : undefined,
+            versionMetadata: {
+                create: {
+                    engineVersion,
+                    timestamp: input.generatedAt ? new Date(input.generatedAt) : undefined,
+                },
+            },
             items: {
                 create: input.recommendations.map((recommendation, index) => ({
                     gearItemId: recommendation.item.id,

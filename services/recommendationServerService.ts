@@ -5,12 +5,13 @@ import { createRecommendationHistory, listRecommendationHistoryByUserId } from "
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
 import { rankGearRecommendations, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
 import { getUserProfile } from "@/lib/db/userRepository";
+import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
 import type { ScoredRecommendationItem, UserPreferenceInput } from "@/lib/engine/types/recommendationEngine";
 
 const DEFAULT_RECOMMENDATION_LIMIT = 5;
 const DEFAULT_HISTORY_LIMIT = 20;
-const ALGORITHM_VERSION = "recommendation-personalization-v2";
+const ALGORITHM_VERSION = RECOMMENDATION_ENGINE_VERSION;
 
 export type { CreateRecommendationInput, GearRecommendationResult, UserInput };
 
@@ -77,7 +78,7 @@ export async function generateGearRecommendations(
     const recommendations = rankGearRecommendations(input, recommendationCandidates, preferences).slice(0, limit);
 
     if (!ownerUserId) {
-        return { recommendations };
+        return { recommendations, engineVersion: RECOMMENDATION_ENGINE_VERSION, generatedAt: new Date().toISOString() };
     }
 
     const output = {
@@ -88,6 +89,7 @@ export async function generateGearRecommendations(
             reasons,
         })),
     };
+    const generatedAt = new Date();
     const savedHistory = await createRecommendationHistory({
         userId: ownerUserId,
         inputContext: {
@@ -100,11 +102,15 @@ export async function generateGearRecommendations(
         output: output as Prisma.InputJsonValue,
         topScore: recommendations[0]?.totalScore ?? null,
         algorithmVersion: ALGORITHM_VERSION,
+        engineVersion: RECOMMENDATION_ENGINE_VERSION,
+        generatedAt,
         recommendations,
     });
 
     return { 
         historyId: savedHistory.id,
+        engineVersion: savedHistory.engineVersion,
+        generatedAt: savedHistory.generatedAt.toISOString(),
         recommendations: withPersistedRecommendationIds(recommendations, savedHistory), 
     };
 }
