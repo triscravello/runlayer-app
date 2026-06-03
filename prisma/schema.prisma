@@ -181,20 +181,38 @@ model Recommendation {
   userId            String  @map("user_id")
   weatherSnapshotId String? @map("weather_snapshot_id")
 
-  inputContext     Json    @map("input_context")
+  inputContext     Json     @map("input_context")
   output           Json
-  topScore         Float?  @map("top_score")
-  algorithmVersion String? @map("algorithm_version")
+  topScore         Float?   @map("top_score")
+  algorithmVersion String?  @map("algorithm_version")
+  engineVersion    String   @default("1.0.0") @map("engine_version")
+  generatedAt      DateTime @default(now()) @map("generated_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   weatherSnapshot WeatherSnapshot? @relation(fields: [weatherSnapshotId], references: [id])
 
-  savedOutfits SavedOutfit[]
-  items        RecommendationItem[]
+  savedOutfits    SavedOutfit[]
+  items           RecommendationItem[]
+  versionMetadata RecommendationVersionMetadata?
 
+  @@index([engineVersion])
+  @@index([generatedAt])
   @@map("recommendations")
+}
+
+model RecommendationVersionMetadata {
+  id String @id @default(uuid())
+
+  recommendationId String   @unique @map("recommendation_id")
+  engineVersion    String   @map("engine_version")
+  timestamp        DateTime @default(now())
+
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([engineVersion])
+  @@map("recommendation_version_metadata")
 }
 
 model RecommendationItem {
