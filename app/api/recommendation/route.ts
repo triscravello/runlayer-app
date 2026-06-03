@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { userId, weatherSnapshotId, inputContext, output, topScore, algorithmVersion } = body;
+    const { userId, weatherSnapshotId, inputContext, output, topScore, algorithmVersion, engineVersion, generatedAt } = body;
 
     if (!userId || !inputContext || !output) {
       return NextResponse.json(
@@ -37,7 +37,9 @@ export async function POST(request: Request) {
       inputContext,
       output,
       topScore: topScore ?? null,
-      algorithmVersion: algorithmVersion ?? null,
+      algorithmVersion: algorithmVersion ?? engineVersion ?? null,
+      engineVersion: engineVersion ?? algorithmVersion ?? null,
+      generatedAt: generatedAt ?? null,
     } as CreateRecommendationInput);
 
     return NextResponse.json(recommendation);
