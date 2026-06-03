@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 import { prisma } from "../prisma";
 
 type JsonInputValue = Prisma.InputJsonValue;
@@ -11,6 +12,8 @@ export type CreateRecommendationInput = {
     output: JsonInputValue;
     topScore?: number | null;
     algorithmVersion?: string | null;
+    engineVersion?: string | null;
+    generatedAt?: Date | string | null;
 };
 
 export type SaveOutfitInput = {
@@ -140,6 +143,8 @@ export async function listGeneratedOutfits() {
 }
 
 export async function createGeneratedOutfit(input: CreateRecommendationInput) {
+    const engineVersion = input.engineVersion ?? input.algorithmVersion ?? RECOMMENDATION_ENGINE_VERSION;
+
     return prisma.recommendation.create({
         data: {
             userId: input.userId,
@@ -147,7 +152,15 @@ export async function createGeneratedOutfit(input: CreateRecommendationInput) {
             inputContext: input.inputContext,
             output: input.output,
             topScore: input.topScore ?? null,
-            algorithmVersion: input.algorithmVersion ?? null,
+            algorithmVersion: input.algorithmVersion ?? engineVersion, 
+            engineVersion,
+            generatedAt: input.generatedAt ? new Date(input.generatedAt) : undefined,
+            versionMetadata: {
+                create: {
+                    engineVersion,
+                    timestamp: input.generatedAt ? new Date(input.generatedAt) : undefined
+                },
+            },
         },
     });
 }
