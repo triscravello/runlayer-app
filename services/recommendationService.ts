@@ -13,6 +13,8 @@ export type CreateRecommendationInput = {
     output: Prisma.InputJsonValue;
     topScore?: number | null;
     algorithmVersion?: string | null;
+    engineVersion?: string | null;
+    generatedAt?: string | Date | null;
 };
 
 export type RecommendationRecord = {
@@ -23,6 +25,8 @@ export type RecommendationRecord = {
     output: Prisma.JsonValue;
     topScore: number | null;
     algorithmVersion: string | null;
+    engineVersion: string | null;
+    generatedAt: string | Date;
     createdAt: string | Date;
 };
 
