@@ -38,12 +38,35 @@ export async function POST(request: Request) {
         const token = createSessionToken(user.id);
         const { name, options } = getAuthCookies();
 
-        const response = NextResponse.json({ user: { id: user.id, email: user.email } }, { status: 201 });
+        const response = NextResponse.json(
+            {
+                success: true,
+                data: {
+                    token,
+                    user: {
+                        id: user.id,
+                        email: user.email,
+                        username: user.email,
+                    },
+                },
+            },
+            { status: 201 },
+        );
+
         response.cookies.set(name, token, options);
 
         return response;
     } catch (error) {
         console.error("Error signing up:", error);
-        return NextResponse.json({ error: "Failed to sign up" }, { status: 500 });
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Email and password are required", 
+                },
+            },
+            { status: 400 }
+        );
     }
 }

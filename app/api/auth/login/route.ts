@@ -28,11 +28,30 @@ export async function POST(request: Request) {
         const token = createSessionToken(user.id);
         const { name, options } = getAuthCookies();
 
-        const response = NextResponse.json({ user: { id: user.id, email: user.email } });
+        const response = NextResponse.json({
+            success: true,
+            data: {
+                token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    username: user.email,
+                },
+            },
+        });
         response.cookies.set(name, token, options);
         return response;
     } catch (error) {
         console.error("Error logging in:", error);
-        return NextResponse.json({ error: "Failed to log in" }, { status: 500 });
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: "INVALID_CREDENTIALS",
+                    message: "Invalid email or password",
+                },
+            },
+            { status: 401 }
+        );
     }
 }

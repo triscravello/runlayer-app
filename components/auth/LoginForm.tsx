@@ -10,7 +10,7 @@ import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
 
 export default function LoginForm() {
-    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
@@ -24,14 +24,14 @@ export default function LoginForm() {
         setError("");
         setSuccessMessage("");
 
-        if (!username.trim() || !password.trim()) {
-            setError('Username and password are required');
+        if (!email.trim() || !password.trim()) {
+            setError('Email and password are required');
             return;
         }
         setIsSubmitting(true);
 
         try {
-            const result = await authService.login({ username, password });
+            const result = await authService.login({ email, password });
             setUser(result.data.user);
             setSuccessMessage("Logged in successfully. Redirecting...");
             router.push("/dashboard");
@@ -56,7 +56,7 @@ export default function LoginForm() {
                     {successMessage && <p className="text-emerald-600 mb-4">{successMessage}</p>}
                     <div className="space-y-2">
                         <Label htmlFor="username">Username</Label>
-                        <Input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} required className="bg-input-background" />
+                        <Input id="username" type="text" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-input-background" />
                     </div>
 
                     <div className="space-y-2">
