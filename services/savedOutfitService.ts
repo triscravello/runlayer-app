@@ -3,7 +3,7 @@ import { readJsonResponse, type ServiceRequestOptions } from "./apiResponse";
 export type SavedKitType = "race_day" | "training" | "custom";
 
 export type SaveOutfitInput = {
-    userId: string;
+    userId?: string;
     recommendationId?: string;
     name?: string | null;
     description?: string | null;
@@ -29,18 +29,18 @@ export type SavedOutfit = SaveOutfitInput & {
 export type SavedOutfitRecord = Omit<SavedOutfit, "recommendation" | "OutfitItem">;
 
 export type UpdateSavedOutfitInput = Partial<Omit<SaveOutfitInput, "userId">> & {
-    userId: string;
+    userId?: string;
     outfitId: string;
 }
 
 export type DeleteSavedOutfitInput = {
-    userId: string;
+    userId?: string;
     outfitId: string;
 }
 
 export const savedOutfitService = {
-    async listSavedOutfits(userId: string, options: ServiceRequestOptions = {}): Promise<SavedOutfit[]> {
-        const response = await fetch(`/api/outfit/save?userId=${encodeURIComponent(userId)}`, {
+    async listSavedOutfits(_userId: string, options: ServiceRequestOptions = {}): Promise<SavedOutfit[]> {
+        const response = await fetch("/api/outfit/save", {
             credentials: "include",
             signal: options.signal,
         });
@@ -49,34 +49,51 @@ export const savedOutfitService = {
     },
 
     async saveOutfit(input: SaveOutfitInput): Promise<SavedOutfitRecord> {
+        const payload = {
+            recommendationId: input.recommendationId,
+            name: input.name,
+            description: input.description,
+            type: input.type,
+            isFavorite: input.isFavorite,
+            gearItemIds: input.gearItemIds
+        }
         const response = await fetch("/api/outfit/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify(input),
+            body: JSON.stringify(payload),
         });
 
         return readJsonResponse<SavedOutfitRecord>(response, "Unable to save outfits.");
     },
 
     async updateSavedOutfit(input: UpdateSavedOutfitInput): Promise<SavedOutfit> {
-        const response = await fetch(`/api/outfit/${encodeURIComponent(input.outfitId)}`, {
+        const { outfitId } = input;
+        const payload = {
+            recommendationId: input.recommendationId,
+            name: input.name,
+            description: input.description,
+            type: input.type,
+            isFavorite: input.isFavorite,
+            gearItemIds: input.gearItemIds,
+        };
+        const response = await fetch(`/api/outfit/${encodeURIComponent(outfitId)}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify(input),
+            body: JSON.stringify(payload),
         });
 
         return readJsonResponse<SavedOutfit>(response, "Unable to update saved kit.");
     },
 
     async deleteSavedOutfit(input: DeleteSavedOutfitInput): Promise<{ deletedCount: number }> {
-        const params = new URLSearchParams({ userId: input.userId, outfitId: input.outfitId });
+        const params = new URLSearchParams({ outfitId: input.outfitId });
         const response = await fetch(`/api/outfit/save?${params.toString()}`, {
             method: "DELETE",
             credentials: "include",
         });
 
         return readJsonResponse<{ deletedCount: number }>(response, "Unable to delete saved outfit.");
-    }
+    },
 };

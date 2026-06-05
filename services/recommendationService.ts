@@ -7,7 +7,7 @@ export type { GearRecommendationResult, UserInput };
 export type FeedbackType = "HELPFUL" | "NOT_HELPFUL";
 
 export type CreateRecommendationInput = {
-    userId: string;
+    userId?: string;
     weatherSnapshotId?: string | null;
     inputContext: Prisma.InputJsonValue;
     output: Prisma.InputJsonValue;
@@ -100,12 +100,11 @@ export const recommendationService = {
 
     async getRecommendationHistory(input: { userId?: string; limit?: number; offset?: number } = {}, options: ServiceRequestOptions = {}): Promise<RecommendationHistoryRecord[]> {
         const params = new URLSearchParams();
-        if (input.userId) params.set("userId", input.userId);
         if (input.limit) params.set("limit", String(input.limit));
         if (input.offset) params.set("offset", String(input.offset));
 
         const query = params.toString();
-        const response = await fetch(`/api/recommendation/history?${query ? `&${query}` : ""}`, {
+        const response = await fetch(`/api/recommendation/history${query ? `?${query}` : ""}`, {
             credentials: "include",
             signal: options.signal,
         });
@@ -114,13 +113,14 @@ export const recommendationService = {
     }, 
 
     async submitFeedback(input: { userId?: string; recommendationId: string; feedbackType: FeedbackType }): Promise<RecommendationFeedbackResponse> {
+        const payload = { recommendationId: input.recommendationId, feedBack: input.feedbackType };
         const response = await fetch("api/recommendation/feedback", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             credentials: "include",
-            body: JSON.stringify(input),
+            body: JSON.stringify(payload),
         });
 
         return readJsonResponse<RecommendationFeedbackResponse>(response, "Unable to submit recommendation feedback.");

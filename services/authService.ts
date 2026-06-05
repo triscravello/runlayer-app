@@ -1,13 +1,13 @@
 export interface AuthSuccessResponse {
     success: true;
     data: {
-        token: string;
         user: {
             id: string;
             email: string;
             username: string;
-        }
-    }
+            role: "USER" | "ADMIN";
+        };
+    };
 }
 
 export interface AuthErrorResponse {
@@ -15,13 +15,13 @@ export interface AuthErrorResponse {
     error: {
         code: string;
         message: string;
-    }
+    };
 }
 
 export interface SignupPayload {
     email: string;
     password: string;
-};
+}
 
 export interface LoginPayload {
     email: string;
@@ -33,7 +33,7 @@ async function parseAuthResponse(response: Response): Promise<AuthSuccessRespons
 
     if (!response.ok || !data.success) {
         const fallback = `Request failed with status ${response.status}`;
-        const message = 'error' in data ? data.error.message: fallback;
+        const message = 'error' in data ? data.error.message : fallback;
         throw new Error(message || fallback);
     }
 
@@ -49,7 +49,7 @@ export const authService = {
             },
             credentials: "include",
             body: JSON.stringify(payload),
-        })
+        });
 
         return parseAuthResponse(response);
     },
@@ -62,8 +62,15 @@ export const authService = {
             },
             credentials: "include",
             body: JSON.stringify(payload),
-        })
+        });
 
         return parseAuthResponse(response);
-    }
-}
+    },
+
+    async logout(): Promise<void> {
+        await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "include",
+        });
+    },
+};
