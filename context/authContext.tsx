@@ -6,6 +6,7 @@ export type AuthUser = {
     id: string;
     email: string;
     username: string;
+    role: "USER" | "ADMIN";
 };
 
 type AuthContextType = {
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-        checkAuth();
+        void Promise.resolve().then(checkAuth);
     }, [checkAuth]);
 
     const value = useMemo(

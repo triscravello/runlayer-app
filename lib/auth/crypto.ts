@@ -1,4 +1,4 @@
-import { createHmac, sign, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
