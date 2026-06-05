@@ -100,7 +100,7 @@ export async function getSavedOutfitById(userId: string, outfitId: string) {
 
 export async function saveOutfit(input: SaveOutfitInput) {
     if (input.recommendationId) {
-        const recommendation = await.prisma.recommendation.findFirst({
+        const recommendation = await prisma.recommendation.findFirst({
             where: { id: input.recommendationId, userId: input.userId },
             select: { id: true },
         });
