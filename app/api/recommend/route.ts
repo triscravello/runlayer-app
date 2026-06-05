@@ -1,23 +1,13 @@
-import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { NextResponse, type NextRequest } from "next/server";
+import { withAuth } from "@/lib/auth/api";
 import { generateGearRecommendations } from "@/services/recommendationServerService";
 import type { UserInput } from "@/lib/engine/recommendationEngine";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-    try {
-        const body = (await req.json()) as UserInput;
-        const sessionUser = await getSessionUser();
-        const recommendations = await generateGearRecommendations(body, undefined, sessionUser?.id ?? body.userId ?? null);
+export const POST = withAuth(async (request: NextRequest, _context, user) => {
+    const body = (await request.json()) as UserInput;
+    const recommendations = await generateGearRecommendations({ ...body, userId: user.id }, undefined, user.id);
 
-        return NextResponse.json(recommendations);
-    } catch (error) {
-        console.error(error);
-
-        return NextResponse.json(
-            { error: "Failed to generate recommendation" },
-            { status: 500 }
-        );
-    }
-}
+    return NextResponse.json(recommendations);
+})

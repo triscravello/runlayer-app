@@ -1,53 +1,31 @@
 // app/api/recommendation/route.ts
-import { NextResponse } from "next/server";
-import { createRecommendation, CreateRecommendationInput, listRecommendations } from "@/services/recommendationServerService";
+import { NextResponse, type NextRequest } from "next/server";
+import { withAuth } from "@/lib/auth/api";
+import { createRecommendation, getRecommendationHistory, type CreateRecommendationInput } from "@/services/recommendationServerService";
 
-// GET all recommendations
-export async function GET() {
-  try {
-    const recommendations = await listRecommendations();
+export const GET = withAuth(async (_request: NextRequest, _context, user) => {
+  const recommendations = await getRecommendationHistory(user.id);
+  return NextResponse.json(recommendations);
+})
 
-    return NextResponse.json(recommendations);
-  } catch (error) {
-    console.error("Error fetching recommendations:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch recommendations" },
-      { status: 500 }
-    );
+export const POST = withAuth(async (request: NextRequest, _context, user) => {
+  const body = await request.json();
+  const { weatherSnapshotId, inputContext, output, topScore, algorithmVersion, engineVersion, generatedAt } = body;
+
+  if (!inputContext || !output) {
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-}
 
-// CREATE recommendation
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+  const recommendation = await createRecommendation({
+    userId: user.id,
+    weatherSnapshotId: weatherSnapshotId ?? null,
+    inputContext,
+    output,
+    topScore: topScore ?? null,
+    algorithmVersion: algorithmVersion ?? engineVersion ?? null,
+    engineVersion: engineVersion ?? algorithmVersion ?? null,
+    generatedAt: generatedAt ?? null,
+  } as CreateRecommendationInput);
 
-    const { userId, weatherSnapshotId, inputContext, output, topScore, algorithmVersion, engineVersion, generatedAt } = body;
-
-    if (!userId || !inputContext || !output) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    const recommendation = await createRecommendation({
-      userId,
-      weatherSnapshotId: weatherSnapshotId ?? null,
-      inputContext,
-      output,
-      topScore: topScore ?? null,
-      algorithmVersion: algorithmVersion ?? engineVersion ?? null,
-      engineVersion: engineVersion ?? algorithmVersion ?? null,
-      generatedAt: generatedAt ?? null,
-    } as CreateRecommendationInput);
-
-    return NextResponse.json(recommendation);
-  } catch (error) {
-    console.error("Error creating recommendation:", error);
-    return NextResponse.json(
-      { error: "Failed to create recommendation" },
-      { status: 500 }
-    );
-  }
-}
+  return NextResponse.json(recommendation);
+});
