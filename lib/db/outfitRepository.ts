@@ -99,6 +99,17 @@ export async function getSavedOutfitById(userId: string, outfitId: string) {
 }
 
 export async function saveOutfit(input: SaveOutfitInput) {
+    if (input.recommendationId) {
+        const recommendation = await.prisma.recommendation.findFirst({
+            where: { id: input.recommendationId, userId: input.userId },
+            select: { id: true },
+        });
+
+        if (!recommendation) {
+            throw new Error("Recommendation not found for this user.");
+        }
+    }
+
     const savedOutfit = await prisma.savedOutfit.create({
         data: {
             userId: input.userId,
