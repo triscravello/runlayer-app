@@ -2,6 +2,8 @@ import { GearComparisonClient } from "@/components/compare/GearComparisonClient"
 import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { rankGearRecommendations } from "@/lib/engine/recommendationEngine";
 
+export const dynamic = "force-dynamic";
+
 export default async function ComparePage() {
     const gearItems = await listGearRecommendationCandidates();
     const scoredItems = rankGearRecommendations(
