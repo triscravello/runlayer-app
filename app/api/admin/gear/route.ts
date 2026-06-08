@@ -11,5 +11,5 @@ export const GET = withAdmin(async () => {
 export const POST = withAdmin(async (request: NextRequest) => {
     const body = await parseJsonBody(request, createGearItemSchema);
     const created = await createGearItem(body);
-    return NextResponse.json(created, { status: 204 });
+    return NextResponse.json(created, { status: 201 });
 })
