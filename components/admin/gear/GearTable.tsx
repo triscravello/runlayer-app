@@ -196,7 +196,6 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
               ) : (
                 sortedItems.map((item) => {
                   const selected = selectedIds.has(item.id);
-                  const updatedLabel = formatRelativeDate(item.updatedAt);
                   const hasValidImageUrl = typeof item.imageUrl === "string" && item.imageUrl.trim().length > 0;
                   return (
                     <tr key={item.id} className={`border-t border-zinc-800/60 bg-zinc-900/40 transition-colors ${selected ? "bg-zinc-800/70" : "hover:bg-zinc-800/50"}`}>

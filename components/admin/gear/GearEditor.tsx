@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Sparkles, ImagePlus, RefreshCcw, AlertTriangle, Archive, Check, ChevronDown, Clock3, GripVertical, Loader2, UploadCloud, Wand2 } from "lucide-react";
+import { Sparkles, RefreshCcw, AlertTriangle, Archive, Check, ChevronDown, Clock3, GripVertical, Loader2, UploadCloud, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
