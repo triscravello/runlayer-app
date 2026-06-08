@@ -1,23 +1,43 @@
 import type { TempCategory } from "@/services/weatherService";
 
+type OpenWeatherCondition = {
+  main?: string;
+}
+
+type OpenWeatherResponse = {
+  name?: string;
+  main?: {
+    temp?: number;
+    humidity?: number;
+  };
+  wind?: {
+    speed?: number;
+  };
+  weather?: OpenWeatherCondition[];
+  rain?: unknown;
+  uvi?: number;
+};
+
+type NormalizedOpenWeather = {
+  location: string;
+  tempF: number;
+  humidity: number;
+  windSpeed: number;
+  precipitationChance: number;
+  uvIndex: number;
+  condition: string;
+  tempCategory: TempCategory;
+};
+
 export const weatherNormalizer = {
-  normalize(raw: any): {
-    location: string;
-    tempF: number;
-    humidity: number;
-    windSpeed: number;
-    precipitationChance: number;
-    uvIndex: number;
-    condition: string;
-    tempCategory: TempCategory;
-  } {
-    const tempF = raw.main.temp;
-    const humidity = raw.main.humidity;
-    const windSpeed = raw.wind.speed;
+  normalize(raw: OpenWeatherResponse): NormalizedOpenWeather {
+    const tempF = raw.main?.temp ?? 0;
+    const humidity = raw.main?.humidity ?? 0;
+    const windSpeed = raw.wind?.speed ?? 0;
     const condition = raw.weather?.[0]?.main || "Unknown";
 
     return {
-      location: raw.name,
+      location: raw.name ?? "Unknown",
       tempF,
       humidity,
       windSpeed,
@@ -36,7 +56,7 @@ export const weatherNormalizer = {
     return "hot";
   },
 
-  estimatePrecip(raw: any) {
+  estimatePrecip(raw: OpenWeatherResponse) {
     if (raw.rain) return 0.7;
     if (raw.weather?.[0]?.main === "Rain") return 0.6;
     return 0.1;

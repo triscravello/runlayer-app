@@ -1,22 +1,27 @@
+import { BadRequestError } from "../http/apiErrors";
+
 export const weatherClient = {
     async fetchWeather(location: string) {
-        try {
-            // example using OpenWeather
-            const apiKey = process.env.WEATHER_API_KEY;
+        const apiKey = process.env.WEATHER_API_KEY;
 
-            const res = await fetch(
-                `https://api.openweathermap.org/data/2.5/weather?q=${location}&units=imperial&appid=${apiKey}`
-            )
-
-            if (!res.ok) {
-                throw new Error("Weather API request failed");
-            }
-
-            const data = await res.json();
-            return data;
-        } catch (error) {
-            console.error("WeatherClient error:" , error);
-            throw new Error("Failed to fetch weather data");
+        if (!apiKey) {
+            throw new Error("Missing WEATHER_API_KEY");
         }
+
+        const params = new URLSearchParams({
+            q: location,
+            units: "imperial",
+            appid: apiKey,
+        });
+
+        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params.toString()}`);
+
+        if (!res.ok) {
+            if (res.status === 404) {
+                throw new BadRequestError("Weather location not found");
+            }
+        }
+
+        return res.json();
     }
 }
