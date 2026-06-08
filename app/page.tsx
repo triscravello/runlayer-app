@@ -1,13 +1,11 @@
+import Link from "next/link";
+
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ArrowRight, Zap, Target, Brain, TrendingUp } from "lucide-react";
 
-interface HomePageProps {
-  onGetStarted: () => void;
-}
-
-export default function HomePage({ onGetStarted }: HomePageProps) {
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -23,10 +21,10 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
                 <span className="text-xl">RunLayer</span>
               </div>
               <Button
-                onClick={onGetStarted}
+                asChild
                 className="bg-[#10B981] hover:bg-[#059669] text-white"
               >
-                Get Started
+                <Link href="/auth/signup">Get Started</Link>
               </Button>
             </div>
           </div>
@@ -43,44 +41,45 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
             </Badge>
 
             <h1 className="text-5xl md:text-6xl lg:text-7xl">
-              The Running Gear
+              The Smart Layering Engine
               <br />
-              Recommendation Engine
+              For Every Run
             </h1>
 
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              AI-powered outfit optimization based on real conditions, personal physiology,
-              and performance science. Know exactly what to wear before every run.
+              Personalized layering guidance based on real conditions, your running profile, and performance context. Know what to wear before every run.
             </p>
 
-            <div className="flex gap-4 justify-center pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button
-                onClick={onGetStarted}
+                asChild
                 className="bg-[#10B981] hover:bg-[#059669] text-white text-lg px-8 py-6 h-auto"
               >
-                Start Optimizing
-                <ArrowRight className="ml-2 w-5 h-5" />
+                <Link href="/auth/signup">
+                  Start Optimizing 
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Link>
               </Button>
-              <Button variant="outline" className="text-lg px-8 py-6 h-auto">
-                See How It Works
+              <Button asChild variant="outline" className="text-lg px-8 py-6 h-auto">
+                <a href="#how-it-works">See How It Works</a>
               </Button>
             </div>
 
             {/* Quick Stats */}
-            <div className="flex gap-8 justify-center pt-12 text-center">
+            <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 justify-center pt-12 text-center">
               <div>
-                <div className="text-3xl mb-1">98%</div>
-                <div className="text-sm text-muted-foreground">Accuracy</div>
+                <div className="text-2xl md:text-3xl font-bold tracking-tight mb-1">Weather-aware</div>
+                <div className="text-sm text-muted-foreground">Conditions-first guidance</div>
               </div>
-              <div className="w-px bg-border" />
+              <div className="hidden sm:block w-px bg-border" />
               <div>
-                <div className="text-3xl mb-1">12k+</div>
-                <div className="text-sm text-muted-foreground">Recommendations</div>
+                <div className="text-2xl md:text-3xl font-bold tracking-tight mb-1">Personalized</div>
+                <div className="text-sm text-muted-foreground">Built around your run</div>
               </div>
-              <div className="w-px bg-border" />
+              <div className="hidden sm:block w-px bg-border" />
               <div>
-                <div className="text-3xl mb-1">24/7</div>
-                <div className="text-sm text-muted-foreground">Live Weather</div>
+                <div className="text-2xl md:text-3xl font-bold tracking-tight mb-1">Explainable</div>
+                <div className="text-sm text-muted-foreground">Clear gear reasoning</div>
               </div>
             </div>
           </div>
@@ -88,12 +87,12 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
       </div>
 
       {/* How It Works Section */}
-      <div className="bg-muted/30 py-20 md:py-32">
+      <div id="how-it-works" className="bg-muted/30 py-20 md:py-32 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl mb-4">Data-Driven Performance Intelligence</h2>
+            <h2 className="text-4xl font-bold tracking-tight mb-4">Data-Driven Performance Intelligence</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Four integrated systems working together to compute your optimal gear
+              Four integrated systems working together to calculate practical layering guidance
             </p>
           </div>
 
@@ -103,11 +102,9 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
               <div className="w-12 h-12 bg-[#10B981]/10 rounded-lg flex items-center justify-center mb-4">
                 <Brain className="w-6 h-6 text-[#10B981]" />
               </div>
-              <h3 className="text-2xl mb-3">Recommendation Engine</h3>
+              <h3 className="text-2xl font-bold tracking-tight mb-3">Recommendation Engine</h3>
               <p className="text-muted-foreground leading-relaxed">
-                AI reasoning that analyzes temperature, humidity, wind, run type, and personal
-                physiology to compute optimal outfit configurations. Every recommendation
-                includes transparent logic explaining exactly why each piece was selected.
+                Recommendation logic analyzes temperature, humidity, wind, run type, and personal physiology to compute practical outfit configurations. Every recommendation includes transparent gear reasoning that explains why each piece was selected.
               </p>
             </Card>
 
@@ -116,7 +113,7 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
               <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
                 <Target className="w-6 h-6 text-blue-500" />
               </div>
-              <h3 className="text-2xl mb-3">Weather Intelligence</h3>
+              <h3 className="text-2xl font-bold tracking-tight mb-3">Weather Intelligence</h3>
               <p className="text-muted-foreground leading-relaxed">
                 Real-time environmental data processing that goes beyond basic forecasts.
                 Analyzes heat index, evaporative cooling efficiency, and wind chill to
@@ -129,10 +126,10 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
               <div className="w-12 h-12 bg-orange-500/10 rounded-lg flex items-center justify-center mb-4">
                 <Zap className="w-6 h-6 text-orange-500" />
               </div>
-              <h3 className="text-2xl mb-3">Gear Database</h3>
+              <h3 className="text-2xl font-bold tracking-tight mb-3">Gear Database</h3>
               <p className="text-muted-foreground leading-relaxed">
-                Curated performance database with technical specifications, material properties,
-                and real-world testing data. Each item tagged with functional characteristics:
+                Curated gear database with technical specifications, material properties,
+                and real-world performance context. Each item is tagged with functional characteristics:
                 moisture transfer rates, friction coefficients, thermal regulation scores.
               </p>
             </Card>
@@ -142,7 +139,7 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
               <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
                 <TrendingUp className="w-6 h-6 text-purple-500" />
               </div>
-              <h3 className="text-2xl mb-3">Brand Intelligence</h3>
+              <h3 className="text-2xl font-bold tracking-tight mb-3">Brand Intelligence</h3>
               <p className="text-muted-foreground leading-relaxed">
                 Athletic ecosystem mapping across Nike, Bandit, Tracksmith, Lululemon, and more.
                 Matches brand strengths to specific conditions: Nike for moisture management,
@@ -158,9 +155,9 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-4xl mb-4">Not a Shopping App. An Intelligence System.</h2>
+              <h2 className="text-4xl font-bold tracking-tight mb-4">Not a Shopping App. A Decision Engine.</h2>
               <p className="text-xl text-muted-foreground">
-                RunLayer computes what you should wear based on science, not preference
+                RunLayer calculates what to wear from conditions, gear data, and performance context.
               </p>
             </div>
 
@@ -171,7 +168,7 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
                 <ul className="space-y-3">
                   <li className="flex items-start gap-2 text-muted-foreground">
                     <span className="text-destructive">✗</span>
-                    <span>Generic "outfit of the day" suggestions</span>
+                    <span>Generic &quot;outfit of the day&quot; suggestions</span>
                   </li>
                   <li className="flex items-start gap-2 text-muted-foreground">
                     <span className="text-destructive">✗</span>
@@ -202,11 +199,11 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-[#10B981]">✓</span>
-                    <span>Environmental intelligence with impact analysis</span>
+                    <span>Weather-aware impact analysis</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-[#10B981]">✓</span>
-                    <span>Transparent AI reasoning for every choice</span>
+                    <span>Transparent gear reasoning for every choice</span>
                   </li>
                 </ul>
               </Card>
@@ -220,7 +217,7 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
         <div className="max-w-4xl mx-auto px-4 md:px-8">
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4">Example Intelligence</Badge>
-            <h2 className="text-4xl mb-4">See The System Think</h2>
+            <h2 className="text-4xl font-bold tracking-tight mb-4">See The System Think</h2>
           </div>
 
           <Card className="p-8 border-2 border-amber-200">
@@ -234,16 +231,16 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
               </div>
 
               <div>
-                <h4 className="mb-2 text-amber-900">Weather Logic</h4>
+                <h4 className="mb-2 text-amber-900 font-bold tracking-tight">Weather Logic</h4>
                 <p className="text-sm leading-relaxed text-foreground/90">
-                  At 72°F with 65% humidity, your body's cooling efficiency drops by
+                  At 72°F with 65% humidity, your body&apos; cooling efficiency drops by
                   approximately 20%. The tank top configuration maximizes skin exposure for
                   evaporative cooling, while mesh panels create convective airflow channels.
                 </p>
               </div>
 
               <div>
-                <h4 className="mb-2 text-amber-900">Physiology Logic</h4>
+                <h4 className="mb-2 text-amber-900 font-bold tracking-tight">Physiology Logic</h4>
                 <p className="text-sm leading-relaxed text-foreground/90">
                   High humidity increases chafing risk during long runs. Lightweight split
                   shorts reduce friction and improve airflow, while moisture-wicking fabric
@@ -253,7 +250,7 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
 
               <div className="pt-4 border-t border-border text-center">
                 <p className="text-sm text-muted-foreground italic">
-                  "This system actually knows what I should wear better than I do."
+                  &quot;This system actually knows what I should wear better than I do.&quot;
                 </p>
               </div>
             </div>
@@ -264,19 +261,21 @@ export default function HomePage({ onGetStarted }: HomePageProps) {
       {/* CTA Section */}
       <div className="py-20 md:py-32">
         <div className="max-w-4xl mx-auto px-4 md:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl mb-6">
-            Stop guessing. Start optimizing.
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
+            Stop guessing. Start layering with context.
           </h2>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Get personalized gear recommendations powered by real-time conditions and
-            performance science.
+            Get personalized gear recommendations shaped by real-time conditions,
+            recommendation logic, and performance context.
           </p>
           <Button
-            onClick={onGetStarted}
+            asChild
             className="bg-[#10B981] hover:bg-[#059669] text-white text-lg px-10 py-6 h-auto"
           >
-            Start Your First Recommendation
-            <ArrowRight className="ml-2 w-5 h-5" />
+            <Link href="/auth/signup">
+              Start Your First Recommendation
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </Link>
           </Button>
         </div>
       </div>
