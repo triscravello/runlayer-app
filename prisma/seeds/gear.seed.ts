@@ -1,6 +1,8 @@
-import { Category, PriceRange, Brand } from "@prisma/client";
+import { Category, PriceRange } from "@prisma/client";
+import type { Brand } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { GearSeedItem, loadGearSeedData } from "./data/gear.data";
+import { loadGearSeedData } from "./data/gear.data";
+import type { GearSeedItem } from "./data/gear.data";
 
 type BodyTypeFitScores = Record<"lean" | "average" | "larger", number>;
 
@@ -120,7 +122,7 @@ async function seedGearItems(records: ReturnType<typeof buildGearRecords>) {
     }
 }
 
-async function main() {
+export async function seedGearCatalog() {
     const gearData = loadGearSeedData();
     const brandCache = await resolveBrands(gearData);
     const gearRecords = buildGearRecords(gearData, brandCache);
@@ -130,11 +132,13 @@ async function main() {
     console.log(`Gear seed completed with ${gearData.length} records`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (process.argv[1]?.endsWith("gear.seed.ts")) {
+  seedGearCatalog()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

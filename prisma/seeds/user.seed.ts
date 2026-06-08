@@ -8,7 +8,7 @@ function hashPassword(password: string) {
     return `${salt}:${hash}`;
 }
 
-async function main() {
+export async function seedUserProfile() {
     const email = "user@example.com";
     const hashedPassword = hashPassword("Password123");
     
@@ -45,11 +45,13 @@ async function main() {
     console.log("Seeded user and profile:", { user, userProfile });
 };
 
-main()
-    .catch((e) => {
-        console.error(e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+if (process.argv[1]?.endsWith("user.seed.ts")) {
+    seedUserProfile()
+        .catch((e) => {
+            console.error(e);
+            process.exit(1);
+        })
+        .finally(async () => {
+            await prisma.$disconnect();
+        });
+}
