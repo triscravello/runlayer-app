@@ -1,6 +1,6 @@
 # RunLayer
 
-AI-powered running outfit recommendations based on real-time weather conditions and personal preferences.
+Weather-driven running outfit recommendations based on real-time conditions and personal preferences.
 
 ## Overview
 
@@ -17,36 +17,17 @@ RunLayer helps runners make smart gear decisions by combining:
 | Framework | [Next.js 16](https://nextjs.org) (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 4 |
-| Database | Supabase (PostgreSQL) + Prisma ORM |
+| UI Components | Radix UI + `class-variance-authority` + `tailwind-merge`
+| Database | Supabase (PostgreSQL) + Prisma ORM 5 |
+| Auth | [Better Auth](https://better-auth.com) |
+| Validation | Zod
 | State | Zustand |
 | Fonts | Geist (Vercel) |
 
 ## Project Structure
 
 \`\`\`
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes (recommendation, weather, user)
-│   ├── auth/              # Authentication pages
-│   ├── dashboard/         # User dashboard
-│   ├── recommendation/    # Recommendation UI
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Landing page
-├── components/            # React components
-│   ├── layout/           # Layout components
-│   ├── profile/          # Profile forms
-│   ├── recommendation/   # Recommendation displays
-│   ├── saved/            # Saved outfits UI
-│   └── ui/               # Generic UI primitives
-├── lib/                   # Core library code
-│   ├── db/               # Database repositories & Supabase client
-│   ├── engine/           # Recommendation algorithms
-│   ├── types/            # TypeScript interfaces
-│   ├── utils/            # Helpers & validators
-│   └── weather/          # Weather API client
-├── services/             # Business logic layer
-├── store/                # Zustand state stores
-├── config/               # App configuration
-└── prisma/               # Schema & seed data
+├── app/ # Next.js App Router │ ├── api/ # API routes │ │ ├── auth/[...all] # Better Auth catch-all handler │ │ ├── gear/ # Gear catalog CRUD │ │ ├── outfit/save/ # Saved outfits │ │ ├── profile/ # User profile │ │ ├── recommendation/# Recommendation engine │ │ └── weather/ # Weather API proxy │ ├── auth/ # Authentication pages (sign-in, sign-up) │ ├── dashboard/ # User dashboard │ ├── recommendation/ # Recommendation UI │ ├── layout.tsx # Root layout │ └── page.tsx # Landing page ├── components/ # React components │ ├── layout/ # Layout components │ ├── profile/ # Profile forms │ ├── recommendation/ # Recommendation displays │ ├── saved/ # Saved outfits UI │ └── ui/ # Generic UI primitives (shadcn/ui pattern) ├── config/ # App configuration (env, weather rules, brand configs) ├── content/ # Static content & prompts ├── context/ # React Context providers (Auth, App) ├── docs/ # Documentation ├── hooks/ # Custom React hooks (useAuth, useGear, useWeather, etc.) ├── lib/ # Core library code │ ├── db/ # Database repositories & Prisma client │ ├── engine/ # Recommendation algorithms │ ├── types/ # TypeScript interfaces │ └── utils/ # Helpers & validators ├── prisma/ # Prisma schema, migrations & seed data ├── scripts/ # Utility & deployment scripts ├── services/ # Business logic layer (auth, gear, weather, outfits) └── store/ # State management (React Context / custom hooks)
 \`\`\`
 
 ## Key Features
@@ -56,6 +37,7 @@ RunLayer helps runners make smart gear decisions by combining:
 - **Gear Catalog** — Curated database of running apparel with weather suitability tags and brand info
 - **Saved Outfits** — Users can save and favorite recommended combinations for quick reference
 - **Brand Mapping** — Matches recommendations to user budget tiers and style preferences
+- **OAuth Authentication** = Google sign-in via Better Auth
 
 ## Environment Setup
 
@@ -95,7 +77,9 @@ Core entities:
 - **UserProfile** — Running preferences & body characteristics
 - **Gear** — Apparel items with weather/body tags
 - **Brand** — Brand metadata (tier, style)
+- **Category** - Gear categories
 - **Recommendation** — Generated outfit suggestions
+- **RecommendationItem** - Individual items within a recommendation
 - **UserSavedOutfits** — Favorited recommendations
 - **Weather** — Cached weather condition snapshots
 
@@ -155,7 +139,8 @@ Core entities:
 | \`npm run build\` | Production build |
 | \`npm run start\` | Start production server |
 | \`npm run lint\` | Run ESLint |
+| \`npm run db:seed\` | Seed the database with initial data |
+| \`npm run postinstall\` | Automatically generates Prisma client after install |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
