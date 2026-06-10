@@ -1,4 +1,4 @@
-import { BadRequestError } from "../http/apiErrors";
+import { BadRequestError, HttpError } from "../http/apiErrors";
 
 export const weatherClient = {
     async fetchWeather(location: string) {
@@ -20,6 +20,8 @@ export const weatherClient = {
             if (res.status === 404) {
                 throw new BadRequestError("Weather location not found");
             }
+
+            throw new HttpError(res.status, "Weather provider request failed", "WEATHER_PROVIDER_ERROR");
         }
 
         return res.json();
