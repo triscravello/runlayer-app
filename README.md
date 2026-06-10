@@ -10,6 +10,12 @@ RunLayer helps runners make smart gear decisions by combining:
 - **Curated gear database** with weather suitability tags
 - **Smart recommendation engine** that matches conditions to optimal outfits
 
+## Problem
+
+Runners often rely on generic weather advice or guesswork when choosing what to wear. Temperature alone does not account for factors such as humidity, wind, workout intensity, terrain, or individual preferences.
+
+RunLayer solves this problem by combining real-time weather data, personal runner profiles, and a rule-based recommendation engine to generate personalized running outfit recommendations.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -24,6 +30,29 @@ RunLayer helps runners make smart gear decisions by combining:
 | State | Zustand |
 | Fonts | Geist (Vercel) |
 
+## Architecture
+
+Request Flow
+
+User
+  ↓
+Recommendation Form
+  ↓
+/api/recommendation
+  ↓
+Recommendation Service
+  ↓
+Recommendation Engine
+  ↓
+Scorers + Filters
+  ↓
+Prisma Repository Layer
+  ↓
+PostgreSQL (Supabase)
+
+External Services:
+- Weather API
+
 ## Project Structure
 
 \`\`\`
@@ -32,12 +61,37 @@ RunLayer helps runners make smart gear decisions by combining:
 
 ## Key Features
 
-- **Weather-Aware Recommendations** — Fetches current conditions (temp, humidity, wind, UV, precipitation) to suggest appropriate layers
-- **User Profiles** — Stores body type, heat sensitivity, chafe preferences, style, budget, and fit preferences
-- **Gear Catalog** — Curated database of running apparel with weather suitability tags and brand info
-- **Saved Outfits** — Users can save and favorite recommended combinations for quick reference
-- **Brand Mapping** — Matches recommendations to user budget tiers and style preferences
-- **OAuth Authentication** = Google sign-in via Better Auth
+- **Weather-Aware Recommendations** — Uses weather conditions like temperature, humidity, rain, wind, and UV to recommend running outfits.
+- **Personalized Runner Profiles** — Stores user preferences such as heat sensitivity, budget, terrain, fit, and style.
+- **Rule-Based Recommendation Engine** — Scores gear using weather, workout type, intensity, terrain, budget, and brand affinity.
+- **Recommendation Explanations** — Shows why each item was recommended with score breakdowns and reasoning.
+- **Saved Outfits & Kits** — Lets users save race-day, cold-weather, tempo, and custom outfit collections.
+- **Recommendation History** — Tracks past recommendations for review and personalization.
+- **Feedback System** — Users can rate recommendations to improve future suggestions.
+- **Gear Comparison View** — Compare multiple gear items side-by-side.
+- **Admin Gear Management** — Admin dashboard for creating, editing, importing, and managing gear.
+- **Analytics Dashboard** — Tracks recommendation patterns, brand trends, weather usage, and feedback insights.
+
+## Recommendation Engine
+
+RunLayer uses a rule-based recommendation engine.
+
+Recommendations are generated through:
+
+1. Weather filtering
+2. Category filtering
+3. User preference matching
+4. Brand affinity scoring
+5. Budget scoring
+6. Terrain scoring
+7. Weather scoring
+8. Rotation penalties to reduce repetitive recommendations
+
+Each recommendation returns:
+- Recommended items
+- Score breakdown
+- Explanation reasons
+- Recommendation engine version metadata
 
 ## Environment Setup
 
