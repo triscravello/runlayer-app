@@ -87,7 +87,9 @@ export function DashboardClient({ user }: { user: DashboardUser }) {
                 });
 
                 if (!response.ok) {
-                    throw new Error("Dashboard data is not available right now.");
+                    const errorData = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+                    
+                    throw new Error(errorData?.error?.message ?? "Dashboard data is not available right now.");
                 }
 
                 const data = (await response.json()) as DashboardData;
@@ -144,12 +146,9 @@ export function DashboardClient({ user }: { user: DashboardUser }) {
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
                             <MapPin className="w-4 h-4" />
-                            <input
-                                type="text"
-                                defaultValue={dashboardData?.weather.location ?? ""}
-                                className="bg-transparent border-none outline-none"
-                                aria-label="Dashboard location"
-                            />
+                            <span aria-label="Dashboard location">
+                                {dashboardData?.weather.location ?? (isLoading ? "Loading location..." : "")}
+                            </span>
                         </div>
                     </div>
                     <Button
@@ -244,7 +243,7 @@ export function DashboardClient({ user }: { user: DashboardUser }) {
                                 <div className="text-sm text-muted-foreground">Brands Tracked</div>
                             </Card>
                             <Card className="p-4">
-                                <div className="text-2xl">{dashboardData.stats.accuracyPercent}</div>
+                                <div className="text-2xl">{dashboardData.stats.accuracyPercent}%</div>
                                 <div className="text-sm text-muted-foreground">Accuracy</div>
                             </Card>
                         </div>
