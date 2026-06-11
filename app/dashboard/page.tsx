@@ -14,6 +14,7 @@ export default async function DashboardPage() {
     id: user.id,
     email: user.email,
     role: user.role,
+    location: user.location,
   };
 
   return <DashboardClient user={dashboardUser} />;

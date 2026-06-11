@@ -14,6 +14,7 @@ export type DashboardUser = {
     id: string;
     email: string;
     role: string;
+    location: string | null;
 };
 
 type RunType = "easy" | "long" | "intervals";
