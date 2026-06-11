@@ -8,6 +8,7 @@ type OpenWeatherResponse = {
   name?: string;
   main?: {
     temp?: number;
+    feels_like?: number;
     humidity?: number;
   };
   wind?: {
@@ -21,6 +22,7 @@ type OpenWeatherResponse = {
 type NormalizedOpenWeather = {
   location: string;
   tempF: number;
+  feelsLikeF: number;
   humidity: number;
   windSpeed: number;
   precipitationChance: number;
@@ -32,6 +34,7 @@ type NormalizedOpenWeather = {
 export const weatherNormalizer = {
   normalize(raw: OpenWeatherResponse): NormalizedOpenWeather {
     const tempF = raw.main?.temp ?? 0;
+    const feelsLikeF = raw.main?.feels_like ?? tempF;
     const humidity = raw.main?.humidity ?? 0;
     const windSpeed = raw.wind?.speed ?? 0;
     const condition = raw.weather?.[0]?.main || "Unknown";
@@ -39,6 +42,7 @@ export const weatherNormalizer = {
     return {
       location: raw.name ?? "Unknown",
       tempF,
+      feelsLikeF,
       humidity,
       windSpeed,
       precipitationChance: this.estimatePrecip(raw),

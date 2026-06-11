@@ -6,6 +6,7 @@ export type TempCategory = "cold" | "cool" | "mild" | "warm" | "hot";
 export type NormalizedWeather = {
     location: string;
     tempF: number;
+    feelsLikeF: number;
     humidity: number;
     windSpeed: number;
     precipitationChance: number;
