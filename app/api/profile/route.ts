@@ -17,6 +17,7 @@ export const PUT = withAuth(async (request: NextRequest, _context, user) => {
   const body = (await request.json()) as UpsertUserProfileInput;
 
   const {
+    location,
     heightCm,
     weightLbs,
     bodyType,
@@ -35,6 +36,7 @@ export const PUT = withAuth(async (request: NextRequest, _context, user) => {
 
   const updatedProfile = await upsertUserProfile({
     userId: user.id,
+    location,
     heightCm,
     weightLbs,
     bodyType,

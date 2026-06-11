@@ -2,26 +2,29 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAuthCookies, hashPassword } from "@/lib/auth";
+import { success } from "zod";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SignupPayload = {
     email?: unknown;
     password?: unknown;
+    location?: unknown;
 };
 
-function authUserResponse(user: { id: string; email: string; role: string }) {
+function authUserResponse(user: { id: string; email: string; role: string; location: string | null }) {
     return {
         id: user.id,
         email: user.email,
         username: user.email,
         role: user.role,
+        location: user.location,
     }
 }
 
 export async function POST(request: Request) {
     try {
-        const { email, password } = (await request.json()) as SignupPayload;
+        const { email, password, location } = (await request.json()) as SignupPayload;
 
         if (typeof email !== "string" || typeof password !== "string") {
             return NextResponse.json({ success: false, error: { code: "VALIDATION_ERROR", message: "Email and password are required" } }, { status: 400 });
@@ -37,18 +40,31 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: { code: "VALIDATION_ERROR", message: "Password must have be at least 8 characters " } }, { status: 400 });
         }
 
+        if (typeof location !== "string" || !location.trim()) {
+            return NextResponse.json({ success: false, error: { code: "VALIDATION_ERROR", message: "Location is required" } }, { status: 400 });
+        }
+
+        const normalizedLocation = location.trim();
+
         const user = await prisma.user.create({
             data: {
                 email: normalizedEmail,
                 passwordHash: hashPassword(password),
                 profile: {
-                    create: {},
+                    create: {
+                        location: normalizedLocation,
+                    },
                 },
             },
             select: {
                 id: true,
                 email: true,
                 role: true,
+                profile: {
+                    select: {
+                        location: true,
+                    },
+                },
             },
         });
 
@@ -58,7 +74,7 @@ export async function POST(request: Request) {
             {
                 success: true,
                 data: {
-                    user: authUserResponse(user),
+                    user: authUserResponse({ ...user, location: user.profile?.location ?? null }),
                 },
             },
             { status: 201 },

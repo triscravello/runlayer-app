@@ -33,6 +33,11 @@ export async function POST(request: Request) {
                 email: true,
                 passwordHash: true,
                 role: true,
+                profile: {
+                    select: {
+                        location: true,
+                    },
+                },
             },
         });
 
@@ -50,6 +55,7 @@ export async function POST(request: Request) {
                     email: user.email,
                     username: user.email,
                     role: user.role,
+                    location: user.profile?.location ?? null,
                 },
             },
         });
