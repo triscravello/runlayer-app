@@ -10,6 +10,7 @@ type BudgetSensitivityValue = "low" | "medium" | "high";
 export type UpsertUserProfileInput = {
     userId: string;
     heightCm?: number | null;
+    location?: string | null;
     weightLbs?: number | null;
     bodyType?: BodyTypeValue | null;
     heatSensitivity?: string | null;
@@ -40,6 +41,7 @@ export async function getUserProfile(userId: string) {
 
 export async function upsertUserProfile(input: UpsertUserProfileInput) {
     const profileData = {
+        location: input.location == null ? input.location : input.location.trim() || null,
         heightCm: input.heightCm,
         weightLbs: input.weightLbs,
         bodyType: input.bodyType,

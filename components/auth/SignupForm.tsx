@@ -51,7 +51,7 @@ export default function SignupForm() {
         setIsSubmitting(true);
 
         try {
-            const result = await authService.signup({ email: email.trim(), password });
+            const result = await authService.signup({ email: email.trim(), password, location: location.trim() });
             setUser(result.data.user);
             setSuccessMessage("Account created successfully. Redirecting...");
             router.replace(redirectTo);

@@ -7,6 +7,7 @@ export type AuthUser = {
     email: string;
     username: string;
     role: "USER" | "ADMIN";
+    location: string | null;
 };
 
 type AuthContextType = {

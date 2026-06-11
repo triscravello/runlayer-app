@@ -28,9 +28,12 @@ export async function seedUserProfile() {
 
     const userProfile = await prisma.userProfile.upsert({
         where: { userId: user.id },
-        update: {},
+        update: {
+            location: "Denver, CO",
+        },
         create: {
             userId: user.id,
+            location: "Denver, CO",
             heightCm: 180,
             weightLbs: 170,
             bodyType: "ATHLETIC",

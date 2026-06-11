@@ -6,6 +6,7 @@ export interface AuthSuccessResponse {
             email: string;
             username: string;
             role: "USER" | "ADMIN";
+            location: string | null;
         };
     };
 }
@@ -21,6 +22,7 @@ export interface AuthErrorResponse {
 export interface SignupPayload {
     email: string;
     password: string;
+    location: string;
 }
 
 export interface LoginPayload {

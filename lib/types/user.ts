@@ -14,6 +14,7 @@ export type BudgetSensitivity = "low" | "medium" | "high";
 export interface UserProfile {
     id: string;
     userId: string;
+    location?: string | null;
     heightCm?: number | null;
     weightLbs?: number | null;
     bodyType?: string | null;
@@ -33,6 +34,7 @@ export interface UserProfile {
 }
 
 export type UserProfilePayload = {
+    location?: string | null;
     heightCm?: number;
     weightLbs?: number;
     bodyType?: string;
