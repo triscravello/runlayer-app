@@ -1,151 +1,20 @@
-'use client';
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { OutfitCard } from "@/components/recommendation/OutfitCard";
-import { WeatherSummary } from "@/components/recommendation/WeatherSummary";
-import { BrandList } from "@/components/recommendation/BrandList";
-import { MapPin } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export default function DashboardPage() {
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="space-y-2">
-          <h1 className="text-3xl">Command Center</h1>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <MapPin className="w-4 h-4" />
-            <input
-              type="text"
-              defaultValue="St. Petersburg, FL"
-              className="bg-transparent border-none outline-none"
-            />
-          </div>
-        </div>
+import { DashboardClient, type DashboardUser } from "@/components/dashboard/DashboardClient";
+import { getSessionUser } from "@/lib/auth";
 
-        {/* Run Type Selector */}
-        <div className="flex gap-3">
-          <Button variant="default" className="bg-[#10B981] hover:bg-[#059669] text-white">
-            Easy
-          </Button>
-          <Button variant="outline">Long</Button>
-          <Button variant="outline">Intervals</Button>
-        </div>
+export default async function DashboardPage() {
+  const user = await getSessionUser();
 
-        {/* Weather Context */}
-        <WeatherSummary 
-          location="St. Petersburg, FL"
-          temperature={89}
-          feelsLike={96}
-          condition="Humid and sunny"
-          humidity={72}
-          precipitationChance={0.18}
-          windSpeed={10}
-          uvIndex={8}
-          impactLabel="High sweat risk"
-          labels={["Hot conditions", "High humidity"]}
-          recommendationNote="Recommendations lean into breathable, fast-drying pieces and sun coverage because heat and humidity will increase sweat load."
-        />
+  if (!user) {
+    redirect("/login");
+  }
 
-        {/* Primary Recommendation Card */}
-        <OutfitCard 
-          title="Recommended Outfit for Today"
-          tags={[
-            { label: "Hot", tone: "weather" },
-            { label: "Tempo Run", tone: "workout" },
-            { label: "Lightweight", tone: "attribute" }
-          ]}
-          items={[
-            {
-              id: "lightweight-tank",
-              label: "Lightweight Tank",
-              category: "Top",
-              description: "Open-knit singlet for heat release.",
-              attributes: ["breathable", "no chafe"],
-              icon: "👕"
-            },
-            {
-              id: "split-shorts",
-              label: "Split Shorts",
-              category: "Bottom",
-              description: "Short inseam keeps stride unrestricted",
-              attributes: ["relaxed fit", "quick dry"],
-              icon: "🩳"
-            },
-            {
-              id: "performance-cap",
-              label: "Performance Cap",
-              category: "Accessories",
-              description: "Shields sun without trapping heat",
-              attributes: ["packable", "sweat-wicking"],
-              icon: "🧢"
-            },
-          ]}
-          attributes={[
-            { label: "Breathability", value: "High airflow fabric" },
-            { label: "Layering", value: "Single-layer heat setup" },
-            { label: "Fit", value: "Trim top, free-moving bottom" },
-          ]}
-          why={[
-            "Fits hot conditions",
-            "Designed for tempo runs",
-            { tags: ["quick-dry", "anti-chafe", "performance-fit"] },
-          ]}
-          onSave={(outfit) => console.log("Save outfit", outfit)}
-          onViewDetails={(outfit) => console.log("View outfit details", outfit)}
-        />
+  const dashboardUser: DashboardUser = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+  };
 
-        {/* Brand Enrichment */}
-        <BrandList 
-          layout="horizontal"
-          filterTags={["hot-weather", "tempo", "quick-dry"]}
-          brands={[
-            {
-              id: "tracksmith",
-              name: "Tracksmith",
-              rank: 1,
-              score: 94,
-              summary: "Lightweight performance staples with race-day fits.",
-              tags: ["tempo", "lightweight", "performance-fit"],
-              why: "Matches the tempo content and trim, fast-moving outfit profile.",
-            },
-            {
-              id: "janji",
-              name: "Janji",
-              rank: 2,
-              score: 89,
-              summary: "Breathable warm-weather pieces with quick-dry fabrics.",
-              tags: ["hot-weather", "quick-dry", "sun-coverage"],
-              why: "Useful for humid runs where moisture management matters",
-            },
-            {
-              id: "satisfy",
-              name: "Satisfy",
-              rank: 3,
-              score: 84,
-              summary: "Premium run gear focused on freedom of movement",
-              tags: ["anti-chafe", "tempo", "lightweight"],
-              why: "Pairs with split shorts and low-friction hot-weather layers."
-            },
-          ]}
-        />
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="p-4">
-            <div className="text-2xl">12</div>
-            <div className="text-sm text-muted-foreground">Saved Outfits</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl">5</div>
-            <div className="text-sm text-muted-foreground">Brands Tracked</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl">98%</div>
-            <div className="text-sm text-muted-foreground">Accuracy</div>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+  return <DashboardClient user={dashboardUser} />;
 }
