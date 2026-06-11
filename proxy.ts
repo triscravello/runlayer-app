@@ -53,7 +53,7 @@ export async function proxy(req: NextRequest) {
     const validSession = await hasValidSession(req.cookies.get(AUTH_COOKIE_NAME)?.value);
 
     if (!validSession) {
-        const loginUrl = new URL("/auth/login", req.url);
+        const loginUrl = new URL("/login", req.url);
         loginUrl.searchParams.set("redirect", `${req.nextUrl.pathname}${req.nextUrl.search}`);
         return NextResponse.redirect(loginUrl);
     }

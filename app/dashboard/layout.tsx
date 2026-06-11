@@ -6,7 +6,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     try {
         await requireAuth();
     } catch {
-        redirect("/auth/login?redirect=/dashboard");
+        redirect("/login?redirect=/dashboard");
     }
 
     return children;
