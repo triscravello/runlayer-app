@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+
 import { getAuthCookies } from "@/lib/auth";
 
 export async function POST() {
     const { name } = getAuthCookies();
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true, redirectTo: "/login" });
 
     response.cookies.set(name, "", {
         httpOnly: true,
