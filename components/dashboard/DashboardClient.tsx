@@ -146,7 +146,7 @@ export function DashboardClient({ user }: { user: DashboardUser }) {
                             <MapPin className="w-4 h-4" />
                             <input
                                 type="text"
-                                defaultValue={dashboardData?.weather.location ?? "St. Petersburg, FL"}
+                                defaultValue={dashboardData?.weather.location ?? ""}
                                 className="bg-transparent border-none outline-none"
                                 aria-label="Dashboard location"
                             />
