@@ -272,10 +272,6 @@ function getRunType(request: Request): RunType {
     return validRunTypes.has(runType as RunType) ? (runType as RunType) : "easy";
 }
 
-type SessionUserWithLocation = NonNullable<Awaited<ReturnType<typeof getSessionUser>>> & {
-  location?: string | null;
-};
-
 type DashboardWeather = {
   location: string;
   temperature: number;
@@ -290,8 +286,10 @@ type DashboardWeather = {
   recommendationNote: string;
 };
 
-function getSavedLocation(user: SessionUserWithLocation) {
-  return user.location?.trim() || "St. Petersburg, FL";
+const DEFAULT_WEATHER_LOCATION = "New York, NY";
+
+function getSavedLocation(user: NonNullable<Awaited<ReturnType<typeof getSessionUser>>>) {
+  return user.location?.trim() || DEFAULT_WEATHER_LOCATION;
 }
 
 function buildWeatherLabels(weather: {
@@ -431,7 +429,7 @@ export async function GET(request: Request) {
         );
     }
 
-    const location = getSavedLocation(user as SessionUserWithLocation);
+    const location = getSavedLocation(user);
     const runType = getRunType(request);
     const runData = runTypeData[runType];
     const weather = await getDashboardWeather(location);
