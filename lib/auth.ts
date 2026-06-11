@@ -51,7 +51,7 @@ export async function getSessionUser() {
     const session = verifySessionToken(token);
     if (!session) return null;
 
-    return prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
         where: { id: session.userId },
         select: {
             id: true,
@@ -59,8 +59,24 @@ export async function getSessionUser() {
             role: true,
             createdAt: true,
             updatedAt: true,
+            profile: {
+                select: {
+                    location: true,
+                },
+            },
         },
-    })
+    });
+
+    if (!user) return null;
+
+    return {
+        id: user.id,
+        email: user.email, 
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt, 
+        location: user.profile?.location ?? null,
+    };
 }
 
 export async function requireAuth() {
