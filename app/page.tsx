@@ -20,12 +20,16 @@ export default function HomePage() {
                 </div>
                 <span className="text-xl">RunLayer</span>
               </div>
-              <Button
-                asChild
-                className="bg-[#10B981] hover:bg-[#059669] text-white"
-              >
-                <Link href="/auth/signup">Get Started</Link>
-              </Button>
+              
+              <div className="flex items-center gap-3">
+                <Button asChild variant="ghost" className="text-sm font-medium hover:bg-[#10B981]/10">
+                  <Link href="/login">Login In</Link>
+                </Button>
+                
+                <Button asChild className="bg-[#10B981] hover:bg-[#059669] text-white">
+                  <Link href="/auth/signup">Get Started</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </nav>
