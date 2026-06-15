@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/authContext";
+import Navbar from "@/components/layout/Navbar";
 
 export const metadata: Metadata = {
   title: "RunLayer",
@@ -18,7 +19,10 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-100">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
