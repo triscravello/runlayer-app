@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^5.22.0",
     "class-variance-authority": "^0.7.1",
@@ -22,6 +23,7 @@
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-hook-form": "^7.79.0",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.4.3"
   },
