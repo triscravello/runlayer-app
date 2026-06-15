@@ -1,6 +1,5 @@
 import { runTypeData } from "./runTypeData";
 import type { RecommendationWeather, RunType, RunTypeRecommendation } from "./recommendationTypes";
-import { update } from "lodash";
 
 type RecommendationTag = {
     label: string;
