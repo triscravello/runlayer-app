@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import AppShell from "@/components/layout/AppShell";
 import { requireAuth } from "@/lib/auth";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -9,5 +10,5 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         redirect("/login?redirect=/dashboard");
     }
 
-    return children;
+    return <AppShell>{children}</AppShell>;
 } 
