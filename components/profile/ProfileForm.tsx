@@ -1,26 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch, type FieldError, type FieldPath } from "react-hook-form";
 import { useAuth } from "@/context/authContext";
 import { useProfile } from "@/hooks/useProfile";
-import type { UserProfilePayload } from "@/lib/types/user";
-import { Button } from "@/components/ui/Button";
+import type { UserProfile } from "@/lib/types/user";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/Card";
+  bodyTypeSchema,
+  budgetLevelSchema,
+  budgetSensitivitySchema,
+  coldToleranceSchema,
+  heatSensitivitySchema,
+  heatToleranceSchema,
+  preferredFitSchema,
+  profileSchema,
+  stylePreferenceSchema,
+  terrainPreferenceSchema,
+  type UserProfilePayload
+} from "@/lib/validation/profileSchema";
+import { Button } from "../ui/Button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 
-type SelectOption = {
-  value: string;
-  label: string;
+type SelectOption<T extends string = string> = { value: T; label: string };
+
+type ProfileFormState = {
+  heightCm: string;
+  weightLbs: string;
+  bodyType: "" | NonNullable<UserProfilePayload["bodyType"]>;
+  preferredFit: UserProfilePayload["preferredFit"];
+  heatSensitivity: UserProfilePayload["heatSensitivity"];
+  heatTolerance: UserProfilePayload["heatTolerance"];
+  coldTolerance: UserProfilePayload["coldTolerance"];
+  chafeProne: boolean;
+  stylePreference: UserProfilePayload["stylePreference"];
+  budgetLevel: UserProfilePayload["budgetLevel"];
+  budgetSensitivity: UserProfilePayload["budgetSensitivity"];
+  terrainPreference: UserProfilePayload["terrainPreference"];
+  preferredBrands: string;
+  avoidedBrands: string;
 };
 
-const bodyTypeOptions: SelectOption[] = [
+const bodyTypeOptions: SelectOption<ProfileFormState["bodyType"]>[] = [
   { value: "", label: "Select body type" },
   { value: "SLIM", label: "Slim" },
   { value: "ATHLETIC", label: "Athletic" },
@@ -28,19 +51,19 @@ const bodyTypeOptions: SelectOption[] = [
   { value: "PLUS", label: "Plus" },
 ];
 
-const preferredFitOptions: SelectOption[] = [
+const preferredFitOptions: SelectOption<UserProfilePayload["preferredFit"]>[] = [
   { value: "slim", label: "Slim" },
   { value: "regular", label: "Regular" },
   { value: "relaxed", label: "Relaxed" },
 ];
 
-const toleranceOptions: SelectOption[] = [
+const toleranceOptions: SelectOption<UserProfilePayload["heatTolerance"]>[] = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
 ];
 
-const stylePreferenceOptions: SelectOption[] = [
+const stylePreferenceOptions: SelectOption<UserProfilePayload["stylePreference"]>[] = [
   { value: "performance", label: "Performance" },
   { value: "casual", label: "Casual" },
   { value: "minimal", label: "Minimal" },
@@ -48,19 +71,14 @@ const stylePreferenceOptions: SelectOption[] = [
   { value: "classic", label: "Classic" },
 ];
 
-const budgetLevelOptions: SelectOption[] = [
+const budgetLevelOptions: SelectOption<UserProfilePayload["budgetLevel"]>[] = [
   { value: "BUDGET", label: "Low" },
   { value: "MID", label: "Mid" },
   { value: "PREMIUM", label: "High" },
 ];
 
-const budgetSensitivityOptions: SelectOption[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
-
-const terrainPreferenceOptions: SelectOption[] = [
+const budgetSensitivityOptions: SelectOption<UserProfilePayload["budgetSensitivity"]>[] = toleranceOptions;
+const terrainPreferenceOptions: SelectOption<UserProfilePayload["terrainPreference"]>[] = [
   { value: "mixed", label: "Mixed" },
   { value: "road", label: "Road" },
   { value: "trail", label: "Trail" },
@@ -69,7 +87,7 @@ const terrainPreferenceOptions: SelectOption[] = [
 const selectClassName =
   "border-input bg-input-background focus-visible:border-ring focus-visible:ring-ring/50 flex h-9 w-full rounded-md border px-3 py-1 text-base outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
 
-const initialFormState = {
+const initialFormState: ProfileFormState = {
   heightCm: "",
   weightLbs: "",
   bodyType: "",
@@ -86,224 +104,123 @@ const initialFormState = {
   avoidedBrands: "",
 };
 
-type ProfileFormState = typeof initialFormState;
+function enumValue<T extends string>(schema: { safeParse: (value: unknown) => { success: boolean; data?: T } }, value: string | null | undefined, fallback: T): T {
+  const result = schema.safeParse(value);
+  return result.success && result.data ? result.data : fallback;
+}
 
-function createFormState(profile: {
-  heightCm?: number | null;
-  weightLbs?: number | null;
-  bodyType?: string | null;
-  preferredFit?: string | null;
-  heatSensitivity?: string | null;
-  heatTolerance?: string | null;
-  coldTolerance?: string | null;
-  chafeProne: boolean;
-  stylePreference?: string | null;
-  budgetLevel?: string | null;
-  budgetSensitivity?: string | null;
-  terrainPreference?: string | null;
-  preferredBrands?: string[] | null;
-  avoidedBrands?: string[] | null;
-} | null): ProfileFormState {
-  if (!profile) {
-    return initialFormState;
-  }
+function optionalBodyType(value: string | null | undefined): ProfileFormState["bodyType"] {
+  const result = bodyTypeSchema.safeParse(value);
+  return result.success ? result.data : "";
+}
+
+function createFormState(profile: UserProfile | null): ProfileFormState {
+  if (!profile) return initialFormState;
 
   return {
     heightCm: profile.heightCm?.toString() ?? "",
     weightLbs: profile.weightLbs?.toString() ?? "",
-    bodyType: profile.bodyType ?? "",
-    preferredFit: profile.preferredFit ?? "regular",
-    heatSensitivity: profile.heatSensitivity ?? "medium",
-    heatTolerance: profile.heatTolerance ?? "medium",
-    coldTolerance: profile.coldTolerance ?? "medium",
+    bodyType: optionalBodyType(profile.bodyType),
+    preferredFit: enumValue(preferredFitSchema, profile.preferredFit, "regular"),
+    heatSensitivity: enumValue(heatSensitivitySchema, profile.heatSensitivity, "medium"),
+    heatTolerance: enumValue(heatToleranceSchema, profile.heatTolerance, "medium"),
+    coldTolerance: enumValue(coldToleranceSchema, profile.coldTolerance, "medium"),
     chafeProne: profile.chafeProne,
-    stylePreference: profile.stylePreference ?? "performance",
-    budgetLevel: profile.budgetLevel ?? "MID",
-    budgetSensitivity: profile.budgetSensitivity ?? "medium",
-    terrainPreference: profile.terrainPreference ?? "mixed",
+    stylePreference: enumValue(stylePreferenceSchema, profile.stylePreference, "performance"),
+    budgetLevel: enumValue(budgetLevelSchema, profile.budgetLevel, "MID"),
+    budgetSensitivity: enumValue(budgetSensitivitySchema, profile.budgetSensitivity, "medium"),
+    terrainPreference: enumValue(terrainPreferenceSchema, profile.terrainPreference, "mixed"),
     preferredBrands: profile.preferredBrands?.join(", ") ?? "",
     avoidedBrands: profile.avoidedBrands?.join(", ") ?? "",
-  };
+  }
 }
 
 function convertCentimetersToFeetAndInches(heightCm: string) {
   const centimeters = Number(heightCm);
 
-  if (!Number.isFinite(centimeters) || centimeters <= 0) {
-    return "Enter height in centimeters to see feet and inches.";
-  }
-
+  if (!Number.isFinite(centimeters) || centimeters <= 0) return "Enter height in centimeters to see feet and inches.";
+  
   const totalInches = Math.round(centimeters / 2.54);
-  const feet = Math.floor(totalInches / 12);
-  const inches = totalInches % 12;
 
-  return `${feet} ft ${inches} in`;
+  return `${Math.floor(totalInches / 12)} ft ${totalInches % 12} in`;
 }
 
-function toOptionalNumber(value: string) {
-  if (!value.trim()) {
-    return undefined;
-  }
-
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : undefined;
+function FieldErrorMessage({ error }: { error?: FieldError }) {
+  return error?.message ? <p className="text-xs text-red-600">{error.message}</p> : null;
 }
 
-function toBrandList(value: string) {
-  return value.split(",").map((brand) => brand.trim()).filter(Boolean);
-}
+export default function ProfileForm() {
+  const { user, loading: authLoading } = useAuth();
+  const { profile, isLoading, isSaving, error, successMessage, saveProfile } = useProfile(user?.id);
+  const userExists = Boolean(user);
 
-type ProfileFormFieldsProps = {
-  authLoading: boolean;
-  error: string;
-  isLoading: boolean;
-  isSaving: boolean;
-  profile: ReturnType<typeof useProfile>["profile"];
-  saveProfile: ReturnType<typeof useProfile>["saveProfile"];
-  successMessage: string;
-  userExists: boolean;
-};
+  const {
+    formState: { errors, isDirty, isValid },
+    handleSubmit,
+    register,
+    reset,
+    control,
+  } = useForm<ProfileFormState, UserProfilePayload>({
+    defaultValues: initialFormState,
+    mode: "onChange",
+    resolver: zodResolver(profileSchema),
+  });
 
-function ProfileFormFields({
-  authLoading,
-  error,
-  isLoading,
-  isSaving,
-  profile,
-  saveProfile,
-  successMessage,
-  userExists,
-}: ProfileFormFieldsProps) {
-  const [formState, setFormState] = useState(() => createFormState(profile));
+  useEffect(() => {
+    reset(userExists ? createFormState(profile) : initialFormState);
+  }, [profile, reset, userExists]);
 
-  const convertedHeight = useMemo(
-    () => convertCentimetersToFeetAndInches(formState.heightCm),
-    [formState.heightCm],
-  );
-
-  const handleFieldChange = (field: keyof ProfileFormState, value: string | boolean) => {
-    setFormState((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const payload: UserProfilePayload = {
-      heightCm: toOptionalNumber(formState.heightCm),
-      weightLbs: toOptionalNumber(formState.weightLbs),
-      bodyType: formState.bodyType || undefined,
-      preferredFit: formState.preferredFit,
-      heatSensitivity: formState.heatSensitivity,
-      heatTolerance: formState.heatTolerance,
-      coldTolerance: formState.coldTolerance,
-      chafeProne: formState.chafeProne,
-      stylePreference: formState.stylePreference,
-      budgetLevel: formState.budgetLevel,
-      budgetSensitivity: formState.budgetSensitivity,
-      terrainPreference: formState.terrainPreference,
-      preferredBrands: toBrandList(formState.preferredBrands),
-      avoidedBrands: toBrandList(formState.avoidedBrands),
-    };
-
-    await saveProfile(payload);
-  };
-
+  const heightCm = useWatch({ control, name: "heightCm" });
+  const convertedHeight = useMemo(() => convertCentimetersToFeetAndInches(heightCm), [heightCm]);
   const isDisabled = authLoading || isLoading || isSaving || !userExists;
+  const saveDisabled = isDisabled || !isDirty || !isValid;
+
+  const onSubmit = handleSubmit(async (payload: UserProfilePayload) => {
+    const nextProfile = await saveProfile(payload);
+
+    if (nextProfile) reset(createFormState(nextProfile));
+  });
+
+  const errorFor = (name: FieldPath<ProfileFormState>) => errors[name] as FieldError | undefined;
 
   return (
     <Card className="border-2 border-[#10B981]/15 shadow-lg">
       <CardHeader>
         <CardTitle className="text-2xl">Profile Preferences</CardTitle>
-        <CardDescription>
-          Tell RunLayer how your gear should feel, fit, and match your running style.
-        </CardDescription>
+        <CardDescription>Tell RunLayer how your gear should feel, fit, and match your running style.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {!userExists && !authLoading ? (
-            <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-              Log in to save your profile preferences.
-            </p>
-          ) : null}
-
+        <form onSubmit={onSubmit} className="space-y-8">
+          {!userExists && !authLoading ? <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm text-muted-foreground">Log in to save your profile preferences.</p> : null}
           {error ? <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p> : null}
-          {successMessage ? (
-            <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p>
-          ) : null}
+          {successMessage ? <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p> : null}
 
           <section className="space-y-4">
             <div>
               <h2>Body & Fit</h2>
-              <p className="text-sm text-muted-foreground">
-                Capture your core fit profile so recommendations can prioritize the right cuts and sizes.
-              </p>
+              <p className="text-sm text-muted-foreground">Capture your core fit profile so recommendations can prioritize the right cuts and sizes.</p>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="heightCm">Height (cm)</Label>
-                <Input
-                  id="heightCm"
-                  min="0"
-                  inputMode="numeric"
-                  type="number"
-                  value={formState.heightCm}
-                  onChange={(event) => handleFieldChange("heightCm", event.target.value)}
-                  placeholder="178"
-                  disabled={isDisabled}
-                />
+                <Input id="heightCm" min="0" inputMode="numeric" type="number" {...register("heightCm")} placeholder="178" disabled={isDisabled} />
                 <p className="text-xs text-muted-foreground">{convertedHeight}</p>
+                <FieldErrorMessage error={errorFor("heightCm")} />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="weightLbs">Weight (lbs)</Label>
-                <Input
-                  id="weightLbs"
-                  min="0"
-                  inputMode="numeric"
-                  type="number"
-                  value={formState.weightLbs}
-                  onChange={(event) => handleFieldChange("weightLbs", event.target.value)}
-                  placeholder="165"
-                  disabled={isDisabled}
-                />
+                <Input id="weightLbs" min="0" inputMode="numeric" type="number" {...register("weightLbs")} placeholder="165" disabled={isDisabled} />
+                <FieldErrorMessage error={errorFor("weightLbs")} />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="bodyType">Body Type</Label>
-                <select
-                  id="bodyType"
-                  className={selectClassName}
-                  value={formState.bodyType}
-                  onChange={(event) => handleFieldChange("bodyType", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {bodyTypeOptions.map((option) => (
-                    <option key={option.value || option.label} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <select id="bodyType" className={selectClassName} {...register("bodyType")} disabled={isDisabled}>{bodyTypeOptions.map((option) => <option key={option.value || option.label} value={option.value}>{option.label}</option>)}</select>
+                <FieldErrorMessage error={errorFor("bodyType")} />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="preferredFit">Preferred Fit</Label>
-                <select
-                  id="preferredFit"
-                  className={selectClassName}
-                  value={formState.preferredFit}
-                  onChange={(event) => handleFieldChange("preferredFit", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {preferredFitOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <select id="preferredFit" className={selectClassName} {...register("preferredFit")} disabled={isDisabled}>{preferredFitOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                <FieldErrorMessage error={errorFor("preferredFit")} />
               </div>
             </div>
           </section>
@@ -311,215 +228,32 @@ function ProfileFormFields({
           <section className="space-y-4">
             <div>
               <h2>Comfort Profile</h2>
-              <p className="text-sm text-muted-foreground">
-                Tune recommendations for temperature response and friction risk.
-              </p>
+              <p className="text-sm text-muted-foreground">Tune recommendations for temperature response and friction risk.</p>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="heatSensitivity">Heat Sensitivity</Label>
-                <select
-                  id="heatSensitivity"
-                  className={selectClassName}
-                  value={formState.heatSensitivity}
-                  onChange={(event) => handleFieldChange("heatSensitivity", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {toleranceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="heatTolerance">Heat Tolerance</Label>
-                <select
-                  id="heatTolerance"
-                  className={selectClassName}
-                  value={formState.heatTolerance}
-                  onChange={(event) => handleFieldChange("heatTolerance", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {toleranceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="coldTolerance">Cold Tolerance</Label>
-                <select
-                  id="coldTolerance"
-                  className={selectClassName}
-                  value={formState.coldTolerance}
-                  onChange={(event) => handleFieldChange("coldTolerance", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {toleranceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
-                <input
-                  id="chafeProne"
-                  type="checkbox"
-                  className="size-4 rounded border-input accent-[#10B981]"
-                  checked={formState.chafeProne}
-                  onChange={(event) => handleFieldChange("chafeProne", event.target.checked)}
-                  disabled={isDisabled}
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="chafeProne">Chafe Prone</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Prioritize smoother seams, liners, and anti-chafe materials.
-                  </p>
-                </div>
-              </div>
+              {(["heatSensitivity", "heatTolerance", "coldTolerance"] as const).map((field) => <div key={field} className="space-y-2"><Label htmlFor={field}>{field === "heatSensitivity" ? "Heat Sensitivity" : field === "heatTolerance" ? "Heat Tolerance" : "Cold Tolerance"}</Label><select id={field} className={selectClassName} {...register(field)} disabled={isDisabled}>{toleranceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><FieldErrorMessage error={errorFor(field)} /></div>)}
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3"><input id="chafeProne" type="checkbox" className="size-4 rounded border-input accent-[#10B981]" {...register("chafeProne")} disabled={isDisabled} /><div className="space-y-1"><Label htmlFor="chafeProne">Chafe Prone</Label><p className="text-xs text-muted-foreground">Prioritize smoother seams, liners, and anti-chafe materials.</p></div></div>
             </div>
           </section>
 
           <section className="space-y-4">
             <div>
               <h2>Style & Budget</h2>
-              <p className="text-sm text-muted-foreground">
-                Balance the look and price point of your outfit recommendations.
-              </p>
+              <p className="text-sm text-muted-foreground">Balance the look and price point of your outfit recommendations.</p>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="stylePreference">Style Preference</Label>
-                <select
-                  id="stylePreference"
-                  className={selectClassName}
-                  value={formState.stylePreference}
-                  onChange={(event) => handleFieldChange("stylePreference", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {stylePreferenceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="budgetLevel">Budget Level</Label>
-                <select
-                  id="budgetLevel"
-                  className={selectClassName}
-                  value={formState.budgetLevel}
-                  onChange={(event) => handleFieldChange("budgetLevel", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {budgetLevelOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="budgetSensitivity">Budget Sensitivity</Label>
-                <select
-                  id="budgetSensitivity"
-                  className={selectClassName}
-                  value={formState.budgetSensitivity}
-                  onChange={(event) => handleFieldChange("budgetSensitivity", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {budgetSensitivityOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="terrainPreference">Terrain Preference</Label>
-                <select
-                  id="terrainPreference"
-                  className={selectClassName}
-                  value={formState.terrainPreference}
-                  onChange={(event) => handleFieldChange("terrainPreference", event.target.value)}
-                  disabled={isDisabled}
-                >
-                  {terrainPreferenceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="preferredBrands">Preferred Brands</Label>
-                <Input
-                  id="preferredBrands"
-                  value={formState.preferredBrands}
-                  onChange={(event) => handleFieldChange("preferredBrands", event.target.value)}
-                  placeholder="Nike, Tracksmith"
-                  disabled={isDisabled}
-                />
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="avoidedBrands">Avoided Brands</Label>
-                <Input
-                  id="avoidedBrands"
-                  value={formState.avoidedBrands}
-                  onChange={(event) => handleFieldChange("avoidedBrands", event.target.value)}
-                  placeholder="Brands to down-rank"
-                  disabled={isDisabled}
-                />
-              </div>
+              <div className="space-y-2"><Label htmlFor="stylePreference">Style Preference</Label><select id="stylePreference" className={selectClassName} {...register("stylePreference")} disabled={isDisabled}>{stylePreferenceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><FieldErrorMessage error={errorFor("stylePreference")} /></div>
+              <div className="space-y-2"><Label htmlFor="budgetLevel">Budget Level</Label><select id="budgetLevel" className={selectClassName} {...register("budgetLevel")} disabled={isDisabled}>{budgetLevelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><FieldErrorMessage error={errorFor("budgetLevel")} /></div>
+              <div className="space-y-2"><Label htmlFor="budgetSensitivity">Budget Sensitivity</Label><select id="budgetSensitivity" className={selectClassName} {...register("budgetSensitivity")} disabled={isDisabled}>{budgetSensitivityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><FieldErrorMessage error={errorFor("budgetSensitivity")} /></div>
+              <div className="space-y-2"><Label htmlFor="terrainPreference">Terrain Preference</Label><select id="terrainPreference" className={selectClassName} {...register("terrainPreference")} disabled={isDisabled}>{terrainPreferenceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><FieldErrorMessage error={errorFor("terrainPreference")} /></div>
+              <div className="space-y-2"><Label htmlFor="preferredBrands">Preferred Brands</Label><Input id="preferredBrands" {...register("preferredBrands")} placeholder="Nike, Tracksmith" disabled={isDisabled} /><FieldErrorMessage error={errorFor("preferredBrands")} /></div>
+              <div className="space-y-2 md:col-span-2"><Label htmlFor="avoidedBrands">Avoided Brands</Label><Input id="avoidedBrands" {...register("avoidedBrands")} placeholder="Brands to down-rank" disabled={isDisabled} /><FieldErrorMessage error={errorFor("avoidedBrands")} /></div>
             </div>
           </section>
 
-          <div className="flex flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              {isLoading ? "Loading saved profile..." : "Your preferences update future outfit recommendations."}
-            </p>
-            <Button
-              type="submit"
-              disabled={isDisabled}
-              className="bg-[#10B981] text-white hover:bg-[#059669]"
-            >
-              {isSaving ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
+          <div className="flex flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{isLoading ? "Loading saved profile..." : "Your preferences update future outfit recommendations."}</p><Button type="submit" disabled={saveDisabled} className="bg-[#10B981] text-white hover:bg-[#059669]">{isSaving ? "Saving..." : "Save Profile"}</Button></div>
         </form>
       </CardContent>
     </Card>
-  );
-}
-export default function ProfileForm() {
-  const { user, loading: authLoading } = useAuth();
-  const { profile, isLoading, isSaving, error, successMessage, saveProfile } = useProfile(user?.id);
-
-  return (
-    <ProfileFormFields
-      key={profile?.updatedAt ?? profile?.id ?? "new-profile"}
-      authLoading={authLoading}
-      error={error}
-      isLoading={isLoading}
-      isSaving={isSaving}
-      profile={profile}
-      saveProfile={saveProfile}
-      successMessage={successMessage}
-      userExists={Boolean(user)}
-    />
   );
 }
