@@ -1,4 +1,4 @@
-import type { UserProfile } from "@/lib/types/user";
+import type { UserProfile, UserProfilePayload } from "@/lib/types/user";
 import { readJsonResponse, type ServiceRequestOptions } from "./apiResponse";
 
 export const userService = {
@@ -25,5 +25,3 @@ export const userService = {
         return readJsonResponse<UserProfile>(response, "Unable to save profile.");
     },
 };
-
-export type UserProfilePayload = Partial<Omit<UserProfile, "id" | "userId" | "createdAt" | "updatedAt">>;
