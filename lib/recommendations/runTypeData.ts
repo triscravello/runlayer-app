@@ -79,9 +79,9 @@ export const runTypeData = {
       ],
     },
     stats: {
-      savedOutfits: 12,
-      brandsTracked: 5,
-      accuracyPercent: 98,
+      savedOutfits: 0,
+      brandsTracked: 0,
+      accuracyPercent: 0,
     },
   },
   long: {
@@ -162,9 +162,9 @@ export const runTypeData = {
       ],
     },
     stats: {
-      savedOutfits: 16,
-      brandsTracked: 7,
-      accuracyPercent: 96,
+      savedOutfits: 0,
+      brandsTracked: 0,
+      accuracyPercent: 0,
     },
   },
   intervals: {
@@ -245,9 +245,9 @@ export const runTypeData = {
       ],
     },
     stats: {
-      savedOutfits: 9,
-      brandsTracked: 6,
-      accuracyPercent: 97,
+      savedOutfits: 0,
+      brandsTracked: 0,
+      accuracyPercent: 0,
     },
   },
 } satisfies Record<RunType, RunTypeRecommendation>;
