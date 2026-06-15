@@ -7,9 +7,16 @@ export interface User {
     updatedAt: string;
 };
 
-export type ToleranceLevel = "low" | "medium" | "high";
-export type TerrainPreference = "road" | "trail" | "mixed";
-export type BudgetSensitivity = "low" | "medium" | "high";
+import type { UserProfilePayload } from "../validation/profileSchema";
+
+export type { UserProfilePayload };
+export type ToleranceLevel = UserProfilePayload["heatTolerance"];
+export type TerrainPreference = UserProfilePayload["terrainPreference"];
+export type BudgetSensitivity = UserProfilePayload["budgetSensitivity"];
+export type BodyType = NonNullable<UserProfilePayload["bodyType"]>;
+export type PreferredFit = UserProfilePayload["preferredFit"];
+export type StylePreference = UserProfilePayload["stylePreference"];
+export type BudgetLevel = UserProfilePayload["budgetLevel"];
 
 export interface UserProfile {
     id: string;
@@ -31,22 +38,4 @@ export interface UserProfile {
     avoidedBrands: string[];
     createdAt: string;
     updatedAt: string;
-}
-
-export type UserProfilePayload = {
-    location?: string | null;
-    heightCm?: number;
-    weightLbs?: number;
-    bodyType?: string;
-    heatSensitivity: string;
-    heatTolerance?: ToleranceLevel | string;
-    coldTolerance?: ToleranceLevel | string;
-    chafeProne: boolean;
-    stylePreference: string;
-    budgetLevel: string;
-    budgetSensitivity?: BudgetSensitivity | string;
-    preferredFit: string;
-    terrainPreference?: TerrainPreference | string;
-    preferredBrands?: string[];
-    avoidedBrands?: string[];
 }
