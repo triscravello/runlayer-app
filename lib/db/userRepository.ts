@@ -1,35 +1,9 @@
 import { prisma } from "../prisma";
+import type { UserProfilePayload } from "../validation/profileSchema";
 
-type BodyTypeValue = "SLIM" | "ATHLETIC" | "BROAD" | "PLUS";
-type BudgetLevelValue = "BUDGET" | "MID" | "PREMIUM";
-
-type ToleranceValue = "low" | "medium" | "high";
-type TerrainPreferenceValue = "road" | "trail" | "mixed";
-type BudgetSensitivityValue = "low" | "medium" | "high";
-
-export type UpsertUserProfileInput = {
+export type UpsertUserProfileInput = UserProfilePayload & {
     userId: string;
-    heightCm?: number | null;
-    location?: string | null;
-    weightLbs?: number | null;
-    bodyType?: BodyTypeValue | null;
-    heatSensitivity?: string | null;
-    heatTolerance?: ToleranceValue | string | null;
-    coldTolerance?: ToleranceValue | string | null;
-    chafeProne?: boolean | null;
-    stylePreference?: string | null;
-    budgetLevel?: BudgetLevelValue | null;
-    budgetSensitivity?: BudgetSensitivityValue | string | null;
-    preferredFit?: string | null;
-    terrainPreference?: TerrainPreferenceValue | string | null;
-    preferredBrands?: string[] | null;
-    avoidedBrands?: string[] | null;
-}
-
-function normalizeBrandList(brands?: string[] | null) {
-    if (!brands) return;
-    return [...new Set(brands.map((brand) => brand.trimEnd()).filter(Boolean))];
-}
+};
 
 export async function getUserProfile(userId: string) {
     return prisma.userProfile.findUnique({
@@ -54,8 +28,8 @@ export async function upsertUserProfile(input: UpsertUserProfileInput) {
         budgetSensitivity: input.budgetSensitivity,
         preferredFit: input.preferredFit,
         terrainPreference: input.terrainPreference,
-        preferredBrands: normalizeBrandList(input.preferredBrands),
-        avoidedBrands: normalizeBrandList(input.avoidedBrands),
+        preferredBrands: input.preferredBrands,
+        avoidedBrands: input.avoidedBrands,
     };
 
     return prisma.userProfile.upsert({
