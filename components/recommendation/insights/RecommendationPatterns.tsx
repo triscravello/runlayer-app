@@ -1,7 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { UserInsightsData } from "@/lib/db/analyticsRepository";
 
-export function RecommendationPatterns({ patterns, totals }: { patterns: UserInsightsData["patterns"]; totals: UserInsightsData["totals"] }) {
+export type RecommendationPatternsProps = {
+    patterns: UserInsightsData["patterns"];
+    totals: UserInsightsData["totals"];
+}
+
+export function RecommendationPatterns({ patterns, totals }: RecommendationPatternsProps) {
     return (
         <Card className="border-slate-200 bg-white shadow-sm">
             <CardHeader>

@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { UserInsightsData } from "@/lib/db/analyticsRepository";
 
-export function PreferenceInsights({ preferences }: { preferences: UserInsightsData["preferences"] }) {
+export type PreferenceInsightsProps = {
+    preferences: UserInsightsData["preferences"];
+}
+
+export function PreferenceInsights({ preferences }: PreferenceInsightsProps) {
     return (
         <Card className="border-emerald-100 bg-white shadow-sm">
             <CardHeader>

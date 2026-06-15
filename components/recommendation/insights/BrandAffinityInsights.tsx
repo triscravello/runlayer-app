@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { UserInsightsData } from "@/lib/db/analyticsRepository";
 
-export function BrandAffinityInsights({ brands }: { brands: UserInsightsData["brandAffinities"] }) {
+export type BrandAffinityInsightsProps = {
+    brands: UserInsightsData["brandAffinities"];
+}
+
+export function BrandAffinityInsights({ brands }: BrandAffinityInsightsProps) {
     return (
         <Card className="border-slate-200 bg-white shadow-sm">
             <CardHeader>

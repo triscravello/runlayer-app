@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { UserInsightsData } from "@/lib/db/analyticsRepository";
 
-export function WeatherInsights({ weather }: { weather: UserInsightsData["weather"] }) {
+export type WeatherInsightsProps = {
+    weather: UserInsightsData["weather"];
+}
+
+export function WeatherInsights({ weather }: WeatherInsightsProps) {
     return (
         <Card className="border-slate-200 bg-white shadow-sm">
             <CardHeader>
