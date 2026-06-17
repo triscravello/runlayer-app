@@ -10,32 +10,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        {/* Navigation Bar */}
-        <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="max-w-7xl mx-auto px-4 md:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-[#10B981] rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xl">⚡</span>
-                </div>
-                <span className="text-xl">RunLayer</span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <Button asChild variant="ghost" className="text-sm font-medium hover:bg-[#10B981]/10">
-                  <Link href="/login">Login In</Link>
-                </Button>
-                
-                <Button asChild className="bg-[#10B981] hover:bg-[#059669] text-white">
-                  <Link href="/auth/signup">Get Started</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </nav>
-
         {/* Hero Content */}
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-20">
           <div className="max-w-4xl mx-auto text-center space-y-8">
             <Badge
               variant="outline"

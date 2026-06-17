@@ -3,7 +3,14 @@
 import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 
-const appShellPrefixes = ["/dashboard", "/admin", "/recommendation", "/compare"];
+const appShellPrefixes = [
+    "/dashboard", 
+    "/admin", 
+    "/recommendation", 
+    "/compare",
+    "/profile",
+    "/saved-outfits",
+];
 
 export default function RootNavbarGate() {
     const pathname = usePathname();
