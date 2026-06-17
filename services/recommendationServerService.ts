@@ -55,6 +55,7 @@ async function getRecommendationPreferences(userId?: string | null): Promise<Use
     if (!profile) return {};
 
     return {
+        genderPreference: profile.genderPreference?.toLowerCase(),
         favoriteBrands: profile.preferredBrands,
         preferredBrands: profile.preferredBrands,
         avoidedBrands: profile.avoidedBrands,
@@ -67,6 +68,17 @@ async function getRecommendationPreferences(userId?: string | null): Promise<Use
     };
 }
 
+function baseProductKey(recommendation: ScoredRecommendationItem) {
+    const brand = recommendation.item.brandName ?? recommendation.item.brandId ?? "";
+    const baseName = recommendation.item.name
+        .replace(/\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)$/i, "")
+        .replace(/\s+\d+$/i, "")
+        .trim()
+        .toLowerCase();
+
+    return `${brand.toLowerCase()}::${baseName}`;
+}
+
 function diversifyRecommendationsByCategory(
     rankedItems: ScoredRecommendationItem[],
     limit: number,
@@ -74,21 +86,38 @@ function diversifyRecommendationsByCategory(
     const categoryOrder = ["TOP", "BOTTOM", "ACCESSORY"];
     const selected: ScoredRecommendationItem[] = [];
     const usedIds = new Set<string>();
+    const usedProductKeys = new Set<string>();
 
     for (const category of categoryOrder) {
         const match = rankedItems.find(
             (recommendation) => 
                 recommendation.item.category?.toUpperCase() === category &&
-                !usedIds.has(recommendation.item.id)
+                !usedIds.has(recommendation.item.id) &&
+                !usedProductKeys.has(baseProductKey(recommendation))
         );
 
         if (match) {
             selected.push(match);
             usedIds.add(match.item.id);
+            usedProductKeys.add(baseProductKey(match));
         }
 
         if (selected.length >= limit) return selected;
     }
+
+    for (const recommendation of rankedItems) {
+        const productKey = baseProductKey(recommendation);
+
+        if (!usedIds.has(recommendation.item.id) && !usedProductKeys.has(productKey)) {
+            selected.push(recommendation);
+            usedIds.add(recommendation.item.id);
+            usedProductKeys.add(productKey);
+        }
+
+        if (selected.length >= limit) break;
+    }
+
+    if (selected.length >= limit) return selected;
 
     for (const recommendation of rankedItems) {
         if (!usedIds.has(recommendation.item.id)) {
