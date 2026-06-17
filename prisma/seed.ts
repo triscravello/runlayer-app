@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
-import { seedGearCatalog } from "./seeds/gear.seed";
-import { seedUserProfile } from "./seeds/user.seed";
-import { seedDemoOutfit } from "./seeds/outfit.seed";
+import { prisma } from "../lib/prisma.ts";
+import { seedGearCatalog } from "./seeds/gear.seed.ts";
+import { seedUserProfile } from "./seeds/user.seed.ts";
+import { seedDemoOutfit } from "./seeds/outfit.seed.ts";
 
 async function main() {
     await seedUserProfile();

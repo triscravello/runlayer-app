@@ -1,5 +1,5 @@
 // prisma/seeds/outfit.seed.ts
-import { prisma } from "../../lib/prisma";
+import { prisma } from "../../lib/prisma.ts";
 
 export async function seedDemoOutfit() {
     const outfit = await prisma.savedOutfit.upsert({

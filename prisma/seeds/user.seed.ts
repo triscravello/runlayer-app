@@ -1,6 +1,6 @@
 // prisma/seeds/user.seed.ts
 import { randomBytes, scryptSync } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../../lib/prisma.ts";
 
 function hashPassword(password: string) {
     const salt = randomBytes(16).toString("hex");

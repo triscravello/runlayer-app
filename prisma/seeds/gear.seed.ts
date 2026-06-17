@@ -1,8 +1,8 @@
 import { Category, PriceRange } from "@prisma/client";
 import type { Brand } from "@prisma/client";
-import { prisma } from "../../lib/prisma";
-import { loadGearSeedData } from "./data/gear.data";
-import type { GearSeedItem } from "./data/gear.data";
+import { prisma } from "../../lib/prisma.ts";
+import { loadGearSeedData } from "./data/gear.data.ts";
+import type { GearSeedItem } from "./data/gear.data.ts";
 
 type BodyTypeFitScores = Record<"lean" | "average" | "larger", number>;
 
