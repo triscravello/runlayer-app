@@ -52,6 +52,7 @@ function getBreakdown(value: unknown): ScoreBreakdown {
         brandAffinity: Number(record.brandAffinity ?? 0),
         brandPenalty: Number(record.brandPenalty ?? 0),
         budget: Number(record.budget ?? 0),
+        genderAlignment: Number(record.genderAlignment ?? 0),
         temperatureTolerance: Number(record.temperatureTolerance ?? 0),
         rotationAdjustment: Number(record.rotationAdjustment ?? 0),
     };
