@@ -15,6 +15,7 @@ export type TerrainPreference = UserProfilePayload["terrainPreference"];
 export type BudgetSensitivity = UserProfilePayload["budgetSensitivity"];
 export type BodyType = NonNullable<UserProfilePayload["bodyType"]>;
 export type PreferredFit = UserProfilePayload["preferredFit"];
+export type GenderPreference = NonNullable<UserProfilePayload["genderPreference"]>;
 export type StylePreference = UserProfilePayload["stylePreference"];
 export type BudgetLevel = UserProfilePayload["budgetLevel"];
 
@@ -25,6 +26,7 @@ export interface UserProfile {
     heightCm?: number | null;
     weightLbs?: number | null;
     bodyType?: string | null;
+    genderPreference?: GenderPreference | string | null;
     heatSensitivity?: string | null;
     heatTolerance?: ToleranceLevel | string | null;
     coldTolerance?: ToleranceLevel | string | null;

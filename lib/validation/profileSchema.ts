@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const bodyTypeSchema = z.enum(["SLIM", "ATHLETIC", "BROAD", "PLUS"]);
 export const preferredFitSchema = z.enum(["slim", "regular", "relaxed"]);
+export const genderPreferenceSchema = z.enum(["male", "female", "non_binary", "preferred_not_to_say"]);
 export const heatSensitivitySchema = z.enum(["low", "medium", "high"]);
 export const heatToleranceSchema = z.enum(["low", "medium", "high"]);
 export const coldToleranceSchema = z.enum(["low", "medium", "high"]);
@@ -50,6 +51,7 @@ export const profileSchema = z.object({
         message: "Weight must be between 50 and 700 lbs",
     }),
     bodyType: z.preprocess((value) => (value === "" ? undefined: value), bodyTypeSchema.optional()),
+    genderPreference: z.preprocess((value) => (value === "" ? undefined : value), genderPreferenceSchema.optional()),
     preferredFit: preferredFitSchema.default("regular"),
     heatSensitivity: heatSensitivitySchema.default("medium"),
     heatTolerance: heatToleranceSchema.default("medium"),
