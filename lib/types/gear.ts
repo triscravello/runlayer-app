@@ -1,7 +1,7 @@
 // lib/types/gear.ts
 export type Category = "top" | "bottom" | "shoes" | "accessory";
 export type PriceRange = "budget" | "mid" | "premium";
-export type WeatherCondition = "hot" | "cold" | "rain" | "wind";
+export type WeatherCondition = "hot" | "warm" | "cold" | "rain" | "wind";
 export type BodyType = "slim" | "athletic" | "broad" | "plus";
 export type BrandTier = "entry" | "mid" | "elite";
 

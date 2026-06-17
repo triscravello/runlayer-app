@@ -19,8 +19,17 @@ export type GearRecommendationResult = {
 }
 
 export function rankGearRecommendations(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[], preferences: UserPreferenceInput = {}): RankedGearItem[] {
-  const filtered = preferenceFilter(preferences, intensityFilter(userInput, categoryFilter(userInput, weatherFilter(userInput, gearItems))));
-  return recommendationRanker(userInput, preferences, filtered);
+  const afterWeather = weatherFilter(userInput, gearItems);
+
+  const afterCategory = categoryFilter(userInput, afterWeather);
+
+  const afterIntensity = intensityFilter(userInput, afterCategory);
+
+  const afterPreference = preferenceFilter(preferences, afterIntensity);
+
+  const ranked = recommendationRanker(userInput, preferences, afterPreference);
+
+  return ranked;
 }
 
 export async function generateOutfitRecommendations(userInput: RecommendationUserInput, preferences: UserPreferenceInput = {}) {

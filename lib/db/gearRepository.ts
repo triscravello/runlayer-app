@@ -11,7 +11,7 @@ type CreateGearInput = {
     subcategory?: string | null;
     priceRange: GearItemRow["priceRange"];
     tags?: string[];
-    weatherSuitability?: Partial<Record<"hot" | "cold" | "rain" | "wind", number | null>>;
+    weatherSuitability?: Partial<Record<"hot" | "warm" | "cold" | "rain" | "wind", number | null>>;
     bodyTypeFit?: string[];
     imageUrl?: string | null;
     affiliateUrl?: string | null;
@@ -43,7 +43,7 @@ export async function createGearItem(input: CreateGearInput) {
             subcategory: input.subcategory,
             priceRange: input.priceRange,
             tags: input.tags ?? [],
-            weatherHot: input.weatherSuitability?.hot,
+            weatherHot: input.weatherSuitability?.hot ?? input.weatherSuitability?.warm,
             weatherCold: input.weatherSuitability?.cold,
             weatherRain: input.weatherSuitability?.rain,
             weatherWind: input.weatherSuitability?.wind,
@@ -61,7 +61,7 @@ export async function updateGearItem(input: UpdateGearInput) {
         where: { id },
         data: {
             ...gearData,
-            weatherHot: weatherSuitability?.hot,
+            weatherHot: weatherSuitability?.hot ?? input.weatherSuitability?.warm,
             weatherCold: weatherSuitability?.cold,
             weatherRain: weatherSuitability?.rain,
             weatherWind: weatherSuitability?.wind,
@@ -80,6 +80,7 @@ function mapGearItemForRecommendation(gearItem: GearItemRow): GearItem {
         ...gearItem,
         weatherSuitability: {
             hot: gearItem.weatherHot ?? 0,
+            warm: gearItem.weatherHot ?? 0,
             cold: gearItem.weatherCold ?? 0,
             rain: gearItem.weatherRain ?? 0,
             wind: gearItem.weatherWind ?? 0,

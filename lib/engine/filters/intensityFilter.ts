@@ -28,9 +28,5 @@ export function intensityFilter(
         item.tags.some((tag) => acceptedTags.includes(tag.toLowerCase()))
     );
 
-    console.log("Intensity filter input:", intensity);
-    console.log("Accepted intensity tags:", acceptedTags);
-    console.log("After intensity filter:", filtered.length);
-
     return filtered.length > 0 ? filtered : gearItems;
 }

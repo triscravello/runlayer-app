@@ -3,8 +3,6 @@ export function categoryFilter(
   userInput: RecommendationUserInput,
   gearItems: RecommendationGearItem[]
 ) {
-  console.log("Category filter input:", userInput.category);
-
   if (!userInput.category || userInput.category === "all") {
     return gearItems;
   }
@@ -12,8 +10,6 @@ export function categoryFilter(
   const filtered = gearItems.filter(
     (i) => i.category?.toLowerCase() === userInput.category?.toLowerCase()
   );
-
-  console.log("Category filter result:", filtered.length);
 
   return filtered;
 }

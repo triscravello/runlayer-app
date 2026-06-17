@@ -67,6 +67,41 @@ async function getRecommendationPreferences(userId?: string | null): Promise<Use
     };
 }
 
+function diversifyRecommendationsByCategory(
+    rankedItems: ScoredRecommendationItem[],
+    limit: number,
+) {
+    const categoryOrder = ["TOP", "BOTTOM", "ACCESSORY"];
+    const selected: ScoredRecommendationItem[] = [];
+    const usedIds = new Set<string>();
+
+    for (const category of categoryOrder) {
+        const match = rankedItems.find(
+            (recommendation) => 
+                recommendation.item.category?.toUpperCase() === category &&
+                !usedIds.has(recommendation.item.id)
+        );
+
+        if (match) {
+            selected.push(match);
+            usedIds.add(match.item.id);
+        }
+
+        if (selected.length >= limit) return selected;
+    }
+
+    for (const recommendation of rankedItems) {
+        if (!usedIds.has(recommendation.item.id)) {
+            selected.push(recommendation);
+            usedIds.add(recommendation.item.id);
+        }
+
+        if (selected.length >= limit) break;
+    }
+
+    return selected;
+}
+
 export async function generateGearRecommendations(
     input: UserInput,
     limit = DEFAULT_RECOMMENDATION_LIMIT,
@@ -75,7 +110,8 @@ export async function generateGearRecommendations(
     const ownerUserId = userId ?? input.userId ?? null;
     const recommendationCandidates = await listGearRecommendationCandidates();
     const preferences = await getRecommendationPreferences(ownerUserId);
-    const recommendations = rankGearRecommendations(input, recommendationCandidates, preferences).slice(0, limit);
+    const rankedRecommendations = rankGearRecommendations(input, recommendationCandidates, preferences);
+    const recommendations = diversifyRecommendationsByCategory(rankedRecommendations, limit);
 
     if (!ownerUserId) {
         return { recommendations, engineVersion: RECOMMENDATION_ENGINE_VERSION, generatedAt: new Date().toISOString() };

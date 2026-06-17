@@ -1,4 +1,4 @@
-export type WeatherCondition = "hot" | "cold" | "rain" | "humid" | "wind";
+export type WeatherCondition = "hot" | "warm" | "cold" | "rain" | "humid" | "wind";
 export type Intensity = "recovery" | "easy" | "long-run" | "tempo" | "race";
 export type Terrain = "road" | "trail" | "treadmill";
 export type Season = "winter" | "summer" | "shoulder";
