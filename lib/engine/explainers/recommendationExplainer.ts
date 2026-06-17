@@ -8,6 +8,7 @@ const contributionLabels: Record<keyof RecommendationScoreBreakdown, string> = {
     brandAffinity: "Preferred brand",
     brandPenalty: "Avoided brand",
     budget: "Budget preference",
+    genderAlignment: "Gender preference",
     temperatureTolerance: "Temperature tolerance",
     rotationAdjustment: "Rotation adjustment",
 };
@@ -24,6 +25,10 @@ const personalizedCopy: Partial<Record<keyof RecommendationScoreBreakdown, { pos
     budget: {
         positive: "Boosted because the price tier fits your budget sensitivity",
         negative: "Penalized because the price tier is above your budget comfort",
+    },
+    genderAlignment: {
+        positive: "Boosted because this item matches your gender preference",
+        negative: "Penalized because this item does not match your gender preference"
     },
     temperatureTolerance: {
         positive: "Boosted because the materials match your temperature tolerance",

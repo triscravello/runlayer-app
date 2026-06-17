@@ -3,6 +3,7 @@ import { weatherFilter } from "./filters/weatherFilter";
 import { categoryFilter } from "./filters/categoryFilter";
 import { intensityFilter } from "./filters/intensityFilter";
 import { preferenceFilter } from "./filters/preferenceFilter";
+import { genderFilter } from "./filters/genderFilter";
 import { recommendationRanker } from "./rankers/recommendationRanker";
 import { outfitBuilder } from "./builders/outfitBuilder";
 import type { RecommendationGearItem, RecommendationUserInput, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
@@ -27,7 +28,9 @@ export function rankGearRecommendations(userInput: RecommendationUserInput, gear
 
   const afterPreference = preferenceFilter(preferences, afterIntensity);
 
-  const ranked = recommendationRanker(userInput, preferences, afterPreference);
+  const afterGender = genderFilter(preferences, afterPreference);
+  
+  const ranked = recommendationRanker(userInput, preferences, afterGender);
 
   return ranked;
 }
