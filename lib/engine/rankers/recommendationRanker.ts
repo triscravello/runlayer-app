@@ -9,6 +9,7 @@ import { budgetScorer } from "../scorers/budgetScorer";
 import { seasonalScorer } from "../scorers/seasonalScorer";
 import { temperatureToleranceScorer } from "../scorers/temperatureToleranceScorer";
 import { rotationPenaltyScorer } from "../scorers/rotationPenaltyScorer";
+import { genderAlignmentScorer } from "../scorers/genderAlignmentScorer";
 
 function sumBreakdown(breakdown: RecommendationScoreBreakdown) {
     return Object.values(breakdown).reduce((a, b) => a + b, 0);
@@ -43,6 +44,7 @@ export function scoreGearItem(
         brandAffinity: brandAffinityScorer(preferences, item),
         brandPenalty: brandPenaltyScorer(preferences, item),
         budget: budgetScorer(preferences, item),
+        genderAlignment: genderAlignmentScorer(preferences, item),
         temperatureTolerance: temperatureToleranceScorer(effectiveInput, preferences, item),
         rotationAdjustment: rotationPenaltyScorer(preferences, item),
     };
