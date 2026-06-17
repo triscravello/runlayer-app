@@ -11,6 +11,7 @@ import {
   budgetLevelSchema,
   budgetSensitivitySchema,
   coldToleranceSchema,
+  genderPreferenceSchema,
   heatSensitivitySchema,
   heatToleranceSchema,
   preferredFitSchema,
@@ -30,6 +31,7 @@ type ProfileFormState = {
   heightCm: string;
   weightLbs: string;
   bodyType: "" | NonNullable<UserProfilePayload["bodyType"]>;
+  genderPreference: "" | NonNullable<UserProfilePayload["genderPreference"]>;
   preferredFit: UserProfilePayload["preferredFit"];
   heatSensitivity: UserProfilePayload["heatSensitivity"];
   heatTolerance: UserProfilePayload["heatTolerance"];
@@ -49,6 +51,14 @@ const bodyTypeOptions: SelectOption<ProfileFormState["bodyType"]>[] = [
   { value: "ATHLETIC", label: "Athletic" },
   { value: "BROAD", label: "Broad" },
   { value: "PLUS", label: "Plus" },
+];
+
+const genderPreferenceOptions: SelectOption<ProfileFormState["genderPreference"]>[] = [
+  { value: "", label: "No preference" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "non_binary", label: "Non-binary" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
 const preferredFitOptions: SelectOption<UserProfilePayload["preferredFit"]>[] = [
@@ -91,6 +101,7 @@ const initialFormState: ProfileFormState = {
   heightCm: "",
   weightLbs: "",
   bodyType: "",
+  genderPreference: "",
   preferredFit: "regular",
   heatSensitivity: "medium",
   heatTolerance: "medium",
@@ -114,6 +125,11 @@ function optionalBodyType(value: string | null | undefined): ProfileFormState["b
   return result.success ? result.data : "";
 }
 
+function optionalGenderPreference(value: string | null | undefined): ProfileFormState["genderPreference"] {
+  const result = genderPreferenceSchema.safeParse(value);
+  return result.success ? result.data : "";
+}
+
 function createFormState(profile: UserProfile | null): ProfileFormState {
   if (!profile) return initialFormState;
 
@@ -121,6 +137,7 @@ function createFormState(profile: UserProfile | null): ProfileFormState {
     heightCm: profile.heightCm?.toString() ?? "",
     weightLbs: profile.weightLbs?.toString() ?? "",
     bodyType: optionalBodyType(profile.bodyType),
+    genderPreference: optionalGenderPreference(profile.genderPreference),
     preferredFit: enumValue(preferredFitSchema, profile.preferredFit, "regular"),
     heatSensitivity: enumValue(heatSensitivitySchema, profile.heatSensitivity, "medium"),
     heatTolerance: enumValue(heatToleranceSchema, profile.heatTolerance, "medium"),
@@ -216,6 +233,11 @@ export default function ProfileForm() {
                 <Label htmlFor="bodyType">Body Type</Label>
                 <select id="bodyType" className={selectClassName} {...register("bodyType")} disabled={isDisabled}>{bodyTypeOptions.map((option) => <option key={option.value || option.label} value={option.value}>{option.label}</option>)}</select>
                 <FieldErrorMessage error={errorFor("bodyType")} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="genderPreference">Gender</Label>
+                <select id="genderPreference" className={selectClassName} {...register("genderPreference")} disabled={isDisabled}>{genderPreferenceOptions.map((option) => <option key={option.value || option.label} value={option.value}>{option.label}</option>)}</select>
+                <FieldErrorMessage error={errorFor("genderPreference")} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="preferredFit">Preferred Fit</Label>

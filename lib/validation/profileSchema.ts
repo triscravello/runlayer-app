@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const bodyTypeSchema = z.enum(["SLIM", "ATHLETIC", "BROAD", "PLUS"]);
 export const preferredFitSchema = z.enum(["slim", "regular", "relaxed"]);
-export const genderPreferenceSchema = z.enum(["male", "female", "non_binary", "preferred_not_to_say"]);
+export const genderPreferenceSchema = z.enum(["male", "female", "non_binary", "prefer_not_to_say"]);
 export const heatSensitivitySchema = z.enum(["low", "medium", "high"]);
 export const heatToleranceSchema = z.enum(["low", "medium", "high"]);
 export const coldToleranceSchema = z.enum(["low", "medium", "high"]);
