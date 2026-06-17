@@ -3,6 +3,7 @@ import type { RecommendationGearItem, UserPreferenceInput } from "../types/recom
 const malePreferences = new Set(["male", "men", "man"]);
 const femalePreferences = new Set(["female", "women", "woman"]);
 const unisexTargets = new Set(["unisex", "all", "any"]);
+const neutralPreferences = new Set(["non_binary", "prefer_not_to_say"]);
 const menTargets = new Set(["male", "men", "man"]);
 const womenTargets = new Set(["female", "women", "woman"]);
 
@@ -18,6 +19,10 @@ export function genderTargetMatchesPreference(preference?: string | null, target
         return true;
     }
 
+    if (neutralPreferences.has(normalizedPreference)) {
+        return true;
+    }
+
     if (malePreferences.has(normalizedPreference)) {
         return menTargets.has(normalizedTarget);
     }
@@ -30,7 +35,8 @@ export function genderTargetMatchesPreference(preference?: string | null, target
 }
 
 export function genderFilter(preferences: UserPreferenceInput, gearItems: RecommendationGearItem[]) {
-    if (!normalize(preferences.genderPreference)) {
+    const normalizedPreference = normalize(preferences.genderPreference);
+    if (!normalizedPreference || neutralPreferences.has(normalizedPreference)) {
         return gearItems;
     }
 
