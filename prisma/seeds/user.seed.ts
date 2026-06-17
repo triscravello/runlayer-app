@@ -26,10 +26,11 @@ export async function seedUserProfile() {
         throw new Error("Failed to seed user");
     }
 
-    const userProfile = await prisma.userProfile.upsert({
+    await prisma.userProfile.upsert({
         where: { userId: user.id },
         update: {
             location: "Denver, CO",
+            genderPreference: "male",
         },
         create: {
             userId: user.id,
@@ -37,6 +38,7 @@ export async function seedUserProfile() {
             heightCm: 180,
             weightLbs: 170,
             bodyType: "ATHLETIC",
+            genderPreference: "male",
             heatSensitivity: "high",
             chafeProne: true,
             stylePreference: "performance",
@@ -44,8 +46,6 @@ export async function seedUserProfile() {
             preferredFit: "slim"
         }
     });
-
-    console.log("Seeded user and profile:", { user, userProfile });
 };
 
 if (process.argv[1]?.endsWith("user.seed.ts")) {

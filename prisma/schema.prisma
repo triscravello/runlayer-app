@@ -75,18 +75,19 @@ model User {
 }
 
 model UserProfile {
-  id     String @id @default(uuid())
-  userId String @unique @map("user_id")
+  id       String  @id @default(uuid())
+  userId   String  @unique @map("user_id")
   location String?
 
   heightCm  Int? @map("height_cm")
   weightLbs Int? @map("weight_lbs")
 
-  bodyType        BodyType? @map("body_type")
-  heatSensitivity String?   @map("heat_sensitivity")
-  heatTolerance   String?   @map("heat_tolerance")
-  coldTolerance   String?   @map("cold_tolerance")
-  chafeProne      Boolean   @default(false) @map("chafe_prone")
+  bodyType         BodyType? @map("body_type")
+  genderPreference String?   @map("gender_preference")
+  heatSensitivity  String?   @map("heat_sensitivity")
+  heatTolerance    String?   @map("heat_tolerance")
+  coldTolerance    String?   @map("cold_tolerance")
+  chafeProne       Boolean   @default(false) @map("chafe_prone")
 
   stylePreference   String?      @map("style_preference")
   budgetLevel       BudgetLevel? @map("budget_level")
