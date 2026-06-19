@@ -3,7 +3,7 @@ import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { createGeneratedOutfit, CreateRecommendationInput, listGeneratedOutfits } from "@/lib/db/outfitRepository";
 import { createRecommendationHistory, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
-import { buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationCategoryDiagnostics, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
+import { buildAlternativesByCategory, buildRecommendedOutfit, diversifyRecommendationsByCategory, flattenAlternativesByCategory, getRecommendationCategoryDiagnostics, logRecommendationSelectionDiagnostics, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
 import { getUserProfile } from "@/lib/db/userRepository";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
@@ -77,16 +77,22 @@ export async function generateGearRecommendations(
     const recommendationCandidates = await listGearRecommendationCandidates();
     const preferences = await getRecommendationPreferences(ownerUserId);
     const { ranked: rankedRecommendations, diagnostics } = getRecommendationCategoryDiagnostics(input, recommendationCandidates, preferences);
-    const recommendations = diversifyRecommendationsByCategory(rankedRecommendations, limit);
-    const recommendedOutfit = buildRecommendedOutfit(recommendations);
-    const outfitItemIds = new Set(Object.values(recommendedOutfit ?? {}).filter(Boolean).map((item) => item.item.id));
-    const alternatives = recommendations.filter((recommendation) => !outfitItemIds.has(recommendation.item.id));
+    const outfitCandidates = diversifyRecommendationsByCategory(rankedRecommendations, limit);
+    const recommendedOutfit = buildRecommendedOutfit(outfitCandidates);
+    const alternativesByCategory = buildAlternativesByCategory(rankedRecommendations, recommendedOutfit);
+    const alternatives = flattenAlternativesByCategory(alternativesByCategory);
+    logRecommendationSelectionDiagnostics(rankedRecommendations, outfitCandidates, recommendedOutfit, alternativesByCategory);
+    const recommendations = [
+        ...outfitCandidates,
+        ...alternatives.filter((alternative) => !outfitCandidates.some((item) => item.item.id === alternative.item.id))
+    ];
 
     if (!ownerUserId) {
         return { 
             recommendations, 
             recommendedOutfit, 
             alternatives, 
+            alternativesByCategory,
             engineVersion: RECOMMENDATION_ENGINE_VERSION, 
             generatedAt: new Date().toISOString(),
             ...(diagnostics ? { diagnostics } : {}),
@@ -96,6 +102,10 @@ export async function generateGearRecommendations(
     const output = {
         recommendedOutfit: recommendedOutfit ? Object.fromEntries(Object.entries(recommendedOutfit).map(([slot, recommendation]) => [slot, recommendation?.item.id])) : null,
         alternatives: alternatives.map((recommendation) => recommendation.item.id),
+        alternativesByCategory: Object.fromEntries(Object.entries(alternativesByCategory).map(([category, categoryAlternatives]) => [
+            category,
+            categoryAlternatives.map((recommendation) => recommendation.item.id),
+        ])),
         recommendations: recommendations.map(({ item, totalScore, scoreBreakdown, reasons }) => ({
             itemId: item.id,
             totalScore,
@@ -121,18 +131,26 @@ export async function generateGearRecommendations(
         recommendations,
     });
 
+    const persistedRecommendations = withPersistedRecommendationIds(recommendations, savedHistory);
+    const persistedRecommendationByGearId = new Map(persistedRecommendations.map((recommendation) => [recommendation.item.id, recommendation]));
+    const attachPersistedRecommendationIds = (items: ScoredRecommendationItem[]) => items.map((item) => persistedRecommendationByGearId.get(item.item.id) ?? item);
+
     return { 
         historyId: savedHistory.id,
         engineVersion: savedHistory.engineVersion,
         generatedAt: savedHistory.generatedAt.toISOString(),
-        recommendations: withPersistedRecommendationIds(recommendations, savedHistory),
+        recommendations: persistedRecommendations,
         recommendedOutfit: recommendedOutfit ? Object.fromEntries(
             Object.entries(recommendedOutfit).map(([slot, recommendation]) => [
                 slot,
-                recommendation ? withPersistedRecommendationIds([recommendation], savedHistory)[0] : undefined,
+                recommendation ? persistedRecommendationByGearId.get(recommendation.item.id) ?? recommendation : undefined,
             ]),
         ) : undefined,
-        alternatives: withPersistedRecommendationIds(alternatives, savedHistory),
+        alternatives: attachPersistedRecommendationIds(alternatives),
+        alternativesByCategory: Object.fromEntries(Object.entries(alternativesByCategory).map(([category, categoryAlternatives]) => [
+            category,
+            attachPersistedRecommendationIds(categoryAlternatives)
+        ])) as GearRecommendationResult["alternativesByCategory"],
         ...(diagnostics ? { diagnostics } : {}),
     };
 }

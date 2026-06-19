@@ -6,7 +6,7 @@ import { preferenceFilter } from "./filters/preferenceFilter";
 import { genderFilter } from "./filters/genderFilter";
 import { recommendationRanker } from "./rankers/recommendationRanker";
 import { outfitBuilder } from "./builders/outfitBuilder";
-import type { RecommendationCategoryDiagnostics, RecommendationCategoryDiagnosticsCounts, RecommendationCategoryDiagnosticsRankedItem, RecommendationGearItem, RecommendationUserInput, RecommendedOutfit, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
+import type { AlternativesByCategory, RecommendationCategoryDiagnostics, RecommendationCategoryDiagnosticsCounts, RecommendationCategoryDiagnosticsRankedItem, RecommendationGearItem, RecommendationUserInput, RecommendedOutfit, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
 
 export type UserInput = RecommendationUserInput;
 export type GearItem = RecommendationGearItem;
@@ -18,11 +18,13 @@ export type GearRecommendationResult = {
   recommendations: RankedGearItem[];
   recommendedOutfit?: RecommendedOutfit;
   alternatives?: RankedGearItem[];
+  alternativesByCategory?: AlternativesByCategory;
   outfits?: ReturnType<typeof outfitBuilder>;
   diagnostics?: RecommendationCategoryDiagnostics;
 }
 
 const OUTFIT_CATEGORY_ORDER = ["top", "bottom", "accessory"] as const;
+const ALTERNATIVE_CATEGORY_ORDER = ["top", "bottom", "accessory"] as const;
 const VARIANT_SUFFIX_PATTERN = /\s+(?:(?:I|II|III|IV|V|VI|VII|VIII|IX|X)|\d+)$/i;
 
 function normalizeCategory(category?: string | null) {
@@ -62,6 +64,41 @@ export function buildRecommendedOutfit(rankedItems: ScoredRecommendationItem[]):
   return { top, bottom, accessory };
 }
 
+export function buildAlternativesByCategory(
+  rankedItems: ScoredRecommendationItem[],
+  recommendedOutfit: RecommendedOutfit | undefined,
+  perCategoryLimit = 3,
+): AlternativesByCategory {
+  const selectedItems = Object.values(recommendedOutfit ?? {}).filter((item): item is ScoredRecommendationItem => Boolean(item));
+  const selectedIds = new Set(selectedItems.map((item) => item.item.id));
+  const selectedFamilies = new Set(selectedItems.map(baseProductKey));
+  const alternativesByCategory: AlternativesByCategory = { top: [], bottom: [], accessory: [] };
+
+  for (const category of ALTERNATIVE_CATEGORY_ORDER) {
+    const usedFamilies = new Set(selectedFamilies);
+    const categoryAlternatives: ScoredRecommendationItem[] = [];
+
+    for (const recommendation of rankedItems) {
+      if (categoryAlternatives.length >= perCategoryLimit) break;
+      if (normalizeCategory(recommendation.item.category) !== category) continue;
+      if (selectedIds.has(recommendation.item.id)) continue;
+
+      const productFamily = baseProductKey(recommendation);
+      if (usedFamilies.has(productFamily)) continue;
+
+      categoryAlternatives.push(recommendation);
+      usedFamilies.add(productFamily);
+    }
+
+    alternativesByCategory[category] = categoryAlternatives;
+  }
+
+  return alternativesByCategory;
+}
+
+export function flattenAlternativesByCategory(alternativesByCategory: AlternativesByCategory) {
+  return ALTERNATIVE_CATEGORY_ORDER.flatMap((category) => alternativesByCategory[category] ?? []);
+}
 
 function getCategoryDiagnosticsCounts(items: Array<RecommendationGearItem | ScoredRecommendationItem>): RecommendationCategoryDiagnosticsCounts {
   const counts: RecommendationCategoryDiagnosticsCounts = { TOP: 0, BOTTOM: 0, ACCESSORY: 0 };
@@ -90,27 +127,54 @@ function toRankedDiagnosticsItem(recommendation: ScoredRecommendationItem) {
   };
 }
 
-function logTopRankedItemsByCategory(rankedItems: ScoredRecommendationItem[]) {
-  if (!isRecommendationDebugEnabled()) return;
-
-  console.log("[recommendation diagnostics] Ranked counts:", getCategoryDiagnosticsCounts(rankedItems));
-
-  for (const category of OUTFIT_CATEGORY_ORDER) {
-    const topItems = rankedItems
-      .filter((item) => normalizeCategory(item.item.category) === category)
-      .slice(0, 5)
-      .map(toRankedDiagnosticsItem);
-
-    console.log(`[recommendation diagnostics] Top ${topItems.length} ${category.toUpperCase()} items by score`, topItems);
-  }
+function countScoredRecommendationsByCategory(items: ScoredRecommendationItem[]) {
+  return OUTFIT_CATEGORY_ORDER.reduce<Record<typeof OUTFIT_CATEGORY_ORDER[number], number>>((counts, category) => {
+    counts[category] = items.filter((item) => normalizeCategory(item.item.category) === category).length;
+    return counts;
+  }, { top: 0, bottom: 0, accessory: 0 });
 }
 
-function countByCategory(items) {
-  return items.reduce((counts, item) => {
-    const category = item.category ?? "UNKNOWN";
-    counts[category] = (counts[category] ?? 0) + 1;
+function countAlternativesByCategory(alternativesByCategory: AlternativesByCategory) {
+  return OUTFIT_CATEGORY_ORDER.reduce<Record<typeof OUTFIT_CATEGORY_ORDER[number], number>>((counts, category) => {
+    counts[category] = alternativesByCategory[category]?.length ?? 0;
     return counts;
-  }, {});
+  }, { top: 0, bottom: 0, accessory: 0 });
+}
+
+function formatCategoryCounts(counts: Record<typeof OUTFIT_CATEGORY_ORDER[number], number>) {
+  return OUTFIT_CATEGORY_ORDER.map((category) => `${category}=${counts[category]}`).join(" ");
+}
+
+function formatRecommendedOutfitCategories(recommendedOutfit: RecommendedOutfit | undefined) {
+  return OUTFIT_CATEGORY_ORDER.map((category) => `${category}=${Boolean(recommendedOutfit?.[category])}`).join(" ");
+}
+
+export function logRecommendationSelectionDiagnostics(
+  rankedItems: ScoredRecommendationItem[],
+  outfitCandidates: ScoredRecommendationItem[],
+  recommendedOutfit: RecommendedOutfit | undefined,
+  alternativesByCategory: AlternativesByCategory,
+) {
+  const rankedCounts = countScoredRecommendationsByCategory(rankedItems);
+  const outfitCandidateCounts = countScoredRecommendationsByCategory(outfitCandidates);
+  const alternativeCounts = countAlternativesByCategory(alternativesByCategory);
+
+  console.log("Ranked:");
+  console.log(formatCategoryCounts(rankedCounts));
+  console.log("Outfit candidates:");
+  console.log(formatCategoryCounts(outfitCandidateCounts));
+  console.log("Recommended outfit:");
+  console.log(formatRecommendedOutfitCategories(recommendedOutfit));
+  console.log("Alternatives:");
+  console.log(formatCategoryCounts(alternativeCounts));
+
+  for (const category of OUTFIT_CATEGORY_ORDER) {
+    if (rankedCounts[category] > 0 && outfitCandidateCounts[category] === 0) {
+      console.log(`${category} lost between ranked items and outfit candidates`);
+    } else if (outfitCandidateCounts[category] > 0 && !recommendedOutfit?.[category]) {
+      console.log(`${category} lost between outfit candidates and recommended outfit`);
+    }
+  }
 }
 
 export function getRecommendationCategoryDiagnostics(
@@ -121,21 +185,13 @@ export function getRecommendationCategoryDiagnostics(
   const afterWeather = weatherFilter(userInput, gearItems);
   const afterCategory = categoryFilter(userInput, afterWeather);
   const afterIntensity = intensityFilter(userInput, afterCategory);
-  const afterPreference = afterIntensity;
+  const afterPreference = preferenceFilter(preferences, afterIntensity);
   const afterGender = genderFilter(preferences, afterPreference);
   const ranked = recommendationRanker(userInput, preferences, afterGender);
 
   if (!isRecommendationDebugEnabled()) {
     return { ranked };
   }
-
-  console.log("[recommendation diagnostics] Weather counts:", getCategoryDiagnosticsCounts(afterWeather));
-  console.log("[recommendation diagnostics] Category counts:", getCategoryDiagnosticsCounts(afterCategory));
-  console.log("[recommendation diagnostics] Intensity counts:", getCategoryDiagnosticsCounts(afterIntensity));
-  console.log("[recommendation diagnostics] Preference counts:", getCategoryDiagnosticsCounts(afterPreference));
-  console.log("[recommendation diagnostics] Gender counts:", getCategoryDiagnosticsCounts(afterGender));
-
-  logTopRankedItemsByCategory(ranked);
 
   return {
     ranked,
@@ -205,29 +261,23 @@ export function diversifyRecommendationsByCategory(rankedItems: ScoredRecommenda
 }
 
 export function rankGearRecommendations(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[], preferences: UserPreferenceInput = {}): RankedGearItem[] {
-  const afterWeather = weatherFilter(userInput, gearItems);
-  console.log("After weather counts:", countByCategory(afterWeather));
-  
-  const afterCategory = categoryFilter(userInput, afterWeather);
-  console.log("After category counts:", countByCategory(afterCategory));
-  
-  const afterIntensity = intensityFilter(userInput, afterCategory);
-  console.log("After intensity counts:", countByCategory(afterIntensity));
-  
-  const afterPreference = preferenceFilter(preferences, afterIntensity);
-  console.log("After preference counts:", countByCategory(afterPreference));
-  
   return getRecommendationCategoryDiagnostics(userInput, gearItems, preferences).ranked;
 }
 
 export async function generateOutfitRecommendations(userInput: RecommendationUserInput, preferences: UserPreferenceInput = {}) {
   const items = await listGearRecommendationCandidates();
   const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(userInput, items as RecommendationGearItem[], preferences);
-  const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+  const outfitCandidates = diversifyRecommendationsByCategory(ranked, 5);
+  const recommendedOutfit = buildRecommendedOutfit(outfitCandidates);
+  const alternativesByCategory = buildAlternativesByCategory(ranked, recommendedOutfit);
+  const alternatives = flattenAlternativesByCategory(alternativesByCategory);
+  logRecommendationSelectionDiagnostics(ranked, outfitCandidates, recommendedOutfit, alternativesByCategory);
+  const recommendations = [...outfitCandidates, ...alternatives.filter((alternative) => !outfitCandidates.some((item) => item.item.id === alternative.item.id))];
 
   return {
-    recommendedOutfit: buildRecommendedOutfit(recommendations),
-    alternatives: recommendations.filter((item) => !OUTFIT_CATEGORY_ORDER.includes(normalizeCategory(item.item.category) as typeof OUTFIT_CATEGORY_ORDER[number])),
+    recommendedOutfit,
+    alternativesByCategory,
+    alternatives,
     outfits: outfitBuilder(recommendations),
     recommendations,
     ...(diagnostics ? { diagnostics }: {}),

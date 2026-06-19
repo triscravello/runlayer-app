@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationCategoryDiagnostics, getRecommendationSelectionDiagnostics } from "./recommendationEngine";
+import { buildAlternativesByCategory, buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationCategoryDiagnostics, getRecommendationSelectionDiagnostics, logRecommendationSelectionDiagnostics } from "./recommendationEngine";
 import type { RecommendationScoreBreakdown, ScoredRecommendationItem } from "./types/recommendationEngine";
 
 const emptyBreakdown: RecommendationScoreBreakdown = {
@@ -73,6 +73,58 @@ test("diversifyRecommendationsByCategory only relaxes duplicate-family suppressi
   );
 });
 
+test("logRecommendationSelectionDiagnostics reports category counts and loss stages", () => {
+  const rankedItems = [
+    scoredItem("top-1", "EZ Tee Perf I", "TOP", 10),
+    scoredItem("bottom-1", "AFO Split Short Ultra I", "BOTTOM", 9),
+    scoredItem("accessory-1", "SpeedDraw Flask I", "ACCESSORY", 8),
+    scoredItem("accessory-2", "ATC Performance Running Cap I", "ACCESSORY", 7),
+  ];
+  const outfitCandidates = [rankedItems[0], rankedItems[2]];
+  const recommendedOutfit = buildRecommendedOutfit(outfitCandidates);
+  const alternativesByCategory = buildAlternativesByCategory(rankedItems, recommendedOutfit);
+  const originalLog = console.log;
+  const logs: string[] = [];
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+
+  try {
+    logRecommendationSelectionDiagnostics(rankedItems, outfitCandidates, recommendedOutfit, alternativesByCategory);
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.deepEqual(logs.slice(0, 8), [
+    "Ranked:",
+    "top=1 bottom=1 accessory=2",
+    "Outfit candidates:",
+    "top=1 bottom=0 accessory=1",
+    "Recommended outfit:",
+    "top=true bottom=false accessory=true",
+    "Alternatives:",
+    "top=0 bottom=1 accessory=1",
+  ]);
+  assert.ok(logs.includes("bottom lost between ranked items and outfit candidates"));
+});
+
+test("buildAlternativesByCategory returns category-specific non-duplicate family swaps", () => {
+  const rankedItems = [
+    scoredItem("top-1", "EZ Tee Perf I", "TOP", 10),
+    scoredItem("top-2", "EZ Tee Perf II", "TOP", 9),
+    scoredItem("top-3", "Session Tee", "TOP", 8),
+    scoredItem("bottom-1", "AFO Split Short Ultra I", "BOTTOM", 7),
+    scoredItem("bottom-2", "Hawaiian Split Shorts I", "BOTTOM", 6),
+    scoredItem("accessory-1", "SpeedDraw Flask I", "ACCESSORY", 5),
+    scoredItem("accessory-2", "ATC Performance Running Cap I", "ACCESSORY", 4),
+  ];
+  const recommendedOutfit = buildRecommendedOutfit(diversifyRecommendationsByCategory(rankedItems, 3));
+
+  const alternativesByCategory = buildAlternativesByCategory(rankedItems, recommendedOutfit);
+
+  assert.deepEqual(alternativesByCategory.top.map((item) => item.item.id), ["top-3"]);
+  assert.deepEqual(alternativesByCategory.bottom.map((item) => item.item.id), ["bottom-2"]);
+  assert.deepEqual(alternativesByCategory.accessory.map((item) => item.item.id), ["accessory-2"]);
+});
+
 test("outfit contains one top, one bottom, and one accessory when all categories are available", () => {
   const rankedItems = [
     scoredItem("top-1", "EZ Tee Perf I", "TOP", 10),
@@ -92,7 +144,7 @@ test("outfit contains one top, one bottom, and one accessory when all categories
   assert.equal(recommendedOutfit.bottom.item.category?.toLowerCase(), "bottom");
   assert.equal(recommendedOutfit.accessory.item.category?.toLowerCase(), "accessory");
 });
-test("development category diagnostics count filter stages and ranked top 10", () => {
+test("development category diagnostics count filter stages and ranked top 10 without console output", () => {
   const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
   process.env.RECOMMENDATION_DEBUG = "true";
   const restoreRecommendationDebug = () => {
@@ -132,7 +184,7 @@ test("development category diagnostics count filter stages and ranked top 10", (
     assert.deepEqual(diagnostics?.preference, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
     assert.deepEqual(diagnostics?.ranking, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
     assert.equal(diagnostics?.rankedTop10.length, 3);
-    assert.equal(logs.length, 3);
+    assert.equal(logs.length, 0);
   } finally {
     console.log = originalLog;
     restoreRecommendationDebug();

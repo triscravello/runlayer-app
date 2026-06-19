@@ -52,3 +52,8 @@ export type RecommendedOutfit = {
   bottom?: ScoredRecommendationItem;
   accessory?: ScoredRecommendationItem;
 }
+export type AlternativesByCategory = {
+  top: ScoredRecommendationItem[];
+  bottom: ScoredRecommendationItem[];
+  accessory: ScoredRecommendationItem[];
+}
