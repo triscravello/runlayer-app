@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:seed": "prisma db seed",
     "postinstall": "prisma generate",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "test": "tsx --test"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -36,6 +37,7 @@
     "eslint-config-next": "16.2.4",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   },
   "prisma": {
