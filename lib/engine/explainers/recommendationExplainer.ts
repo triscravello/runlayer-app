@@ -1,38 +1,42 @@
 import type { RecommendationScoreBreakdown, ScoredRecommendationItem } from "../types/recommendationEngine";
 
 const contributionLabels: Record<keyof RecommendationScoreBreakdown, string> = {
-    weather: "Weather match",
-    intensity: "Workout match",
-    terrain: "Terrain match",
-    seasonality: "Seasonal suitability",
-    brandAffinity: "Preferred brand",
-    brandPenalty: "Avoided brand",
-    budget: "Budget preference",
-    genderAlignment: "Gender preference",
-    temperatureTolerance: "Temperature tolerance",
-    rotationAdjustment: "Rotation adjustment",
+    weather: "Ready for today's condition",
+    intensity: "Fits the planned effort",
+    terrain: "Suited to your route surface",
+    seasonality: "Seasonally appropriate",
+    brandAffinity: "From a brand you tend to like",
+    brandPenalty: "Brand preference mismatch",
+    budget: "Fits your budget comfort zone",
+    genderAlignment: "Matches your fit profile",
+    temperatureTolerance: "Matches your temperature preferences",
+    rotationAdjustment: "Adds variety to your recent recommendations",
 };
 
 const personalizedCopy: Partial<Record<keyof RecommendationScoreBreakdown, { positive: string, negative: string }>> = {
     brandAffinity: {
-        positive: "Boosted because this matches one of your preferred brands",
-        negative: "Penalized because this brand is not aligned with your preferences",
+        positive: "From a brand you tend to like",
+        negative: "Not as close to your usual brand preferences",
     },
     brandPenalty: {
-        positive: "Boosted because this avoids brands you down-rank",
-        negative: "Penalized because this is from a brand you avoid",
+        positive: "Avoids brands you prefer to down-rank",
+        negative: "From a brand you asked us to de-prioritize",
     },
     budget: {
-        positive: "Boosted because the price tier fits your budget sensitivity",
-        negative: "Penalized because the price tier is above your budget comfort",
+        positive: "Fits your budget comfort zone",
+        negative: "May sit above your preferred budget range",
     },
     genderAlignment: {
-        positive: "Boosted because this item matches your gender preference",
-        negative: "Penalized because this item does not match your gender preference"
+        positive: "Available in your preferred sizing category",
+        negative: "Less aligned with your fit profile"
     },
     temperatureTolerance: {
-        positive: "Boosted because the materials match your temperature tolerance",
-        negative: "Penalized because the materials may not fit your temperate tolerance",
+        positive: "Matches your temperature preferences",
+        negative: "May run warmer or cooler than you prefer",
+    },
+    rotationAdjustment: {
+        positive: "Adds variety to your recent recommendations",
+        negative: "Similar to gear recommended recently",
     },
 };
 
@@ -40,9 +44,5 @@ export function recommendationExplainer(scored: ScoredRecommendationItem): strin
     return (Object.entries(scored.scoreBreakdown) as Array<[keyof RecommendationScoreBreakdown, number]>)
         .filter(([, value]) => value !== 0)
         .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-        .map(([key, value]) => {
-            const customCopy = personalizedCopy[key]?.[value > 0 ? "positive" : "negative"];
-            const prefix = customCopy ?? `${contributionLabels[key]} ${value > 0 ? "boosted" : "penalized"} this item`;
-            return `${prefix} (${value > 0 ? "+" : ""}${value})`;
-        });
+        .map(([key, value]) => personalizedCopy[key]?.[value > 0 ? "positive" : "negative"] ?? contributionLabels[key]);
 }
