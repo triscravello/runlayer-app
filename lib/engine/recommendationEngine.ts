@@ -78,6 +78,10 @@ function getCategoryDiagnosticsCounts(items: Array<RecommendationGearItem | Scor
   return counts;
 }
 
+function isRecommendationDebugEnabled() {
+  return process.env.RECOMMENDATION_DEBUG === "true" || process.env.NODE_ENV === "development";
+}
+
 function toRankedDiagnosticsItem(recommendation: ScoredRecommendationItem) {
   return {
     category: recommendation.item.category,
@@ -87,7 +91,7 @@ function toRankedDiagnosticsItem(recommendation: ScoredRecommendationItem) {
 }
 
 function logTopRankedItemsByCategory(rankedItems: ScoredRecommendationItem[]) {
-  if (process.env.NODE_ENV !== "development") return;
+  if (!isRecommendationDebugEnabled()) return;
 
   for (const category of OUTFIT_CATEGORY_ORDER) {
     const topItems = rankedItems
@@ -111,7 +115,7 @@ export function getRecommendationCategoryDiagnostics(
   const afterGender = genderFilter(preferences, afterPreference);
   const ranked = recommendationRanker(userInput, preferences, afterGender);
 
-  if (process.env.NODE_ENV !== "development") {
+  if (!isRecommendationDebugEnabled()) {
     return { ranked };
   }
 

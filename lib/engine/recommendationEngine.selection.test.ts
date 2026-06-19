@@ -93,8 +93,15 @@ test("outfit contains one top, one bottom, and one accessory when all categories
   assert.equal(recommendedOutfit.accessory.item.category?.toLowerCase(), "accessory");
 });
 test("development category diagnostics count filter stages and ranked top 10", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-  Object.defineProperty(process.env, "NODE_ENV", { value: "development", configurable: true });
+  const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
+  process.env.RECOMMENDATION_DEBUG = "true";
+  const restoreRecommendationDebug = () => {
+    if (originalRecommendationDebug === undefined) {
+        delete process.env.RECOMMENDATION_DEBUG;
+    } else {
+        process.env.RECOMMENDATION_DEBUG = originalRecommendationDebug;
+    }
+  };
   const originalLog = console.log;
   const logs: unknown[][] = [];
   console.log = (...args: unknown[]) => logs.push(args);
@@ -128,6 +135,60 @@ test("development category diagnostics count filter stages and ranked top 10", (
     assert.equal(logs.length, 3);
   } finally {
     console.log = originalLog;
-    Object.defineProperty(process.env, "NODE_ENV", { value: originalNodeEnv, configurable: true });
+    restoreRecommendationDebug();
+  }
+});
+
+test("intensity filtering preserves outfit categories when an intensity tag misses a category", () => {
+  const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
+  process.env.RECOMMENDATION_DEBUG = "true";
+  const restoreRecommendationDebug = () => {
+    if (originalRecommendationDebug === undefined) {
+        delete process.env.RECOMMENDATION_DEBUG;
+    } else {
+        process.env.RECOMMENDATION_DEBUG = originalRecommendationDebug;
+    }
+  }
+
+  const originalLog = console.log;
+  console.log = () => {};
+
+  try {
+    const gearItems = [
+      {
+        ...scoredItem("top-easy", "Easy Top", "TOP", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("bottom-general", "General Bottom", "BOTTOM", 0).item,
+        tags: ["quick-dry"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("accessory-easy", "Easy Hat", "ACCESSORY", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { hot: 0.8 },
+      },
+    ];
+
+    const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(
+      { weather: "hot", intensity: "easy" },
+      gearItems,
+    );
+    const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+    const recommendedOutfit = buildRecommendedOutfit(recommendations);
+
+    assert.deepEqual(diagnostics?.category, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.intensity, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.ok(recommendedOutfit?.top);
+    assert.ok(recommendedOutfit?.bottom);
+    assert.ok(recommendedOutfit?.accessory);
+    assert.equal(recommendedOutfit.bottom.item.id, "bottom-general");
+    assert.equal(recommendedOutfit.top.scoreBreakdown.intensity, 10);
+    assert.equal(recommendedOutfit.bottom.scoreBreakdown.intensity, 0);
+  } finally {
+    console.log = originalLog;
+    restoreRecommendationDebug();
   }
 });
