@@ -3,7 +3,7 @@ import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { createGeneratedOutfit, CreateRecommendationInput, listGeneratedOutfits } from "@/lib/db/outfitRepository";
 import { createRecommendationHistory, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
-import { buildRecommendedOutfit, diversifyRecommendationsByCategory,rankGearRecommendations, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
+import { buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationCategoryDiagnostics, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
 import { getUserProfile } from "@/lib/db/userRepository";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
@@ -76,14 +76,21 @@ export async function generateGearRecommendations(
     const ownerUserId = userId ?? input.userId ?? null;
     const recommendationCandidates = await listGearRecommendationCandidates();
     const preferences = await getRecommendationPreferences(ownerUserId);
-    const rankedRecommendations = rankGearRecommendations(input, recommendationCandidates, preferences);
+    const { ranked: rankedRecommendations, diagnostics } = getRecommendationCategoryDiagnostics(input, recommendationCandidates, preferences);
     const recommendations = diversifyRecommendationsByCategory(rankedRecommendations, limit);
     const recommendedOutfit = buildRecommendedOutfit(recommendations);
     const outfitItemIds = new Set(Object.values(recommendedOutfit ?? {}).filter(Boolean).map((item) => item.item.id));
     const alternatives = recommendations.filter((recommendation) => !outfitItemIds.has(recommendation.item.id));
 
     if (!ownerUserId) {
-        return { recommendations, recommendedOutfit, alternatives, engineVersion: RECOMMENDATION_ENGINE_VERSION, generatedAt: new Date().toISOString() };
+        return { 
+            recommendations, 
+            recommendedOutfit, 
+            alternatives, 
+            engineVersion: RECOMMENDATION_ENGINE_VERSION, 
+            generatedAt: new Date().toISOString(),
+            ...(diagnostics ? { diagnostics } : {}),
+        };
     }
 
     const output = {
@@ -126,6 +133,7 @@ export async function generateGearRecommendations(
             ]),
         ) : undefined,
         alternatives: withPersistedRecommendationIds(alternatives, savedHistory),
+        ...(diagnostics ? { diagnostics } : {}),
     };
 }
 

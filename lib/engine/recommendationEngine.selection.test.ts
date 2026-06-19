@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationSelectionDiagnostics } from "./recommendationEngine";
+import { buildRecommendedOutfit, diversifyRecommendationsByCategory, getRecommendationCategoryDiagnostics, getRecommendationSelectionDiagnostics } from "./recommendationEngine";
 import type { RecommendationScoreBreakdown, ScoredRecommendationItem } from "./types/recommendationEngine";
 
 const emptyBreakdown: RecommendationScoreBreakdown = {
@@ -91,4 +91,43 @@ test("outfit contains one top, one bottom, and one accessory when all categories
   assert.equal(recommendedOutfit.top.item.category?.toLowerCase(), "top");
   assert.equal(recommendedOutfit.bottom.item.category?.toLowerCase(), "bottom");
   assert.equal(recommendedOutfit.accessory.item.category?.toLowerCase(), "accessory");
+});
+test("development category diagnostics count filter stages and ranked top 10", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  Object.defineProperty(process.env, "NODE_ENV", { value: "development", configurable: true });
+  const originalLog = console.log;
+  const logs: unknown[][] = [];
+  console.log = (...args: unknown[]) => logs.push(args);
+
+  try {
+    const gearItems = [
+      scoredItem("top-1", "Fast Top", "TOP", 0).item,
+      scoredItem("bottom-1", "Fast Bottom", "BOTTOM", 0).item,
+      scoredItem("accessory-1", "Fast Hat", "ACCESSORY", 0).item,
+      scoredItem("bottom-2", "Budget Bottom", "BOTTOM", 0).item,
+    ].map((item, index) => ({
+      ...item,
+      priceRange: index === 3 ? "budget" : "mid",
+      tags: ["tempo"],
+      weatherSuitability: { hot: 0.8 },
+    }));
+
+    const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(
+      { weather: "hot", intensity: "tempo" },
+      gearItems,
+      { budgetRange: "mid" },
+    );
+
+    assert.equal(ranked.length, 3);
+    assert.deepEqual(diagnostics?.weather, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.category, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.intensity, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.preference, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.ranking, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.equal(diagnostics?.rankedTop10.length, 3);
+    assert.equal(logs.length, 3);
+  } finally {
+    console.log = originalLog;
+    Object.defineProperty(process.env, "NODE_ENV", { value: originalNodeEnv, configurable: true });
+  }
 });

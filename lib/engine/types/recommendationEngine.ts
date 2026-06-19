@@ -29,6 +29,24 @@ export type ScoredRecommendationItem = {
   contributions: RecommendationScoreBreakdown;
   recommendationId?: string;
 };
+export type RecommendationCategoryDiagnosticsCounts = {
+  TOP: number;
+  BOTTOM: number;
+  ACCESSORY: number;
+};
+export type RecommendationCategoryDiagnosticsRankedItem = {
+  category: string | null | undefined;
+  name: string;
+  score: number;
+};
+export type RecommendationCategoryDiagnostics = {
+  weather: RecommendationCategoryDiagnosticsCounts;
+  category: RecommendationCategoryDiagnosticsCounts;
+  intensity: RecommendationCategoryDiagnosticsCounts;
+  preference: RecommendationCategoryDiagnosticsCounts;
+  ranking: RecommendationCategoryDiagnosticsCounts;
+  rankedTop10: RecommendationCategoryDiagnosticsRankedItem[];
+}
 export type RecommendedOutfit = {
   top?: ScoredRecommendationItem;
   bottom?: ScoredRecommendationItem;
