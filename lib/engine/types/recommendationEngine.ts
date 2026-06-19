@@ -29,3 +29,8 @@ export type ScoredRecommendationItem = {
   contributions: RecommendationScoreBreakdown;
   recommendationId?: string;
 };
+export type RecommendedOutfit = {
+  top?: ScoredRecommendationItem;
+  bottom?: ScoredRecommendationItem;
+  accessory?: ScoredRecommendationItem;
+}

@@ -3,7 +3,7 @@ import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { createGeneratedOutfit, CreateRecommendationInput, listGeneratedOutfits } from "@/lib/db/outfitRepository";
 import { createRecommendationHistory, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
-import { rankGearRecommendations, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
+import { buildRecommendedOutfit, diversifyRecommendationsByCategory,rankGearRecommendations, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
 import { getUserProfile } from "@/lib/db/userRepository";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
@@ -68,69 +68,6 @@ async function getRecommendationPreferences(userId?: string | null): Promise<Use
     };
 }
 
-function baseProductKey(recommendation: ScoredRecommendationItem) {
-    const brand = recommendation.item.brandName ?? recommendation.item.brandId ?? "";
-    const baseName = recommendation.item.name
-        .replace(/\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X)$/i, "")
-        .replace(/\s+\d+$/i, "")
-        .trim()
-        .toLowerCase();
-
-    return `${brand.toLowerCase()}::${baseName}`;
-}
-
-function diversifyRecommendationsByCategory(
-    rankedItems: ScoredRecommendationItem[],
-    limit: number,
-) {
-    const categoryOrder = ["TOP", "BOTTOM", "ACCESSORY"];
-    const selected: ScoredRecommendationItem[] = [];
-    const usedIds = new Set<string>();
-    const usedProductKeys = new Set<string>();
-
-    for (const category of categoryOrder) {
-        const match = rankedItems.find(
-            (recommendation) => 
-                recommendation.item.category?.toUpperCase() === category &&
-                !usedIds.has(recommendation.item.id) &&
-                !usedProductKeys.has(baseProductKey(recommendation))
-        );
-
-        if (match) {
-            selected.push(match);
-            usedIds.add(match.item.id);
-            usedProductKeys.add(baseProductKey(match));
-        }
-
-        if (selected.length >= limit) return selected;
-    }
-
-    for (const recommendation of rankedItems) {
-        const productKey = baseProductKey(recommendation);
-
-        if (!usedIds.has(recommendation.item.id) && !usedProductKeys.has(productKey)) {
-            selected.push(recommendation);
-            usedIds.add(recommendation.item.id);
-            usedProductKeys.add(productKey);
-        }
-
-        if (selected.length >= limit) break;
-    }
-
-    if (selected.length >= limit) return selected;
-
-    for (const recommendation of rankedItems) {
-        if (!usedIds.has(recommendation.item.id)) {
-            selected.push(recommendation);
-            usedIds.add(recommendation.item.id);
-        }
-
-        if (selected.length >= limit) break;
-    }
-
-    return selected;
-}
-
 export async function generateGearRecommendations(
     input: UserInput,
     limit = DEFAULT_RECOMMENDATION_LIMIT,
@@ -141,12 +78,17 @@ export async function generateGearRecommendations(
     const preferences = await getRecommendationPreferences(ownerUserId);
     const rankedRecommendations = rankGearRecommendations(input, recommendationCandidates, preferences);
     const recommendations = diversifyRecommendationsByCategory(rankedRecommendations, limit);
+    const recommendedOutfit = buildRecommendedOutfit(recommendations);
+    const outfitItemIds = new Set(Object.values(recommendedOutfit ?? {}).filter(Boolean).map((item) => item.item.id));
+    const alternatives = recommendations.filter((recommendation) => !outfitItemIds.has(recommendation.item.id));
 
     if (!ownerUserId) {
-        return { recommendations, engineVersion: RECOMMENDATION_ENGINE_VERSION, generatedAt: new Date().toISOString() };
+        return { recommendations, recommendedOutfit, alternatives, engineVersion: RECOMMENDATION_ENGINE_VERSION, generatedAt: new Date().toISOString() };
     }
 
     const output = {
+        recommendedOutfit: recommendedOutfit ? Object.fromEntries(Object.entries(recommendedOutfit).map(([slot, recommendation]) => [slot, recommendation?.item.id])) : null,
+        alternatives: alternatives.map((recommendation) => recommendation.item.id),
         recommendations: recommendations.map(({ item, totalScore, scoreBreakdown, reasons }) => ({
             itemId: item.id,
             totalScore,
@@ -176,7 +118,14 @@ export async function generateGearRecommendations(
         historyId: savedHistory.id,
         engineVersion: savedHistory.engineVersion,
         generatedAt: savedHistory.generatedAt.toISOString(),
-        recommendations: withPersistedRecommendationIds(recommendations, savedHistory), 
+        recommendations: withPersistedRecommendationIds(recommendations, savedHistory),
+        recommendedOutfit: recommendedOutfit ? Object.fromEntries(
+            Object.entries(recommendedOutfit).map(([slot, recommendation]) => [
+                slot,
+                recommendation ? withPersistedRecommendationIds([recommendation], savedHistory)[0] : undefined,
+            ]),
+        ) : undefined,
+        alternatives: withPersistedRecommendationIds(alternatives, savedHistory),
     };
 }
 
