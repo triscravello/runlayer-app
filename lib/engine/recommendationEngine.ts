@@ -93,6 +93,8 @@ function toRankedDiagnosticsItem(recommendation: ScoredRecommendationItem) {
 function logTopRankedItemsByCategory(rankedItems: ScoredRecommendationItem[]) {
   if (!isRecommendationDebugEnabled()) return;
 
+  console.log("[recommendation diagnostics] Ranked counts:", getCategoryDiagnosticsCounts(rankedItems));
+
   for (const category of OUTFIT_CATEGORY_ORDER) {
     const topItems = rankedItems
       .filter((item) => normalizeCategory(item.item.category) === category)
@@ -103,6 +105,14 @@ function logTopRankedItemsByCategory(rankedItems: ScoredRecommendationItem[]) {
   }
 }
 
+function countByCategory(items) {
+  return items.reduce((counts, item) => {
+    const category = item.category ?? "UNKNOWN";
+    counts[category] = (counts[category] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
 export function getRecommendationCategoryDiagnostics(
   userInput: RecommendationUserInput,
   gearItems: RecommendationGearItem[],
@@ -111,13 +121,19 @@ export function getRecommendationCategoryDiagnostics(
   const afterWeather = weatherFilter(userInput, gearItems);
   const afterCategory = categoryFilter(userInput, afterWeather);
   const afterIntensity = intensityFilter(userInput, afterCategory);
-  const afterPreference = preferenceFilter(preferences, afterIntensity);
+  const afterPreference = afterIntensity;
   const afterGender = genderFilter(preferences, afterPreference);
   const ranked = recommendationRanker(userInput, preferences, afterGender);
 
   if (!isRecommendationDebugEnabled()) {
     return { ranked };
   }
+
+  console.log("[recommendation diagnostics] Weather counts:", getCategoryDiagnosticsCounts(afterWeather));
+  console.log("[recommendation diagnostics] Category counts:", getCategoryDiagnosticsCounts(afterCategory));
+  console.log("[recommendation diagnostics] Intensity counts:", getCategoryDiagnosticsCounts(afterIntensity));
+  console.log("[recommendation diagnostics] Preference counts:", getCategoryDiagnosticsCounts(afterPreference));
+  console.log("[recommendation diagnostics] Gender counts:", getCategoryDiagnosticsCounts(afterGender));
 
   logTopRankedItemsByCategory(ranked);
 
@@ -189,6 +205,18 @@ export function diversifyRecommendationsByCategory(rankedItems: ScoredRecommenda
 }
 
 export function rankGearRecommendations(userInput: RecommendationUserInput, gearItems: RecommendationGearItem[], preferences: UserPreferenceInput = {}): RankedGearItem[] {
+  const afterWeather = weatherFilter(userInput, gearItems);
+  console.log("After weather counts:", countByCategory(afterWeather));
+  
+  const afterCategory = categoryFilter(userInput, afterWeather);
+  console.log("After category counts:", countByCategory(afterCategory));
+  
+  const afterIntensity = intensityFilter(userInput, afterCategory);
+  console.log("After intensity counts:", countByCategory(afterIntensity));
+  
+  const afterPreference = preferenceFilter(preferences, afterIntensity);
+  console.log("After preference counts:", countByCategory(afterPreference));
+  
   return getRecommendationCategoryDiagnostics(userInput, gearItems, preferences).ranked;
 }
 
@@ -196,6 +224,7 @@ export async function generateOutfitRecommendations(userInput: RecommendationUse
   const items = await listGearRecommendationCandidates();
   const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(userInput, items as RecommendationGearItem[], preferences);
   const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+
   return {
     recommendedOutfit: buildRecommendedOutfit(recommendations),
     alternatives: recommendations.filter((item) => !OUTFIT_CATEGORY_ORDER.includes(normalizeCategory(item.item.category) as typeof OUTFIT_CATEGORY_ORDER[number])),

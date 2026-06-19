@@ -192,3 +192,60 @@ test("intensity filtering preserves outfit categories when an intensity tag miss
     restoreRecommendationDebug();
   }
 });
+
+test("weather filtering preserves essential outfit categories when suitability removes all bottoms", () => {
+  const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
+  process.env.RECOMMENDATION_DEBUG = "true";
+  const restoreRecommendationDebug = () => {
+    if (originalRecommendationDebug === undefined) {
+        delete process.env.RECOMMENDATION_DEBUG;
+    } else {
+        process.env.RECOMMENDATION_DEBUG = originalRecommendationDebug;
+    }
+  }
+
+  const originalLog = console.log;
+  console.log = () => {};
+
+  try {
+    const gearItems = [
+      {
+        ...scoredItem("top-warm", "Warm Top", "TOP", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { warm: 0.8 },
+      },
+      {
+        ...scoredItem("bottom-low", "Low Suitability Bottom", "BOTTOM", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { warm: 0.2 },
+      },
+      {
+        ...scoredItem("bottom-best", "Best Available Bottom", "bottom", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { warm: 0.3 },
+      },
+      {
+        ...scoredItem("accessory-warm", "Warm Hat", "ACCESSORY", 0).item,
+        tags: ["easy"],
+        weatherSuitability: { warm: 0.7 },
+      },
+    ];
+
+    const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(
+      { weather: "warm", intensity: "easy" },
+      gearItems,
+    );
+    const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+    const recommendedOutfit = buildRecommendedOutfit(recommendations);
+
+    assert.deepEqual(diagnostics?.weather, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.ok(recommendedOutfit?.top);
+    assert.ok(recommendedOutfit?.bottom);
+    assert.ok(recommendedOutfit?.accessory);
+    assert.equal(recommendedOutfit.bottom.item.id, "bottom-best");
+    assert.equal(recommendedOutfit.bottom.scoreBreakdown.weather, 4);
+  } finally {
+    console.log = originalLog;
+    restoreRecommendationDebug();
+  }
+});
