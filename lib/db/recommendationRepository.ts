@@ -67,13 +67,60 @@ export async function createRecommendationHistory(input: CreateRecommendationHis
     });
 }
 
+type RecommendationHistoryDeleteClient = Pick<Prisma.TransactionClient, "recommendation" | "recommendationFeedback" | "recommendationItem" | "recommendationVersionMetadata" | "savedOutfit">;
+
 export async function deleteRecommendationHistoryById(userId: string, recommendationId: string) {
-    return prisma.recommendation.deleteMany({
-        where: {
-            id: recommendationId,
-            userId,
-        },
-    });
+    return prisma.$transaction(async (tx: RecommendationHistoryDeleteClient) => {
+        const recommendation = await tx.recommendation.findFirst({
+            where: {
+                id: recommendationId,
+                userId,
+            },
+            select: {
+                id: true,
+            }
+        });
+
+        if (!recommendation) {
+            return { count : 0 };
+        };
+
+        await tx.savedOutfit.updateMany({
+            where: {
+                recommendationId,
+            },
+            data: {
+                recommendationId: null,
+            },
+        });
+
+        await tx.recommendationFeedback.deleteMany({
+            where: {
+                recommendation: {
+                    recommendationId,
+                },
+            },
+        });
+
+        await tx.recommendationItem.deleteMany({
+            where: {
+                recommendationId,
+            },
+        });
+
+        await tx.recommendationVersionMetadata.deleteMany({
+            where: {
+                recommendationId,
+            },
+        });
+
+        return tx.recommendation.deleteMany({
+            where: {
+                id: recommendationId,
+                userId,
+            },
+        });
+    })
 }
 
 export async function listRecommendationHistoryByUserId(options: RecommendationHistoryListOptions) {
