@@ -268,7 +268,7 @@ model SavedOutfit {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  recommendation Recommendation? @relation(fields: [recommendationId], references: [id])
+  recommendation Recommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
   OutfitItem     OutfitItem[]
 
   @@map("saved_outfits")
