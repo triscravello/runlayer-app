@@ -68,7 +68,7 @@ export async function createRecommendationHistory(input: CreateRecommendationHis
 }
 
 export async function listRecommendationHistoryByUserId(options: RecommendationHistoryListOptions) {
-    return prisma.recommendation.findMany({
+    const history = await prisma.recommendation.findMany({
         where: {
             userId: options.userId,
         },
@@ -87,15 +87,17 @@ export async function listRecommendationHistoryByUserId(options: RecommendationH
                         },
                     },
                 },
-                orderBy: {
-                    createdAt: "desc",
-                },
             },
         },
         orderBy: {
-            createdAt: "desc",
+            generatedAt: "desc",
         },
         take: options.take ?? 20,
         skip: options.skip ?? 0,
     });
+
+    return history.map((recommendation) => ({
+        ...recommendation,
+        items: [...recommendation.items].sort((left, right) => left.rank - right.rank),
+    }))
 }

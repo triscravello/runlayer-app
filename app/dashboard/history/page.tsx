@@ -108,6 +108,10 @@ export default function RecommendationHistoryPage() {
             await Promise.resolve();
             await loadHistory(controller.signal);
         }
+
+        void loadHistoryAfterEffect();
+
+        return () => controller.abort();
     }, [loadHistory, loading]);
 
     const emptyStateMessage = useMemo(() => {

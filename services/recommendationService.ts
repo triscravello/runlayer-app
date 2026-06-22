@@ -104,7 +104,7 @@ export const recommendationService = {
         if (input.offset) params.set("offset", String(input.offset));
 
         const query = params.toString();
-        const response = await fetch(`/api/recommendation/history${query ? `?${query}` : ""}`, {
+        const response = await fetch(`/api/recommendations/history${query ? `?${query}` : ""}`, {
             credentials: "include",
             signal: options.signal,
         });
