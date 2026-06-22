@@ -67,6 +67,15 @@ export async function createRecommendationHistory(input: CreateRecommendationHis
     });
 }
 
+export async function deleteRecommendationHistoryById(userId: string, recommendationId: string) {
+    return prisma.recommendation.deleteMany({
+        where: {
+            id: recommendationId,
+            userId,
+        },
+    });
+}
+
 export async function listRecommendationHistoryByUserId(options: RecommendationHistoryListOptions) {
     const history = await prisma.recommendation.findMany({
         where: {

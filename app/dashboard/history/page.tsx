@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, CloudSun, Dumbbell, Loader2, MapPinned, RefreshCw, Tag } from "lucide-react";
+import { CalendarClock, CloudSun, Dumbbell, Loader2, MapPinned, RefreshCw, Tag, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -75,6 +75,7 @@ export default function RecommendationHistoryPage() {
     const [history, setHistory] = useState<RecommendationHistoryRecord[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const [deletingRecommendationId, setDeletingRecommendationId] = useState<string | null>(null);
 
     const loadHistory = useCallback(async (signal?: AbortSignal) => {
         const userId = user?.id;
@@ -113,6 +114,24 @@ export default function RecommendationHistoryPage() {
 
         return () => controller.abort();
     }, [loadHistory, loading]);
+
+    const handleDeleteRecommendation = useCallback(async (recommendationId: string) => {
+        const shouldDelete = window.confirm("Delete this recommendation history record? This will not delete any gear items.");
+
+        if (!shouldDelete) return;
+
+        setDeletingRecommendationId(recommendationId);
+        setError("");
+
+        try {
+            await recommendationService.deleteRecommendationHistory({ recommendationId });
+            setHistory((currentHistory) => currentHistory.filter((record) => record.id !== recommendationId));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Unable to delete recommendation history.");
+        } finally {
+            setDeletingRecommendationId(null);
+        }
+    }, []);
 
     const emptyStateMessage = useMemo(() => {
         if (loading) return "Checking your session...";
@@ -170,7 +189,23 @@ export default function RecommendationHistoryPage() {
                                         <CardTitle className="flex items-center gap-2 text-xl text-slate-950">
                                             <CalendarClock className="size-5 text-emerald-600" /> {formatDate(record.createdAt)}
                                         </CardTitle>
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button 
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => void handleDeleteRecommendation(record.id)}
+                                                disabled={deletingRecommendationId === record.id}
+                                                className="border-red-200 bg-white text-red-700 hover:bg-red-50"
+                                                aria-label={`Delete recommendation history from ${formatDate(record.createdAt)}`}
+                                            >
+                                                {deletingRecommendationId === record.id ? (
+                                                    <Loader2 className="size-4 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="size-4" />
+                                                )}
+                                                Delete
+                                            </Button>
                                             <Badge variant="outline" className="rounded-full bg-slate-50 text-slate-700">
                                                 Engine v{getEngineVersion(record)}
                                             </Badge>

@@ -1,7 +1,7 @@
 import type { Prisma, RecommendationFeedbackType } from "@prisma/client";
 import { listGearRecommendationCandidates } from "@/lib/db/gearRepository";
 import { createGeneratedOutfit, CreateRecommendationInput, listGeneratedOutfits } from "@/lib/db/outfitRepository";
-import { createRecommendationHistory, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
+import { createRecommendationHistory, deleteRecommendationHistoryById, listRecommendationHistoryByUserId } from "@/lib/db/recommendationRepository";
 import { findRecommendationItemForUser, upsertRecommendationFeedback } from "@/lib/db/recommendationFeedbackRepository";
 import { buildAlternativesByCategory, buildRecommendedOutfit, diversifyRecommendationsByCategory, flattenAlternativesByCategory, getRecommendationCategoryDiagnostics, logRecommendationSelectionDiagnostics, type GearRecommendationResult, type UserInput } from "@/lib/engine/recommendationEngine";
 import { getUserProfile } from "@/lib/db/userRepository";
@@ -161,6 +161,10 @@ export async function getRecommendationHistory(userId: string, options: { limit?
         take: options.limit ?? DEFAULT_HISTORY_LIMIT,
         skip: options.offset ?? 0,
     });
+}
+
+export async function deleteRecommendationHistory(userId: string, recommendationId: string) {
+    return deleteRecommendationHistoryById(userId, recommendationId);
 }
 
 export async function submitRecommendationFeedback(input: {

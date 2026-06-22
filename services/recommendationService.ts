@@ -110,7 +110,17 @@ export const recommendationService = {
         });
 
         return readJsonResponse<RecommendationHistoryRecord[]>(response, "Unable to load recommendation history.");
-    }, 
+    },
+
+    async deleteRecommendationHistory(input: { recommendationId: string }, options: ServiceRequestOptions = {}): Promise<{ deletedCount: number }> {
+        const response = await fetch(`/api/recommendations/history/${input.recommendationId}`, {
+            method: "DELETE",
+            credentials: "include",
+            signal: options.signal,
+        });
+
+        return readJsonResponse<{ deletedCount: number }>(response, "Unable to delete recommendation history.");
+    },
 
     async submitFeedback(input: { userId?: string; recommendationId: string; feedbackType: FeedbackType }): Promise<RecommendationFeedbackResponse> {
         const payload = { recommendationId: input.recommendationId, feedBack: input.feedbackType };
