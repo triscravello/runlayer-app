@@ -44,6 +44,7 @@ export type RecommendationCategoryDiagnostics = {
   category: RecommendationCategoryDiagnosticsCounts;
   intensity: RecommendationCategoryDiagnosticsCounts;
   preference: RecommendationCategoryDiagnosticsCounts;
+  gender: RecommendationCategoryDiagnosticsCounts;
   ranking: RecommendationCategoryDiagnosticsCounts;
   rankedTop10: RecommendationCategoryDiagnosticsRankedItem[];
 }

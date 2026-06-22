@@ -200,6 +200,7 @@ export function getRecommendationCategoryDiagnostics(
       category: getCategoryDiagnosticsCounts(afterCategory),
       intensity: getCategoryDiagnosticsCounts(afterIntensity),
       preference: getCategoryDiagnosticsCounts(afterPreference),
+      gender: getCategoryDiagnosticsCounts(afterGender),
       ranking: getCategoryDiagnosticsCounts(ranked),
       rankedTop10: ranked.slice(0, 10).map(toRankedDiagnosticsItem),
     },

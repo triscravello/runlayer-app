@@ -18,15 +18,9 @@ export function preferenceFilter(
             return false;
         }
 
-        // Do not hard-filter to only preferred brands.
-        // Let the scorer boost preferred brands instead.
-        // This avoids wiping out all candidates when brand names/ids differ.
-        
-        if (preferences.budgetRange && item.priceRange) {
-            if (preferences.budgetRange.toLowerCase() !== item.priceRange.toLowerCase()) {
-                return false;
-            }
-        }
+        // Do not hard-filter to only preferred brands or budget matches.
+        // Brand affinity and budget alignment are scoring inputs, not eligibility checks.
+        // This preserves complete outfits when a category has no preferred-brand or exact-budget items.
 
         if (preferences.cushionPreference) {
             const cushionPreference = preferences.cushionPreference.toLowerCase();

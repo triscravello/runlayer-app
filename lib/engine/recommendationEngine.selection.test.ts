@@ -177,13 +177,14 @@ test("development category diagnostics count filter stages and ranked top 10 wit
       { budgetRange: "mid" },
     );
 
-    assert.equal(ranked.length, 3);
+    assert.equal(ranked.length, 4);
     assert.deepEqual(diagnostics?.weather, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
     assert.deepEqual(diagnostics?.category, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
     assert.deepEqual(diagnostics?.intensity, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
-    assert.deepEqual(diagnostics?.preference, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
-    assert.deepEqual(diagnostics?.ranking, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
-    assert.equal(diagnostics?.rankedTop10.length, 3);
+    assert.deepEqual(diagnostics?.preference, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.gender, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.ranking, { TOP: 1, BOTTOM: 2, ACCESSORY: 1 });
+    assert.equal(diagnostics?.rankedTop10.length, 4);
     assert.equal(logs.length, 0);
   } finally {
     console.log = originalLog;
@@ -298,6 +299,66 @@ test("weather filtering preserves essential outfit categories when suitability r
     assert.equal(recommendedOutfit.bottom.scoreBreakdown.weather, 4);
   } finally {
     console.log = originalLog;
+    restoreRecommendationDebug();
+  }
+});
+
+test("budget and preferred brand mismatches do not remove eligible bottoms", () => {
+  const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
+  process.env.RECOMMENDATION_DEBUG = "true";
+  const restoreRecommendationDebug = () => {
+    if (originalRecommendationDebug === undefined) {
+        delete process.env.RECOMMENDATION_DEBUG;
+    } else {
+        process.env.RECOMMENDATION_DEBUG = originalRecommendationDebug;
+    }
+  };
+
+  try {
+    const gearItems = [
+      {
+        ...scoredItem("top-mid-favorite", "Favorite Top", "TOP", 0).item,
+        brandName: "Preferred Brand",
+        genderTarget: "men",
+        priceRange: "mid",
+        tags: ["tempo"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("bottom-premium-other", "Premium Other Bottom", "BOTTOM", 0).item,
+        brandName: "Other Brand",
+        genderTarget: "men",
+        priceRange: "premium",
+        tags: ["tempo"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("accessory-budget-other", "Budget Other Hat", "ACCESSORY", 0).item,
+        brandName: "Other Brand",
+        genderTarget: "unisex",
+        priceRange: "budget",
+        tags: ["tempo"],
+        weatherSuitability: { hot: 0.8 },
+      },
+    ];
+
+    const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(
+      { weather: "hot", intensity: "tempo" },
+      gearItems,
+      { budgetRange: "mid", genderPreference: "male", preferredBrands: ["Preferred Brand"] },
+    );
+    const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+    const recommendedOutfit = buildRecommendedOutfit(recommendations);
+
+    assert.deepEqual(diagnostics?.preference, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.deepEqual(diagnostics?.gender, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.ok(recommendedOutfit?.top);
+    assert.ok(recommendedOutfit?.bottom);
+    assert.ok(recommendedOutfit?.accessory);
+    assert.equal(recommendedOutfit.bottom.item.id, "bottom-premium-other");
+    assert.ok(recommendedOutfit.bottom.scoreBreakdown.budget < 0);
+    assert.equal(recommendedOutfit.bottom.scoreBreakdown.brandAffinity, 0);
+  } finally {
     restoreRecommendationDebug();
   }
 });
