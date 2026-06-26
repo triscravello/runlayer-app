@@ -1,12 +1,13 @@
 import { readJsonResponse, type ServiceRequestOptions } from "./apiResponse";
 
-export type SavedKitType = "race_day" | "training" | "custom";
+export type SavedKitType = "race-day" | "intervals" | "long-run" | "trail" | "rain" | "cold-weather" | "summer" | "favorites" | "race_day" | "training" | "custom";
 
 export type SaveOutfitInput = {
     userId?: string;
     recommendationId?: string;
     name?: string | null;
     description?: string | null;
+    category?: SavedKitType
     type?: SavedKitType;
     isFavorite?: boolean | null;
     gearItemIds?: string[];
@@ -53,7 +54,8 @@ export const savedOutfitService = {
             recommendationId: input.recommendationId,
             name: input.name,
             description: input.description,
-            type: input.type,
+            category: input.category,
+            type: input.type ?? input.category,
             isFavorite: input.isFavorite,
             gearItemIds: input.gearItemIds
         }
@@ -73,7 +75,8 @@ export const savedOutfitService = {
             recommendationId: input.recommendationId,
             name: input.name,
             description: input.description,
-            type: input.type,
+            category: input.category,
+            type: input.type ?? input.category,
             isFavorite: input.isFavorite,
             gearItemIds: input.gearItemIds,
         };
