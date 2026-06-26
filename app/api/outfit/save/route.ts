@@ -10,12 +10,13 @@ export const GET = withAuth(async (_request: NextRequest, _context, user) => {
 
 export const POST = withAuth(async (request: NextRequest, _context, user) => {
     const body = await request.json();
-    const { recommendationId, name, description, type, isFavorite, gearItemIds } = body;
+    const { recommendationId, name, description, category, type, isFavorite, gearItemIds } = body;
     const savedOutfit = await saveOutfit({
         userId: user.id,
         recommendationId,
         name,
         description,
+        category,
         type,
         isFavorite,
         gearItemIds,

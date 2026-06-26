@@ -20,12 +20,13 @@ export const GET = withAuth<OutfitRouteContext>(async (_request: NextRequest, { 
 export const PUT = withAuth<OutfitRouteContext>(async (request: NextRequest, { params }, user) => {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, type, isFavorite, gearItemIds } = body;
+    const { name, description, type, category, isFavorite, gearItemIds } = body;
     const outfit = await updateSavedOutfit({
         userId: user.id,
         outfitId: id,
         name,
         description,
+        category,
         type,
         isFavorite,
         gearItemIds

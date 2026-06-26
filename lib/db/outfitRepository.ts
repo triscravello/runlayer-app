@@ -3,7 +3,7 @@ import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVers
 import { prisma } from "../prisma";
 
 type JsonInputValue = Prisma.InputJsonValue;
-export type SavedKitType = "race_day" | "training" | "custom";
+export type SavedKitType = "race-day" | "intervals" | "long-run" | "trail" | "rain" | "cold-weather" | "summer" | "favorites" | "race_day" | "training" | "custom"
 
 export type CreateRecommendationInput = {
     userId: string;
@@ -21,6 +21,7 @@ export type SaveOutfitInput = {
     recommendationId?: string | null;
     name?: string | null;
     description?: string | null;
+    category?: SavedKitType | string | null;
     type?: SavedKitType | string | null;
     isFavorite?: boolean | null;
     gearItemIds?: string[] | null;
@@ -31,14 +32,27 @@ export type UpdateSavedOutfitInput = {
     outfitId: string;
     name?: string | null;
     description?: string | null;
+    category?: SavedKitType | string | null;
     type?: SavedKitType | string | null;
     isFavorite?: boolean | null;
     gearItemIds?: string[] | null;
 };
 
 function normalizeKitType(type?: string | null): SavedKitType {
-    if (type === "race_day" || type === "training" || type === "custom") return type;
-    return "custom";
+    const normalized = type === "race_day" ? "race-day" : type;
+    if (
+        normalized === "race-day" ||
+        normalized === "intervals" ||
+        normalized === "long-run" ||
+        normalized === "trail" ||
+        normalized === "rain" ||
+        normalized === "cold-weather" || 
+        normalized === "summer" ||
+        normalized === "favorites" ||
+        normalized === "training" || 
+        normalized === "custom"
+    ) return normalized;
+    return "favorites";
 }
 
 function toUniqueGearIds(gearItemIds?: string[] | null) {
@@ -116,7 +130,7 @@ export async function saveOutfit(input: SaveOutfitInput) {
             recommendationId: input.recommendationId ?? null,
             name: input.name ?? "Saved Kit",
             description: input.description ?? null,
-            type: normalizeKitType(input.type),
+            type: normalizeKitType(input.category ?? input.type),
             isFavorite: input.isFavorite ?? false,
         },
     });
@@ -131,7 +145,7 @@ export async function updateSavedOutfit(input: UpdateSavedOutfitInput) {
         data: {
             ...(input.name !== undefined ? { name: input.name } : {}),
             ...(input.description !== undefined ? { description: input.description} : {}),
-            ...(input.type !== undefined ? { type: normalizeKitType(input.type) } : {}),
+            ...(input.category !== undefined || input.type !== undefined ? { type: normalizeKitType(input.category ?? input.type) } : {}),
             ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite ?? false }: {}),
         }
     });
