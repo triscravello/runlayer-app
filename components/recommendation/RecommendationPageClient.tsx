@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RecommendationFeedbackControls } from "@/components/recommendation/RecommendationFeedbackControls";
 import { RecommendationScoreBreakdown } from "@/components/recommendation/RecommendationScoreBreakdown";
 import { Badge } from "@/components/ui/Badge";
@@ -11,9 +12,18 @@ import { recommendationService, type GearRecommendationResult, type UserInput } 
 import { weatherService, type NormalizedWeather } from "@/services/weatherService";
 import type { RecommendationScoreBreakdown as ScoreBreakdown, ScoredRecommendationItem, WeatherCondition, Intensity, Terrain } from "@/lib/engine/types/recommendationEngine";
 import type { UserProfile } from "@/lib/types/user";
-import { Award, CheckCircle2, ChevronRight, CloudSnow, Gauge, Layers, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Award, CheckCircle2, ChevronRight, CloudSnow, Gauge, Layers, RefreshCw, Sparkles } from "lucide-react";
 
 type RecommendationSignal = { label: string; value: string };
+
+const RUN_TYPE_OPTIONS: Array<{ value: Intensity; label: string; description: string }> = [
+  { value: "recovery", label: "Recovery", description: "Gentle, comfort-first effort" },
+  { value: "easy", label: "Easy", description: "Everyday aerobic mileage" },
+  { value: "long-run", label: "Long run", description: "Distance gear, storage, hydration" },
+  { value: "tempo", label: "Tempo", description: "Sustained faster workout" },
+  { value: "intervals", label: "Intervals", description: "Speedwork and high-output reps" },
+  { value: "race", label: "Race", description: "Race-day performance kit" },
+];
 
 type RankedGearRecommendation = {
   id: string;
@@ -93,7 +103,7 @@ function buildProfileSignals(profile: UserProfile | null): string[] {
   return signals;
 }
 
-function buildEngineContext(profile: UserProfile | null, weather: NormalizedWeather | null, userLocation: string | null): EngineContext {
+function buildEngineContext(profile: UserProfile | null, weather: NormalizedWeather | null, userLocation: string | null, runType: Intensity = DEFAULT_CONTEXT.runType): EngineContext {
   const location = weather?.location ?? profile?.location ?? userLocation ?? DEFAULT_CONTEXT.location;
   const weatherSummary = weather
     ? `${weather.tempCategory} ${weather.condition.toLowerCase()}, feels like ${Math.round(weather.feelsLikeF)}°F`
@@ -101,7 +111,7 @@ function buildEngineContext(profile: UserProfile | null, weather: NormalizedWeat
 
   return {
     weather: weatherConditionFromWeather(weather),
-    runType: "easy",
+    runType,
     terrain: terrainFromProfile(profile),
     category: "all",
     location,
@@ -167,13 +177,15 @@ function LoadingState() {
 }
 
 export function RecommendationPageClient({ user, profile, engineVersion }: RecommendationPageClientProps) {
+  const router = useRouter();
   const [result, setResult] = useState<GearRecommendationResult | null>(null);
   const [weather, setWeather] = useState<NormalizedWeather | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
+  const [selectedRunType, setSelectedRunType] = useState<Intensity>(DEFAULT_CONTEXT.runType);
 
-  const context = useMemo(() => buildEngineContext(profile, weather, user.location), [profile, weather, user.location]);
+  const context = useMemo(() => buildEngineContext(profile, weather, user.location, selectedRunType), [profile, weather, selectedRunType, user.location]);
   const gear = useMemo(() => result?.recommendations.map(mapRecommendation) ?? [], [result]);
   const outfitGear = useMemo(() => {
     if (!result?.recommendedOutfit) return [];
@@ -214,7 +226,7 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
         const liveWeather = location ? await weatherService.getWeather(location, { signal: controller.signal }) : null;
         if (controller.signal.aborted) return;
         setWeather(liveWeather);
-        const nextContext = buildEngineContext(profile, liveWeather, user.location);
+        const nextContext = buildEngineContext(profile, liveWeather, user.location, selectedRunType);
         const nextResult = await recommendationService.generateRecommendations(toRecommendationInput(nextContext, user.id), { signal: controller.signal });
         if (!controller.signal.aborted) setResult(nextResult);
       } catch (err) {
@@ -226,14 +238,16 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
 
     loadRecommendations();
     return () => controller.abort();
-  }, [profile, user.id, user.location, retryKey]);
+  }, [profile, selectedRunType, user.id, user.location, retryKey]);
 
   const retry = useCallback(() => setRetryKey((key) => key + 1), []);
+  const goBack = useCallback(() => router.back(), [router]); 
   const contextPills = [context.weatherSummary, `${context.runType} run`, context.terrain, ...context.profileSignals.slice(0, 2)];
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-50/60 via-background to-background px-4 py-8 md:px-8 md:py-12">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <div><Button type="button" variant="ghost" onClick={goBack} className="w-fit text-slate-700 hover:text-slate-950"><ArrowLeft className="size-4" /> Back</Button></div>
         <section className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-end">
           <div className="space-y-5">
             <Badge variant="outline" className="rounded-full border-emerald-200 bg-white/80 px-3 py-1 text-emerald-700 shadow-sm"><Sparkles className="size-3.5" /> Outfit recommendation</Badge>
@@ -244,6 +258,7 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
               <p className="text-sm text-slate-600">{hasEnoughProfileData ? "Personalized using your profile preferences, budget, tolerance settings, and brand signals." : "Add more profile preferences to increase personalization confidence."}</p>
             </div>
             <div className="flex flex-wrap gap-2" aria-label="Recommendation context">{contextPills.map((pill) => <Badge key={pill} variant="outline" className="rounded-full border-slate-200 bg-white px-3 py-1 text-slate-700">{pill}</Badge>)}</div>
+            <fieldset className="space-y-3" aria-label="Select run type"><legend className="text-sm font-semibold text-slate-950">Run type</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{RUN_TYPE_OPTIONS.map((option) => { const selected = selectedRunType === option.value; return <button key={option.value} type="button" aria-pressed={selected} onClick={() => setSelectedRunType(option.value)} className={`rounded-2xl border px-4 py-3 text-left transition ${selected ? "border-emerald-500 bg-emerald-50 text-emerald-950 shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50"}`}><span className="block text-sm font-semibold">{option.label}</span><span className="mt-1 block text-xs text-muted-foreground">{option.description}</span></button>; })}</div></fieldset>
           </div>
           <Card className="border-emerald-100 bg-white/90 shadow-sm"><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-950"><Gauge className="size-5 text-emerald-600" /> Match inputs</CardTitle></CardHeader><CardContent className="space-y-3">{[{ icon: CloudSnow, label: "Weather", value: context.weatherSummary }, { icon: Award, label: "Run type", value: `${context.runType} run` }, { icon: Layers, label: "Profile", value: context.profileSignals.length ? context.profileSignals.slice(0, 2).join(" • ") : "Default runner profile" }].map(({ icon: Icon, label, value }) => <div key={label} className="flex items-center justify-between gap-4 rounded-2xl border bg-slate-50 px-4 py-3"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><Icon className="size-4" /></span><span className="text-sm font-medium text-slate-600">{label}</span></div><span className="text-right text-sm font-semibold text-slate-950">{value}</span></div>)}</CardContent></Card>
         </section>
