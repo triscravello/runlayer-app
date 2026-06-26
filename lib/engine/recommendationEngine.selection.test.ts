@@ -362,3 +362,51 @@ test("budget and preferred brand mismatches do not remove eligible bottoms", () 
     restoreRecommendationDebug();
   }
 });
+test("interval recommendations prioritize speedwork gear while preserving outfit categories", () => {
+  const originalRecommendationDebug = process.env.RECOMMENDATION_DEBUG;
+  process.env.RECOMMENDATION_DEBUG = "true";
+  const restoreRecommendationDebug = () => {
+    if (originalRecommendationDebug === undefined) {
+        delete process.env.RECOMMENDATION_DEBUG;
+    } else {
+        process.env.RECOMMENDATION_DEBUG = originalRecommendationDebug;
+    }
+  };
+
+  try {
+    const gearItems = [
+      {
+        ...scoredItem("top-speed", "Speedwork Top", "TOP", 0).item,
+        tags: ["intervals", "speedwork"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("bottom-tempo", "Tempo Bottom", "BOTTOM", 0).item,
+        tags: ["tempo", "ultralight"],
+        weatherSuitability: { hot: 0.8 },
+      },
+      {
+        ...scoredItem("accessory-general", "General Hat", "ACCESSORY", 0).item,
+        tags: ["sun-protection"],
+        weatherSuitability: { hot: 0.8 },
+      },
+    ];
+
+    const { ranked, diagnostics } = getRecommendationCategoryDiagnostics(
+      { weather: "hot", intensity: "intervals", workoutType: "intervals" },
+      gearItems,
+    );
+    const recommendations = diversifyRecommendationsByCategory(ranked, 5);
+    const recommendedOutfit = buildRecommendedOutfit(recommendations);
+
+    assert.deepEqual(diagnostics?.intensity, { TOP: 1, BOTTOM: 1, ACCESSORY: 1 });
+    assert.ok(recommendedOutfit?.top);
+    assert.ok(recommendedOutfit?.bottom);
+    assert.ok(recommendedOutfit?.accessory);
+    assert.equal(recommendedOutfit.top.scoreBreakdown.intensity, 15);
+    assert.equal(recommendedOutfit.bottom.scoreBreakdown.intensity, 10);
+    assert.equal(recommendedOutfit.accessory.scoreBreakdown.intensity, 0);
+  } finally {
+    restoreRecommendationDebug();
+  }
+});
