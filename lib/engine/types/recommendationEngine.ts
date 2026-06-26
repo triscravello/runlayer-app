@@ -1,5 +1,5 @@
 export type WeatherCondition = "hot" | "warm" | "cold" | "rain" | "humid" | "wind";
-export type Intensity = "recovery" | "easy" | "long-run" | "tempo" | "race";
+export type Intensity = "recovery" | "easy" | "long-run" | "tempo" | "intervals" |"race";
 export type Terrain = "road" | "trail" | "treadmill";
 export type Season = "winter" | "summer" | "shoulder";
 export type Category = "top" | "bottom" | "accessory" | "outerwear" | "socks" | "hat" | "gloves";

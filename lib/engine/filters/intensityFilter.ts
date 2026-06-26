@@ -5,6 +5,7 @@ const intensityTagMap: Record<string, string[]> = {
     easy: ["easy", "daily-run", "everyday-run", "training", "recovery"],
     "long-run": ["long-run", "daily-run", "everyday-run", "training", "storage", "hydration"],
     tempo: ["tempo", "training", "race-day", "ultralight"],
+    intervals: ["intervals", "speedwork", "high-output", "tempo", "training", "race-day", "ultralight", "performance-fit"],
     race: ["race", "race-day", "ultralight", "performance-kit"],
 };
 
