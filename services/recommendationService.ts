@@ -123,8 +123,8 @@ export const recommendationService = {
     },
 
     async submitFeedback(input: { userId?: string; recommendationId: string; feedbackType: FeedbackType }): Promise<RecommendationFeedbackResponse> {
-        const payload = { recommendationId: input.recommendationId, feedBack: input.feedbackType };
-        const response = await fetch("api/recommendation/feedback", {
+        const payload = { recommendationId: input.recommendationId, feedbackType: input.feedbackType };
+        const response = await fetch("/api/recommendation/feedback", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
