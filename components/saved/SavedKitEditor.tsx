@@ -40,6 +40,7 @@ export function SavedKitEditor({ kit, userId, onCancel, onSave }: SavedKitEditor
             outfitId: kit.id,
             name,
             description,
+            category: type,
             type,
             gearItemIds: gearIds.split(",").map((id) => id.trim()).filter(Boolean),
         });
@@ -57,9 +58,14 @@ export function SavedKitEditor({ kit, userId, onCancel, onSave }: SavedKitEditor
                 <div className="space-y-2">
                     <Label htmlFor={`kit-type-${kit.id}`}>Kit type</Label>
                     <select id={`kit-type-${kit.id}`} className={selectClassName} value={type} onChange={(event) => setType(event.target.value as SavedKitType)}>
-                        <option value="race_day">Race day</option>
-                        <option value="training">Training</option>
-                        <option value="custom">Custom</option>
+                        <option value="race-day">Race day</option>
+                        <option value="intervals">Intervals</option>
+                        <option value="long-run">Long run</option>
+                        <option value="trail">Trail</option>
+                        <option value="rain">Rain</option>
+                        <option value="cold-weather">Cold weather</option>
+                        <option value="summer">Summer</option>
+                        <option value="favorites">Favorites</option>
                     </select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
