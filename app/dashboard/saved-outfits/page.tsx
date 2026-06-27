@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/authContext";
 import { useSavedOutfits } from "@/hooks/useSavedOutfits";
 import type { SavedKitType, SavedOutfit } from "@/services/savedOutfitService";
@@ -18,9 +20,14 @@ type SavedOutfitGearItem = {
 };
 
 const kitGroups: Array<{ type: SavedKitType, label: string, description: string }> = [
-    { type: "race_day", label: "Race day kits", description: "Pinned setups for goal efforts and events" },
-    { type: "training", label: "Training kits", description: "Everyday gear combinations for repeat workouts" },
-    { type: "custom", label: "Custom kits", description: "Flexible saved outfits and manual builds" },
+    { type: "race-day", label: "Race day kits", description: "Pinned setups for goal efforts and events" },
+    { type: "intervals", label: "Interval kits", description: "Speedwork combinations you can repeat" },
+    { type: "long-run", label: "Long run kits", description: "Comfort-focused gear for bigger mileage" },
+    { type: "trail", label: "Trail kits", description: "Off-road setups for changing terrain" },
+    { type: "rain", label: "Rain kits", description: "Wet-weather gear combinations" },
+    { type: "cold-weather", label: "Cold weather kits", description: "Layered kits for colder runs" },
+    { type: "summer", label: "Summer kits", description: "Lightweight warm-weather setups" },
+    { type: "favorites", label: "Favorite kits", description: "Flexible saved outfits and manual builds" },
 ]
 
 function getGearItems(outfit: SavedOutfit) {
@@ -31,7 +38,7 @@ function getGearItems(outfit: SavedOutfit) {
 function groupKits(outfits: SavedOutfit[]) {
     return kitGroups.map((group) => ({
         ...group,
-        kits: outfits.filter((outfit) => (outfit.type ?? "custom") === group.type),
+        kits: outfits.filter((outfit) => ((outfit.type === "race_day" ? "race-day" : outfit.type) ?? "favorites")=== group.type),
     }));
 }
 
@@ -91,7 +98,7 @@ export default function SavedOutfitsPage() {
                     </div>
                 ) : !isLoading && user ? (
                     <Card className="border-dashed border-emerald-200 bg-emerald-50/50 shadow-none">
-                        <CardContent className="px-6 py-10 text-center text-sm text-muted-foreground">No saved kits yet. Save a recommendation as a named kit to reuse it later.</CardContent>
+                        <CardContent className="space-y-4 px-6 py-10 text-center"><h2 className="text-2xl font-semibold text-slate-950">No saved kits yet</h2><p className="mx-auto max-w-xl text-sm leading-6 text-muted-foreground">Save your favorite recommendation as a reusable kit for race day, interval workouts, long runs, or changing weather conditions.</p><Button asChild className="bg-emerald-600 text-white hover:bg-emerald-700"><Link href="/recommendation">Generate a recommendation →</Link></Button></CardContent>
                     </Card>
                 ) : null}
             </div>
