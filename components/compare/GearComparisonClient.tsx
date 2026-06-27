@@ -5,8 +5,12 @@ import { GearComparisonTable } from "./GearComparisonTable";
 import { GearSelector } from "./GearSelector";
 import type { ScoredRecommendationItem } from "@/lib/engine/types/recommendationEngine";
 
-export function GearComparisonClient({ scoredItems }: { scoredItems: ScoredRecommendationItem[] }) {
-    const [selectedIds, setSelectedIds] = useState(() => scoredItems.slice(0, 3).map(({ item }) => item.id));
+export function GearComparisonClient({ scoredItems, initialSelectedIds = [] }: { scoredItems: ScoredRecommendationItem[]; initialSelectedIds?: string[] }) {
+    const [selectedIds, setSelectedIds] = useState(() => {
+        const availableIds = new Set(scoredItems.map(({ item }) => item.id));
+        const requestedIds = initialSelectedIds.filter((id) => availableIds.has(id)).slice(0, 4);
+        return requestedIds.length ? requestedIds : scoredItems.slice(0, 3).map(({ item }) => item.id);
+    });
     const selectedItems = useMemo(() => scoredItems.filter(({ item }) => selectedIds.includes(item.id)), [scoredItems, selectedIds]);
 
     return (
