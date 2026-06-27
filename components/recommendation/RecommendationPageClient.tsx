@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RecommendationFeedbackControls } from "@/components/recommendation/RecommendationFeedbackControls";
 import { RecommendationScoreBreakdown } from "@/components/recommendation/RecommendationScoreBreakdown";
@@ -9,12 +10,27 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { recommendationService, type GearRecommendationResult, type UserInput } from "@/services/recommendationService";
+import { savedOutfitService, type SavedKitType } from "@/services/savedOutfitService";
 import { weatherService, type NormalizedWeather } from "@/services/weatherService";
 import type { RecommendationScoreBreakdown as ScoreBreakdown, ScoredRecommendationItem, WeatherCondition, Intensity, Terrain } from "@/lib/engine/types/recommendationEngine";
 import type { UserProfile } from "@/lib/types/user";
-import { ArrowLeft, Award, CheckCircle2, ChevronRight, CloudSnow, Gauge, Layers, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Award, BookmarkPlus, CheckCircle2, ChevronRight, CloudSnow, Gauge, Layers, RefreshCw, Sparkles } from "lucide-react";
 
 type RecommendationSignal = { label: string; value: string };
+
+
+const KIT_CATEGORY_OPTIONS: Array<{ value: SavedKitType; label: string }> = [
+  { value: "race-day", label: "Race day" },
+  { value: "intervals", label: "Intervals" },
+  { value: "long-run", label: "Long run" },
+  { value: "trail", label: "Trail" },
+  { value: "rain", label: "Rain" },
+  { value: "cold-weather", label: "Cold weather" },
+  { value: "summer", label: "Summer" },
+  { value: "favorites", label: "Favorites" },
+];
+
+const selectClassName = "border-input bg-input-background focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full rounded-md border px-3 py-2 text-sm outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50";
 
 const RUN_TYPE_OPTIONS: Array<{ value: Intensity; label: string; description: string }> = [
   { value: "recovery", label: "Recovery", description: "Gentle, comfort-first effort" },
@@ -184,6 +200,12 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
   const [error, setError] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   const [selectedRunType, setSelectedRunType] = useState<Intensity>(DEFAULT_CONTEXT.runType);
+  const [showSaveKitForm, setShowSaveKitForm] = useState(false);
+  const [kitName, setKitName] = useState("");
+  const [kitDescription, setKitDescription] = useState("");
+  const [kitCategory, setKitCategory] = useState<SavedKitType>("favorites");
+  const [saveStatus, setSaveStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [isSavingKit, setIsSavingKit] = useState(false);
 
   const context = useMemo(() => buildEngineContext(profile, weather, user.location, selectedRunType), [profile, weather, selectedRunType, user.location]);
   const gear = useMemo(() => result?.recommendations.map(mapRecommendation) ?? [], [result]);
@@ -243,6 +265,34 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
   const retry = useCallback(() => setRetryKey((key) => key + 1), []);
   const goBack = useCallback(() => router.back(), [router]); 
   const contextPills = [context.weatherSummary, `${context.runType} run`, context.terrain, ...context.profileSignals.slice(0, 2)];
+  const recommendedGearIds = outfitGear.length ? outfitGear.map((item) => item.id) : gear.slice(0, 3).map((item) => item.id);
+  const recommendationId = outfitGear[0]?.recommendationId ?? gear[0]?.recommendationId;
+
+  async function handleSaveKit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!recommendedGearIds.length) {
+      setSaveStatus({ type: "error", message: "No gear items are available to save yet." });
+      return;
+    }
+
+    setIsSavingKit(true);
+    setSaveStatus(null);
+    try {
+      await savedOutfitService.saveOutfit({
+        name: kitName.trim() || `${selectedRunType} kit`,
+        description: kitDescription.trim() || undefined,
+        category: kitCategory,
+        recommendationId,
+        gearItemIds: recommendedGearIds,
+      });
+      setSaveStatus({ type: "success", message: "Kit saved. View it on your Saved Kits page." });
+      setShowSaveKitForm(false);
+    } catch (err) {
+      setSaveStatus({ type: "error", message: err instanceof Error ? err.message : "Unable to save kit." });
+    } finally {
+      setIsSavingKit(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-50/60 via-background to-background px-4 py-8 md:px-8 md:py-12">
@@ -267,6 +317,8 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
         {!isLoading && error ? <Card className="border-red-100 bg-white p-8 text-center shadow-sm"><h2 className="text-2xl font-semibold text-slate-950">Couldn&apos;t load recommendations</h2><p className="mt-2 text-muted-foreground">{error}</p><Button onClick={retry} className="mt-5 bg-emerald-600 text-white hover:bg-emerald-700"><RefreshCw className="size-4" /> Retry</Button></Card> : null}
         {!isLoading && !error && gear.length === 0 ? <Card className="border-emerald-100 bg-white p-8 text-center shadow-sm"><h2 className="text-2xl font-semibold text-slate-950">No recommendations yet</h2><p className="mt-2 text-muted-foreground">The engine did not return ranked gear for this context. Try updating your profile or adding more gear metadata.</p><Button onClick={retry} variant="outline" className="mt-5">Refresh recommendations</Button></Card> : null}
 
+        {!isLoading && !error && gear.length ? <Card className="border-emerald-100 bg-white shadow-sm"><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle className="flex items-center gap-2 text-xl text-slate-950"><BookmarkPlus className="size-5 text-emerald-600" /> Save this kit</CardTitle><p className="mt-1 text-sm text-muted-foreground">Save the current outfit picks as a named reusable kit.</p></div><Button type="button" onClick={() => setShowSaveKitForm((open) => !open)} className="bg-emerald-600 text-white hover:bg-emerald-700">{showSaveKitForm ? "Close" : "Save Kit"}</Button></div></CardHeader>{showSaveKitForm ? <CardContent><form onSubmit={handleSaveKit} className="grid gap-4 md:grid-cols-3"><input className="border-input bg-input-background h-10 rounded-md border px-3 text-sm md:col-span-1" value={kitName} onChange={(event) => setKitName(event.target.value)} placeholder="Kit name" aria-label="Kit name" required /><input className="border-input bg-input-background h-10 rounded-md border px-3 text-sm md:col-span-1" value={kitDescription} onChange={(event) => setKitDescription(event.target.value)} placeholder="Description (optional)" aria-label="Kit description" /><select className={selectClassName} value={kitCategory} onChange={(event) => setKitCategory(event.target.value as SavedKitType)} aria-label="Kit category">{KIT_CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><div className="flex flex-wrap items-center gap-3 md:col-span-3"><Button type="submit" disabled={isSavingKit} className="bg-emerald-600 text-white hover:bg-emerald-700">{isSavingKit ? "Saving…" : "Save outfit"}</Button><span className="text-sm text-muted-foreground">Saving {recommendedGearIds.length} gear items.</span></div></form></CardContent> : null}{saveStatus ? <CardContent className="pt-0"><div className={`rounded-2xl border px-4 py-3 text-sm ${saveStatus.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{saveStatus.message} {saveStatus.type === "success" ? <Link className="font-semibold underline" href="/dashboard/saved-outfits">Open Saved Kits →</Link> : null}</div></CardContent> : null}</Card> : null}
+        
         {!isLoading && !error && gear.length ? <section className="grid gap-5" aria-label="Outfit-first gear recommendations">{(outfitGear.length ? outfitGear : gear).map((gearItem) => <Card key={gearItem.id} className="overflow-hidden border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"><div className="grid gap-0 lg:grid-cols-[220px_1fr]"><div className="flex flex-col justify-between gap-6 border-b bg-slate-950 p-6 text-white lg:border-b-0 lg:border-r"><div className="space-y-2"><p className="text-sm font-medium text-emerald-200">{outfitGear.some((item) => item.id === gearItem.id) ? "Outfit pick" : `Rank #${gearItem.rank}`}</p><div className="text-5xl font-semibold tracking-tight">{gearItem.score}</div><p className="text-sm text-slate-300">match score</p></div><Badge className="w-fit rounded-full bg-emerald-500 px-3 py-1 text-white">{gearItem.matchLabel}</Badge></div><div className="p-6 md:p-7"><div className="grid gap-6 xl:grid-cols-[1fr_380px]"><div className="space-y-5"><div className="space-y-2"><div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{gearItem.brand}</span><ChevronRight className="size-4" /><span>{gearItem.category}</span></div><h2 className="text-2xl font-semibold text-slate-950">{gearItem.name}</h2><p className="max-w-2xl leading-7 text-muted-foreground">{gearItem.description}</p></div><div className="grid gap-3 md:grid-cols-3">{gearItem.signals.map((signal) => <div key={signal.label} className="rounded-2xl border bg-slate-50 p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-950"><CheckCircle2 className="size-4 text-emerald-600" /> {signal.label}</div><p className="text-sm leading-6 text-muted-foreground">{signal.value}</p></div>)}</div><div className="flex flex-wrap gap-2">{gearItem.tags.map((tag) => <Badge key={`${gearItem.id}-${tag}`} variant="outline" className="rounded-full border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-700">{tag}</Badge>)}</div></div><aside className="space-y-4 rounded-3xl border border-emerald-100 bg-emerald-50/80 p-5"><div><div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800"><Sparkles className="size-4" /> Why this was recommended</div><p className="text-base leading-7 text-emerald-950">{gearItem.why}</p></div><RecommendationScoreBreakdown totalScore={gearItem.score} breakdown={gearItem.breakdown} /><RecommendationFeedbackControls recommendationId={gearItem.recommendationId} /></aside></div></div></div></Card>)}</section> : null}
 
         {!isLoading && !error && hasAlternativeGear ? <section className="grid gap-5" aria-label="Alternative gear recommendations"><div><h2 className="text-2xl font-semibold text-slate-950">Alternatives by category</h2><p className="mt-1 text-muted-foreground">Swap one outfit slot at a time with category-matched, non-duplicate options.</p></div>{alternativeGroups.map((group) => group.items.length ? <div key={group.key} className="grid gap-3"><h3 className="text-lg font-semibold text-slate-900">{group.title}</h3><div className="grid gap-3">{group.items.map((gearItem) => <Card key={`alternative-${group.key}-${gearItem.id}`} className="border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{gearItem.brand}</span><ChevronRight className="size-4" /><span>{gearItem.category}</span></div><h4 className="mt-1 text-xl font-semibold text-slate-950">{gearItem.name}</h4><p className="mt-1 text-sm text-muted-foreground">{gearItem.why}</p></div><Badge className="w-fit rounded-full bg-slate-950 px-3 py-1 text-white">{gearItem.matchLabel}</Badge></div></Card>)}</div></div> : null)}</section> : null}
