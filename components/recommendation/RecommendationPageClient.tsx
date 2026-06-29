@@ -266,7 +266,7 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
   const goBack = useCallback(() => router.back(), [router]); 
   const contextPills = [context.weatherSummary, `${context.runType} run`, context.terrain, ...context.profileSignals.slice(0, 2)];
   const recommendedGearIds = outfitGear.length ? outfitGear.map((item) => item.id) : gear.slice(0, 3).map((item) => item.id);
-  const recommendationId = outfitGear[0]?.recommendationId ?? gear[0]?.recommendationId;
+  const recommendationId = result?.recommendationId ?? result?.historyId;
 
   async function handleSaveKit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
