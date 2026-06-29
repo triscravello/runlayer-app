@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Edit3, RotateCcw, Scale, Trash2 } from "lucide-react";
+import { Edit3, ExternalLink, RotateCcw, Scale, Trash2 } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/Card";
 import type { SavedOutfit } from "@/services/savedOutfitService";
+import { selectProductVariant } from "@/lib/gear/productVariant";
+import type { ProductVariant } from "@/lib/engine/types/recommendationEngine";
 
 export type SavedKitCardProps = {
     kit: SavedOutfit,
-    gearItems: Array<{ id?: string; name?: string; category?: string; brand?: { name?: string | null } | null }>;
+    gearItems: Array<{ id?: string; name?: string; category?: string; genderTarget?: string | null; affiliateUrl?: string | null; imageUrl?: string | null; variants?: ProductVariant[]; brand?: { name?: string | null } | null }>;
     onEdit: () => void;
     onDelete: () => void;
 }
@@ -67,7 +69,7 @@ export function SavedKitCard({ kit, gearItems, onEdit, onDelete }: SavedKitCardP
                                     {items.map((gear) => (
                                         <div key={gear.id ?? gear.name} className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm">
                                             <span className="font-medium text-slate-800">{gear.name ?? "Saved gear item"}</span>
-                                            <span className="text-muted-foreground">{gear.brand?.name ?? "RunLayer"}</span>
+                                            <span className="text-muted-foreground">{gear.brand?.name ?? "RunLayer"}</span>{selectProductVariant(gear)?.affiliateUrl ? <Button asChild size="sm" variant="outline"><a href={selectProductVariant(gear)?.affiliateUrl ?? "#"} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Shop</a></Button> : null}
                                         </div>
                                     ))}
                                 </div>

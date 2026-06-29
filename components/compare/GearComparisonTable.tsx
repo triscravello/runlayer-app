@@ -1,4 +1,5 @@
 import { ComparisonMetricRow } from "./ComparisonMetricRow";
+import { ExternalLink } from "lucide-react";
 import { Button } from "../ui/Button";
 import type { ScoredRecommendationItem } from "@/lib/engine/types/recommendationEngine";
 
@@ -45,7 +46,7 @@ export function GearComparisonTable({ items }: GearComparisonTableProps) {
                                         <div className="text-base font-semibold text-slate-950">{item.name}</div>
                                         <div className="text-sm font-normal text-muted-foreground">{item.brandName ?? item.brandId ?? "Brand unknown"}</div>
                                     </div>
-                                    <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700">Select for outfit</Button>
+                                    {item.selectedVariant?.affiliateUrl ? <Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700"><a href={item.selectedVariant.affiliateUrl} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Shop {item.selectedVariant.label}</a></Button> : <Button size="sm" variant="outline" disabled>No link available</Button>}
                                 </div>
                             </th>
                         ))}

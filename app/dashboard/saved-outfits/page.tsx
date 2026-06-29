@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/authContext";
 import { useSavedOutfits } from "@/hooks/useSavedOutfits";
+import type { ProductVariant } from "@/lib/engine/types/recommendationEngine";
 import type { SavedKitType, SavedOutfit } from "@/services/savedOutfitService";
 import { SavedKitCard } from "@/components/saved/SavedKitCard";
 import { SavedKitEditor } from "@/components/saved/SavedKitEditor";
@@ -16,6 +17,10 @@ type SavedOutfitGearItem = {
         name?: string;
         category?: string;
         brand?: { name?: string | null } | null;
+        genderTarget?: string | null;
+        affiliateUrl?: string | null;
+        imageUrl?: string | null;
+        variants?: ProductVariant[];
     } | null;
 };
 
