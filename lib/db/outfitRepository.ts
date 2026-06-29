@@ -27,6 +27,13 @@ export type SaveOutfitInput = {
     gearItemIds?: string[] | null;
 };
 
+export class OutfitValidationError extends Error {
+    constructor(message: string, public readonly statusCode = 400) {
+        super(message);
+        this.name = "OutfitValidationError";
+    }
+}
+
 export type UpdateSavedOutfitInput = {
     userId: string;
     outfitId: string;
@@ -59,18 +66,32 @@ function toUniqueGearIds(gearItemIds?: string[] | null) {
     return [...new Set((gearItemIds ?? []).map((id) => id.trim()).filter(Boolean))];
 }
 
-async function replaceOutfitItems(outfitId: string, gearItemIds?: string[] | null) {
-    if (!gearItemIds) return;
-
+async function findGearItemsOrThrow(gearItemIds?: string[] | null) {
     const uniqueIds = toUniqueGearIds(gearItemIds);
-    await prisma.outfitItem.deleteMany({ where: { outfitId } });
 
-    if (!uniqueIds.length) return;
+    if (!uniqueIds) {
+        throw new OutfitValidationError("Missing gear items.", 400);
+    }
 
     const gearItems = await prisma.gearItem.findMany({
         where: { id: { in: uniqueIds } },
         select: { id: true, category: true },
     });
+    const foundIds = new Set(gearItems.map((gearItem) =>gearItem.id));
+    const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
+
+    if (missingIds.length) {
+        throw new OutfitValidationError(`Missing gear items: ${missingIds.join(", ")}.`, 400);
+    }
+
+    return gearItems;
+}
+
+async function replaceOutfitItems(outfitId: string, gearItemIds?: string[] | null) {
+    if (!gearItemIds) return;
+
+    const gearItems = await findGearItemsOrThrow(gearItemIds);
+    await prisma.outfitItem.deleteMany({ where: { outfitId } });
 
     await prisma.outfitItem.createMany({
         data: gearItems.map((gearItem) => ({
@@ -120,9 +141,11 @@ export async function saveOutfit(input: SaveOutfitInput) {
         });
 
         if (!recommendation) {
-            throw new Error("Recommendation not found for this user.");
+            throw new OutfitValidationError("Recommendation not found for this user.", 404);
         }
     }
+
+    await findGearItemsOrThrow(input.gearItemIds);
 
     const savedOutfit = await prisma.savedOutfit.create({
         data: {

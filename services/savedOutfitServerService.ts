@@ -4,6 +4,7 @@ export {
     saveOutfit,
     updateSavedOutfit,
     deleteSavedOutfitById,
+    OutfitValidationError,
     type SaveOutfitInput,
     type UpdateSavedOutfitInput,
     type SavedKitType,
