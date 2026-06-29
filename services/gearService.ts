@@ -13,6 +13,8 @@ export type GearFilters = {
     tags?: string[];
 };
 
+export type GearProductVariantInput = { label: string; gender: string; affiliateUrl?: string | null; imageUrl?: string | null; price?: number | null; sizes?: string[]; };
+
 export type GearWriteInput = {
     id?: string;
     externalId?: string;
@@ -26,6 +28,7 @@ export type GearWriteInput = {
     bodyTypeFit?: string[];
     imageUrl?: string | null;
     affiliateUrl: string | null;
+    variants?: GearProductVariantInput[];
     weatherSuitability?: Partial<Record<"hot" | "cold" | "rain" | "wind", number | null>>;
 };
 
@@ -51,6 +54,7 @@ function normalizeGearWriteInput(input: GearWriteInput): GearWriteInput & { slug
         subcategory: input.subcategory?.trim() || null,
         genderTarget: input?.genderTarget?.trim() || null,
         tags: normalizeTags(input.tags),
+        variants: input.variants?.length ? input.variants : [{ label: "Default", gender: "unisex", affiliateUrl: input.affiliateUrl, imageUrl: input.imageUrl }],
         slug,
     };
 }
@@ -98,6 +102,7 @@ export async function createGearItem(data: GearWriteInput) {
         bodyTypeFit: normalized.bodyTypeFit,
         imageUrl: normalized.imageUrl,
         affiliateUrl: normalized.affiliateUrl,
+        variants: normalized.variants,
         weatherSuitability: normalized.weatherSuitability,
     });
 }
@@ -132,6 +137,7 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
         bodyTypeFit: normalized.bodyTypeFit,
         imageUrl: normalized.imageUrl,
         affiliateUrl: normalized.affiliateUrl,
+        variants: normalized.variants,
         weatherSuitability: normalized.weatherSuitability,
     });
 }

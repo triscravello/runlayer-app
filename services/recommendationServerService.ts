@@ -7,6 +7,7 @@ import { buildAlternativesByCategory, buildRecommendedOutfit, diversifyRecommend
 import { getUserProfile } from "@/lib/db/userRepository";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
+import { selectProductVariant } from "@/lib/gear/productVariant";
 import type { ScoredRecommendationItem, UserPreferenceInput } from "@/lib/engine/types/recommendationEngine";
 
 const DEFAULT_RECOMMENDATION_LIMIT = 5;
@@ -21,6 +22,16 @@ export async function listRecommendations() {
 
 export async function createRecommendation(input: CreateRecommendationInput) {
     return createGeneratedOutfit(input);
+}
+
+function withSelectedVariants(recommendations: ScoredRecommendationItem[], preferences: UserPreferenceInput): ScoredRecommendationItem[] {
+    return recommendations.map((recommendation) => ({
+        ...recommendation,
+        item: {
+            ...recommendation.item,
+            selectedVariant: selectProductVariant(recommendation.item, { genderPreference: preferences.genderPreference }),
+        },
+    }));
 }
 
 function withPersistedRecommendationIds(
@@ -82,17 +93,17 @@ export async function generateGearRecommendations(
     const alternativesByCategory = buildAlternativesByCategory(rankedRecommendations, recommendedOutfit);
     const alternatives = flattenAlternativesByCategory(alternativesByCategory);
     logRecommendationSelectionDiagnostics(rankedRecommendations, outfitCandidates, recommendedOutfit, alternativesByCategory);
-    const recommendations = [
+    const recommendations = withSelectedVariants([
         ...outfitCandidates,
         ...alternatives.filter((alternative) => !outfitCandidates.some((item) => item.item.id === alternative.item.id))
-    ];
+    ], preferences);
 
     if (!ownerUserId) {
         return { 
             recommendations, 
-            recommendedOutfit, 
-            alternatives, 
-            alternativesByCategory,
+            recommendedOutfit: recommendedOutfit ? Object.fromEntries(Object.entries(recommendedOutfit).map(([slot, recommendation]) => [slot, recommendation ? withSelectedVariants([recommendation], preferences)[0] : undefined])) : undefined, 
+            alternatives: withSelectedVariants(alternatives, preferences), 
+            alternativesByCategory: Object.fromEntries(Object.entries(alternativesByCategory).map(([category, categoryAlternatives]) => [category, withSelectedVariants(categoryAlternatives, preferences)])) as GearRecommendationResult["alternativesByCategory"],
             engineVersion: RECOMMENDATION_ENGINE_VERSION, 
             generatedAt: new Date().toISOString(),
             ...(diagnostics ? { diagnostics } : {}),

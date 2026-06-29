@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
+import { normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
 
 export type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
+
+type GearVariantWriteInput = { label: string; gender: string; affiliateUrl?: string | null; imageUrl?: string | null; price?: number | null; sizes?: string[]; };
 
 type CreateGearInput = {
     name: string;
@@ -15,6 +18,7 @@ type CreateGearInput = {
     bodyTypeFit?: string[];
     imageUrl?: string | null;
     affiliateUrl?: string | null;
+    variants?: GearVariantWriteInput[];
 }
 
 type UpdateGearInput = Partial<Omit<CreateGearInput, "weatherSuitability">> & {
@@ -26,6 +30,7 @@ export async function listGearItems() {
     return prisma.gearItem.findMany({
         include: {
             brand: true,
+            variants: true,
         },
         orderBy: {
             createdAt: "desc",
@@ -50,6 +55,7 @@ export async function createGearItem(input: CreateGearInput) {
             bodyTypeFit: input.bodyTypeFit ?? [],
             imageUrl: input.imageUrl,
             affiliateUrl: input.affiliateUrl,
+            variants: input.variants?.length ? { create: input.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) } : undefined,
         },
     });
 }
@@ -61,6 +67,7 @@ export async function updateGearItem(input: UpdateGearInput) {
         where: { id },
         data: {
             ...gearData,
+            variants: gearData.variants ? { deleteMany: {}, create: gearData.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) } : undefined,
             weatherHot: weatherSuitability?.hot ?? input.weatherSuitability?.warm,
             weatherCold: weatherSuitability?.cold,
             weatherRain: weatherSuitability?.rain,
@@ -75,7 +82,7 @@ export async function deleteGearItem(id: string) {
     });
 }
 
-function mapGearItemForRecommendation(gearItem: GearItemRow): GearItem {
+function mapGearItemForRecommendation(gearItem: GearItemRow & { variants?: GearVariantWriteInput[] }): GearItem {
     return {
         ...gearItem,
         weatherSuitability: {
@@ -85,6 +92,8 @@ function mapGearItemForRecommendation(gearItem: GearItemRow): GearItem {
             rain: gearItem.weatherRain ?? 0,
             wind: gearItem.weatherWind ?? 0,
         },
+        variants: (gearItem.variants ?? []).map((variant) => ({ ...variant, gender: normalizeProductVariantGender(variant.gender) ?? "unisex" })),
+        selectedVariant: selectProductVariant({ ...gearItem, variants: (gearItem.variants ?? []).map((variant) => ({ ...variant, gender: normalizeProductVariantGender(variant.gender) ?? "unisex" })) }),
     };
 }
 
@@ -92,6 +101,7 @@ export async function listGearRecommendationCandidates(): Promise<GearItem[]> {
     const gearItems = await prisma.gearItem.findMany({
         include: {
             brand: true,
+            variants: true,
         },
     });
 
@@ -112,6 +122,7 @@ export async function listWardrobeByUserId(userId: string) {
             gearItem: {
                 include: {
                     brand: true,
+                    variants: true,
                 }
             },
             outfit: true,

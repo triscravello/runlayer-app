@@ -110,7 +110,7 @@ export async function listSavedOutfitsByUserId(userId: string) {
             OutfitItem: {
                 include: {
                     gearItem: {
-                        include: { brand: true },
+                        include: { brand: true, variants: true },
                     },
                 },
             },
@@ -126,7 +126,7 @@ export async function getSavedOutfitById(userId: string, outfitId: string) {
             recommendation: true,
             OutfitItem: {
                 include: {
-                    gearItem: { include: { brand: true } },
+                    gearItem: { include: { brand: true, variants: true } },
                 },
             },
         },
