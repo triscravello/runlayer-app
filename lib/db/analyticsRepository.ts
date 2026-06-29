@@ -165,7 +165,7 @@ async function getWeatherBuckets(userId?: string) {
             COUNT(*) FILTER (
                 WHERE COALESCE(ws."precipitation_chance", 0) >= 0.3
                     OR LOWER(COALESCE(ws.condition, '')) LIKE '%rain%'
-            )::bigint AS rain,
+            )::bigint AS rain
         FROM "recommendations" r
         LEFT JOIN "weather_snapshots" ws ON ws.id = r."weather_snapshot_id"
         WHERE 1 = 1 ${userFilter}
