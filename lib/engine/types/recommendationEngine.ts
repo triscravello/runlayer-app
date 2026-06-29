@@ -5,8 +5,9 @@ export type Season = "winter" | "summer" | "shoulder";
 export type Category = "top" | "bottom" | "accessory" | "outerwear" | "socks" | "hat" | "gloves";
 export type RecommendationUserInput = { userId?: string; weather?: WeatherCondition; intensity?: Intensity, workoutType?: string, terrain?: Terrain; category?: Category | "all"; };
 export type GenderPreference = "male" | "men" | "female" | "women" | "non_binary" | "prefer_not_to_say" |"unisex";
+export type ProductVariant = { id?: string; label: string; gender: "men" | "women" | "unisex"; affiliateUrl?: string | null; imageUrl?: string | null; price?: number | null; sizes?: string[]; };
 export type UserPreferenceInput = { genderPreference?: GenderPreference | string; favoriteBrands?: string[]; preferredBrands?: string[]; avoidedBrands?: string[]; budgetRange?: "budget" | "mid" | "premium"; budgetSensitivity?: "low" | "medium" | "high"; heatSensitivity?: string; heatTolerance?: "low" | "medium" | "high" | string; coldTolerance?: "low" | "medium" | "high" | string; terrainPreference?: "road" | "trail" | "mixed" | string; cushionPreference?: "minimalist" | "max-cushion"; recentRecommendedItemIds?: string[]; frequentlySavedItemIds?: string[]; season?: Season; };
-export type RecommendationGearItem = { id: string; name: string; brandId?: string | null; brandName?: string | null; genderTarget?: string | null; category?: string | null; priceRange?: string | null; tags: string[]; weatherSuitability: Partial<Record<WeatherCondition, number>> | null; };
+export type RecommendationGearItem = { id: string; name: string; brandId?: string | null; brandName?: string | null; genderTarget?: string | null; category?: string | null; priceRange?: string | null; tags: string[]; weatherSuitability: Partial<Record<WeatherCondition, number>> | null; imageUrl?: string | null; affiliateUrl?: string | null; variants?: ProductVariant[]; selectedVariant?: ProductVariant | null; };
 export type RecommendationScoreBreakdown = {
   weather: number;
   intensity: number;

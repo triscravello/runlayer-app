@@ -5,6 +5,16 @@ export type WeatherCondition = "hot" | "warm" | "cold" | "rain" | "wind";
 export type BodyType = "slim" | "athletic" | "broad" | "plus";
 export type BrandTier = "entry" | "mid" | "elite";
 
+export interface ProductVariant {
+    id?: string;
+    label: string;
+    gender: "men" | "women" | "unisex";
+    affiliateUrl?: string | null;
+    imageUrl?: string | null;
+    price?: number | null;
+    sizes?: string[];
+}
+
 export interface Gear {
     id: string;
     name: string;
@@ -23,6 +33,7 @@ export interface Gear {
 
     imageUrl: string;
     affiliateUrl: string;
+    variants?: ProductVariant[];
 
     rating?: number;
     reviewCount?: number;

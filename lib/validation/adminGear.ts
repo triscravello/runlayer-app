@@ -9,6 +9,15 @@ const optionalNullableString = trimmedString.optional().nullable();
 const stringListSchema = z.array(trimmedString.min(1)).default([]);
 const weatherScoreSchema = z.number().min(0).max(1).nullable();
 
+const productVariantSchema = z.object({
+    label: trimmedString.min(1),
+    gender: z.enum(["men", "women", "unisex"]),
+    affiliateUrl: nullableStringWithDefault,
+    imageUrl: nullableStringWithDefault.optional(),
+    price: z.number().min(0).optional().nullable(),
+    sizes: stringListSchema.optional(),
+});
+
 const weatherSuitabilitySchema = z.object({
     hot: weatherScoreSchema.optional(),
     cold: weatherScoreSchema.optional(),
@@ -29,6 +38,7 @@ const baseGearWriteSchema = z.object({
     bodyTypeFit: stringListSchema.optional(),
     imageUrl: nullableStringWithDefault,
     affiliateUrl: nullableStringWithDefault,
+    variants: z.array(productVariantSchema).optional(),
     weatherSuitability: weatherSuitabilitySchema.optional(),
 });
 

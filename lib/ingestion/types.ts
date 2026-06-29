@@ -1,5 +1,7 @@
 import type { Category, PriceRange } from "@prisma/client";
 
+export type ProductVariantInput = { label: string; gender: "men" | "women" | "unisex"; affiliateUrl?: string | null; imageUrl?: string | null; price?: number | null; sizes?: string[]; };
+
 export type RawGearItemInput = {
     externalId?: string;
     name: string;
@@ -14,6 +16,7 @@ export type RawGearItemInput = {
     intensity?: string[];
     imageUrl?: string;
     affiliateUrl: string;
+    variants: ProductVariantInput[];
 }
 
 export type NormalizedGearItem = {
@@ -27,6 +30,7 @@ export type NormalizedGearItem = {
     bodyTypeFit: string[];
     imageUrl?: string | null;
     affiliateUrl: string | null;
+    variants?: ProductVariantInput[];
     slug: string;
 };
 
