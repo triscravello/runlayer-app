@@ -137,6 +137,7 @@ export async function generateGearRecommendations(
 
     return { 
         historyId: savedHistory.id,
+        recommendationId: savedHistory.id,
         engineVersion: savedHistory.engineVersion,
         generatedAt: savedHistory.generatedAt.toISOString(),
         recommendations: persistedRecommendations,

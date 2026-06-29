@@ -13,6 +13,7 @@ export type GearItem = RecommendationGearItem;
 export type RankedGearItem = ScoredRecommendationItem;
 export type GearRecommendationResult = {
   historyId?: string;
+  recommendationId?: string;
   engineVersion?: string;
   generatedAt?: string;
   recommendations: RankedGearItem[];
