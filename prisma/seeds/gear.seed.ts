@@ -82,8 +82,9 @@ function buildGearRecords(items: GearSeedItem[], brandCache: Map<string, Brand>)
                 weatherCold: item.weatherSuitability.cold,
                 weatherRain: item.weatherSuitability.rain,
                 bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
-                imageUrl: item.imageUrl,
-                affiliateUrl: item.affiliateUrl,
+                imageUrl: item.variants[0]?.imageUrl ?? null,
+                affiliateUrl: item.variants[0]?.affiliateUrl ?? null,
+                variants: { create: item.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) },
             },
             update: {
                 genderTarget: item.genderTarget,
@@ -95,8 +96,9 @@ function buildGearRecords(items: GearSeedItem[], brandCache: Map<string, Brand>)
                 weatherCold: item.weatherSuitability.cold,
                 weatherRain: item.weatherSuitability.rain,
                 bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
-                imageUrl: item.imageUrl,
-                affiliateUrl: item.affiliateUrl,
+                imageUrl: item.variants[0]?.imageUrl ?? null,
+                affiliateUrl: item.variants[0]?.affiliateUrl ?? null,
+                variants: { create: item.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) },
             },
         };
     });
@@ -112,7 +114,7 @@ async function seedGearItems(records: ReturnType<typeof buildGearRecords>) {
         if (existing) {
             await prisma.gearItem.update({
                 where: { id: existing.id },
-                data: record.update,
+                data: { ...record.update, variants: { deleteMany: {}, create: record.create.variants.create }},
             });
         } else {
             await prisma.gearItem.create({
