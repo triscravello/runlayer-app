@@ -158,9 +158,32 @@ model GearItem {
   updatedAt          DateTime             @default(now()) @updatedAt @map("updated_at")
   OutfitItem         OutfitItem[]
   RecommendationItem RecommendationItem[]
+  variants           GearItemVariant[]
 
   @@unique([name, brandId])
   @@map("gear_items")
+}
+
+model GearItemVariant {
+  id String @id @default(uuid())
+
+  gearItemId String   @map("gear_item_id")
+  gearItem   GearItem @relation(fields: [gearItemId], references: [id], onDelete: Cascade)
+
+  label        String
+  gender       String
+  affiliateUrl String?  @map("affiliate_url")
+  imageUrl     String?  @map("image_url")
+  price        Float?
+  sizes        String[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([gearItemId, label, gender])
+  @@index([gearItemId])
+  @@index([gender])
+  @@map("gear_item_variants")
 }
 
 model Brand {
