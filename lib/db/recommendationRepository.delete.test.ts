@@ -106,3 +106,85 @@ test("deleteRecommendationHistoryById returns zero without deleting rows for a n
     assert.equal(tx.recommendationItem.deleteMany.mock.callCount(), 0);
     assert.equal(tx.recommendationVersionMetadata.deleteMany.mock.callCount(), 0);
 });
+
+test("createRecommendationHistory creates a weather snapshot with generated recommendation history", async (t) => {
+    const { createRecommendationHistory } = await import("./recommendationRepository");
+    const createdAt = new Date("2026-06-29T12:00:00.000Z");
+    const weatherSnapshotCreate = t.mock.fn(async (args) => {
+        assert.deepEqual(args, {
+            data: {
+                location: "Boston, MA",
+                latitude: null,
+                longitude: null,
+                tempF: 42,
+                humidity: 81,
+                windSpeed: 12,
+                precipitationChance: 0.6,
+                uvIndex: 2,
+                condition: "Rain",
+                tempCategory: "cold",
+            },
+        });
+        return { id: "weather-1" };
+    });
+    const recommendationCreate = t.mock.fn(async (args) => {
+        assert.equal(args.data.weatherSnapshot, undefined);
+        assert.equal(args.data.weatherSnapshotId, "weather-1");
+        return { id: "history-1", items: [] };
+    });
+
+    const originalRecommendationCreate = prisma.recommendation.create;
+    const originalWeatherSnapshotCreate = prisma.weatherSnapshot.create;
+    prisma.recommendation.create = recommendationCreate as unknown as typeof prisma.recommendation.create;
+    prisma.weatherSnapshot.create = weatherSnapshotCreate as unknown as typeof prisma.weatherSnapshot.create;
+    t.after(() => {
+        prisma.recommendation.create = originalRecommendationCreate;
+        prisma.weatherSnapshot.create = originalWeatherSnapshotCreate;
+    });
+
+    await createRecommendationHistory({
+        userId: "user-1",
+        weatherSnapshot: {
+            location: "Boston, MA",
+            tempF: 42,
+            humidity: 81,
+            windSpeed: 12,
+            precipitationChance: 0.6,
+            uvIndex: 2,
+            condition: "Rain",
+            tempCategory: "cold",
+        },
+        inputContext: {},
+        output: {},
+        generatedAt: createdAt,
+        recommendations: [],
+    });
+
+    assert.equal(weatherSnapshotCreate.mock.callCount(), 1);
+    assert.equal(recommendationCreate.mock.callCount(), 1);
+});
+
+test("createRecommendationHistory safely skips weather snapshot creation when weather is unavailable", async (t) => {
+    const { createRecommendationHistory } = await import("./recommendationRepository");
+    const recommendationCreate = t.mock.fn(async (args) => {
+        assert.equal(args.data.weatherSnapshot, undefined);
+        assert.equal(args.data.weatherSnapshotId, null);
+        return { id: "history-1", items: [] };
+    });
+
+    const originalCreate = prisma.recommendation.create;
+    prisma.recommendation.create = recommendationCreate as unknown as typeof prisma.recommendation.create;
+    t.after(() => {
+        prisma.recommendation.create = originalCreate;
+    });
+
+    await createRecommendationHistory({
+        userId: "user-1",
+        weatherSnapshot: null,
+        inputContext: {},
+        output: {},
+        recommendations: [],
+    });
+
+    assert.equal(recommendationCreate.mock.callCount(), 1);
+});
