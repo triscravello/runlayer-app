@@ -82,10 +82,10 @@ export function GearFilters() {
     const hasActiveState = activeFilters.length > 0 || Boolean(searchQuery.trim());
 
     return (
-        <section className="sticky top-24 z-20 rounded-2xl border border-zinc-800/80 bg-zinc-900/75 p-4 shadow-lg backdrop-blur-xl">
-            <div className="flex flex-col gap-3">
+        <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 p-3 shadow-sm backdrop-blur">
+            <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-72 flex-1 lg:max-w-xl">
+                    <div className="relative min-w-0 flex-1 basis-72 lg:max-w-lg">
                         <label className="sr-only" htmlFor="gear-filter-search">
                             Search gear inventory
                         </label>
@@ -94,12 +94,12 @@ export function GearFilters() {
                             id="gear-filter-search"
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            className="border-zinc-700 bg-zinc-950/70 pl-9 pr-3 text-zinc-100 placeholder:text-zinc-500"
-                            placeholder="Search gear ID, tags, terrain, notes, metadata..."
+                            className="h-9 border-zinc-700 bg-zinc-950/60 pl-9 pr-3 text-zinc-100 placeholder:text-zinc-500"
+                            placeholder="Search gear, tags, terrain, notes..."
                         />
                     </div>
 
-                    <div className="flex-wrap items-center gap-1.5" role="group" aria-label="Primary gear filters">
+                    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Primary gear filters">
                         {PRIMARY_FILTERS.map((filter) => {
                             const isActive = activeFilterKeys.includes(filter.key);
                             const activeStyles = filter.isWarning ? "border-amber-500/45 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15" : "border-zinc-500 bg-zinc-800/90 text-zinc-100 hover:bg-zinc-800";
@@ -113,7 +113,7 @@ export function GearFilters() {
                                     onClick={() => toggleFilter(filter.key)}
                                     aria-pressed={isActive}
                                     className={[
-                                        "h-9 gap-1.5 px-3 text-sm focus-visible:ring-zinc-500/60",
+                                        "h-8 gap-1.5 px-2.5 text-xs focus-visible:ring-zinc-500/60",
                                         isActive ? activeStyles : inactiveStyles,
                                     ].join(" ")}
                                 >
@@ -125,7 +125,7 @@ export function GearFilters() {
                     </div>
 
                     <div 
-                        className="ml-auto flex items-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950/50"
+                        className="ml-auto flex items-center overflow-hidden rounded-lg border border-zinc-700/80 bg-zinc-950/40"
                         role="group"
                         aria-label="Inventory view mode"
                     >
@@ -140,7 +140,7 @@ export function GearFilters() {
                                     variant="ghost"
                                     onClick={() => setViewMode(option.key)}
                                     className={[
-                                        "h-9 rounded-none border-0 px-3 text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200 focus-visible:ring-zinc-500/60",
+                                        "h-8 rounded-none border-0 px-2.5 text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200 focus-visible:ring-zinc-500/60",
                                         isSelected ? "bg-zinc-800 text-zinc-100 shadow-inner hover:bg-zinc-800 hover:text-zinc-100" : "",
                                     ].join(" ")}
                                     aria-pressed={isSelected}
@@ -153,7 +153,7 @@ export function GearFilters() {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-zinc-800/80 pt-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-zinc-800/70 pt-2">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                         <Badge variant="outline" className="border-zinc-700 bg-zinc-800/50 text-zinc-300">
                             <Filter className="size-3" aria-hidden="true" />
@@ -187,7 +187,7 @@ export function GearFilters() {
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <div className="flex items-center gap-2 text-xs text-zinc-400">
                         <span>
                             {hasActiveState ? `Showing ${visibleItemCount} of ${TOTAL_GEAR_ITEMS} items` : `${TOTAL_GEAR_ITEMS} total items`}
                         </span>
