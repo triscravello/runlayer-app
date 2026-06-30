@@ -127,8 +127,9 @@ export async function generateGearRecommendations(
     const generatedAt = new Date();
     const savedHistory = await createRecommendationHistory({
         userId: ownerUserId,
+        weatherSnapshot: input.weatherSnapshot ?? null,
         inputContext: {
-            weather: input.weather ?? null,
+            weatherSnapshot: input.weatherSnapshot ?? null,
             workoutType: input.workoutType ?? null,
             terrain: input.terrain ?? null,
             category: input.category ?? null,
