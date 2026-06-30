@@ -30,10 +30,10 @@ type SortState = { key: SortKey; direction: SortDirection };
 type GearTableProps = { items: GearTableItem[]; onSelectItem?: (itemId: string) => void  };
 
 const statusStyle: Record<GearStatus, string> = {
-  Ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+  Ready: "border-emerald-500/25 bg-emerald-500/10 text-emerald-200",
   "Missing Metadata": "border-amber-500/30 bg-amber-500/10 text-amber-200",
-  "Needs Scoring": "border-sky-500/30 bg-sky-500/10 text-sky-200",
-  Hidden: "border-zinc-600 bg-zinc-800 text-zinc-200",
+  "Needs Scoring": "border-sky-500/25 bg-sky-500/10 text-sky-200",
+  Hidden: "border-zinc-700 bg-zinc-800/70 text-zinc-300",
 };
 
 const statusOrder: Record<GearStatus, number> = {
@@ -44,12 +44,12 @@ const statusOrder: Record<GearStatus, number> = {
 }
 
 function StatusBadge({ status }: { status?: GearStatus }) {
-  if (!status) return <EmptyStateCell message="No status" />;
+  if (!status) return <EmptyStateCell message="Pending" />;
   return <Badge variant="outline" className={statusStyle[status]}>{status}</Badge>
 }
 
-function EmptyStateCell({ message }: { message: string }) {
-  return <span className="text-zinc-500">{message}</span>
+function EmptyStateCell({ message = "Missing" }: { message?: string }) {
+  return <Badge variant="outline" className="whitespace-nowrap border-zinc-700/80 bg-zinc-900/70 text-[11px] font-medium text-zinc-400">{message}</Badge>
 }
 
 function getScoreColor(score: number) {
@@ -60,11 +60,11 @@ function getScoreColor(score: number) {
 }
 
 function ScoreCell({ score }: { score?: number }) {
-  if (typeof score !== "number") return <EmptyStateCell message="No score" />;
+  if (typeof score !== "number") return <EmptyStateCell message="Pending" />;
   const clampedScore = Math.max(0, Math.min(score, 100));
   return (
     <div className="space-y-1">
-      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-800">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-zinc-800">
         <div className={`h-full ${getScoreColor(clampedScore)}`} style={{ width: `${clampedScore}%` }} />
       </div>
       <p className="text-xs font-semibold text-zinc-200">{clampedScore}</p>
@@ -156,8 +156,8 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
   }
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm">
+    <div className="min-w-0 space-y-3 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/45 px-3 py-2 text-sm">
         {hasSelected ? (
           <>
             <span className="text-zinc-200">{selectedIds.size} selected</span>
@@ -167,21 +167,21 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
           <span className="text-zinc-400">Select rows to enable bulk actions.</span>
         )}
       </div>
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
+      <div className="min-w-0 overflow-hidden rounded-xl border border-zinc-800/80">
         <div className="max-h-[560px] overflow-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
             <thead className="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/90 text-zinc-400 backdrop-blur">
               <tr>
-                <th className="px-3 py-3 font-medium">
+                <th className="w-10 px-3 py-3 font-medium">
                   <span className="sr-only">Select row</span>
                 </th>
-                <th className="px-3 py-3 font-medium">Image</th>
-                <th className="px-3 py-3 font-medium">Name</th>
-                <th className="px-3 py-3 font-medium">Brand</th>
-                <th className="px-3 py-3 font-medium">Category</th>
-                <th className="px-3 py-3 font-medium">Price</th>
-                <th className="px-3 py-3 font-medium">Weather</th>
-                <th className="px-3 py-3 font-medium">Intensity</th>
+                <th className="w-16 px-3 py-3 font-medium">Image</th>
+                <th className="w-[22%] px-3 py-3 font-medium">Name</th>
+                <th className="w-[11%] px-3 py-3 font-medium">Brand</th>
+                <th className="w-[10%] px-3 py-3 font-medium">Category</th>
+                <th className="w-[8%] px-3 py-3 font-medium">Price</th>
+                <th className="w-[13%] px-3 py-3 font-medium">Weather</th>
+                <th className="w-[9%] px-3 py-3 font-medium">Intensity</th>
                 <th className="px-3 py-3 font-medium"><SortableHeader label="Rec. Score" sortKey="recommendationScore" sort={sort} onSort={toggleSort} /></th>
                 <th className="px-3 py-3 font-medium"><SortableHeader label="Status" sortKey="status" sort={sort} onSort={toggleSort} /></th>
                 <th className="px-3 py-3 font-medium"><SortableHeader label="Last Updated" sortKey="updatedAt" sort={sort} onSort={toggleSort} /></th>
@@ -198,7 +198,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                   const selected = selectedIds.has(item.id);
                   const hasValidImageUrl = typeof item.imageUrl === "string" && item.imageUrl.trim().length > 0;
                   return (
-                    <tr key={item.id} className={`border-t border-zinc-800/60 bg-zinc-900/40 transition-colors ${selected ? "bg-zinc-800/70" : "hover:bg-zinc-800/50"}`}>
+                    <tr key={item.id} className={`border-t border-zinc-800/60 bg-zinc-900/25 transition-colors ${selected ? "bg-zinc-800/70" : "hover:bg-zinc-800/40"}`}>
                       <td className="px-3 py-3">
                         <input
                           type="checkbox"
@@ -229,18 +229,18 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                             onSelectItem?.(item.id);
                           }}
                         >
-                          <p className="font-semibold text-zinc-500">{item.name}</p>
-                          <p className="text-xs text-zinc-500">ID: {item.id}</p>
+                          <p className="truncate font-semibold text-zinc-100">{item.name}</p>
+                          <p className="truncate text-xs text-zinc-500">ID: {item.id}</p>
                         </button>
                       </td>
-                      <td className="px-3 py-3 text-zinc-300">{item.brandId ?? <EmptyStateCell message="No brand" />}</td>
-                      <td className="px-3 py-3 text-zinc-300">{item.category ?? <EmptyStateCell message="No category" />}</td>
-                      <td className="px-3 py-3 text-zinc-300">{item.priceRange ?? <EmptyStateCell message="No price" />}</td>
-                      <td className="px-3 py-3 text-zinc-300">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="No weather tags" />}</td>
-                      <td className="px-3 py-3 text-zinc-300">{item.intensity ?? <EmptyStateCell message="No intensity" />}</td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{item.brandId ?? <EmptyStateCell />}</td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{item.category ?? <EmptyStateCell />}</td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{item.priceRange ?? <EmptyStateCell />}</td>
+                      <td className="px-3 py-3 text-zinc-300"><span className="line-clamp-2">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="Needs metadata" />}</span></td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{item.intensity ?? <EmptyStateCell />}</td>
                       <td className="px-3 py-3"><ScoreCell score={item.recommendationScore} /></td>
                       <td className="px-3 py-3"><StatusBadge status={item.status} /></td>
-                      <td className="px-3 py-3 text-zinc-400">{formatRelativeDate(item.updatedAt) ?? <EmptyStateCell message="Never updated" />}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-zinc-400">{formatRelativeDate(item.updatedAt) ?? <EmptyStateCell message="Pending" />}</td>
                       <td className="px-3 py-3">
                         <Button size="icon" variant="ghost" className="text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:ring-2 focus-visible:ring-sky-500">
                           <MoreHorizontal className="size-4" />
