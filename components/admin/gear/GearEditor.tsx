@@ -32,6 +32,8 @@ export type GearEditorItem = {
 
 type GearEditorProps = {
   item?: GearEditorItem | null;
+  mode?: "edit" | "create";
+  onCreated?: (item: GearEditorItem) => void;
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -199,10 +201,12 @@ function EmptyBadge({ children = "Missing" }: { children?: React.ReactNode }) {
   return <Badge className="border border-zinc-700 bg-zinc-900 text-zinc-400">{children}</Badge>
 }
 
-export function GearEditor({ item }: GearEditorProps) {
+export function GearEditor({ item, mode = "edit", onCreated }: GearEditorProps) {
   const [fields, setFields] = useState<EditableFields>(() => toFields(item));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  const isCreateMode = mode === "create";
 
   const imageUrl = fields.imageUrl.trim();
   const tags = splitList(fields.tags);
@@ -232,16 +236,21 @@ export function GearEditor({ item }: GearEditorProps) {
   };
 
   const handleSave = async () => {
-    if (!item) return;
+    if (!isCreateMode && !item) return;
+    if (!fields.name.trim() || !fields.brandId.trim() || !fields.category || !fields.priceRange) {
+      setSaveState("error");
+      setError("Name, brand ID, category, and price range are required.");
+      return;
+    }
     setSaveState("saving");
     setError(null);
 
-    const response = await fetch(`/api/admin/gear/${item.id}`, {
-      method: "PATCH",
+    const response = await fetch(isCreateMode ? "/api/admin/gear" : `/api/admin/gear/${item?.id}`, {
+      method: isCreateMode ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: fields.name,
-        brandId: fields.brandId,
+        brandId: fields.brandId.trim(),
         category: fields.category,
         priceRange: fields.priceRange,
         genderTarget: fields.genderTarget.trim() || null,
@@ -261,14 +270,18 @@ export function GearEditor({ item }: GearEditorProps) {
 
     if (!response.ok) {
       setSaveState("error");
-      setError("Save failed. Check the item data and try again.");
+      setError(isCreateMode ? "Create failed. Check the required fields and brand ID, then try again." : "Save failed. Check the item data and try again.");
       return;
     };
 
+    const savedItem = await response.json() as GearEditorItem;
     setSaveState("saved");
+    if (isCreateMode) {
+      onCreated?.(savedItem);
+    }
   };
 
-  if (!item) {
+  if (!item && !isCreateMode) {
     return (
       <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
         <CardContent className="p-5">
@@ -288,13 +301,13 @@ export function GearEditor({ item }: GearEditorProps) {
             </div>
 
             <div>
-              <p className="text-sm font-medium text-zinc-100">Manual save only</p>
-              <p className="text-xs text-zinc-500">Autosave is not configured for this editor.</p>
+              <p className="text-sm font-medium text-zinc-100">{isCreateMode ? "Create new item" : "Manual save only"}</p>
+              <p className="text-xs text-zinc-500">{isCreateMode ? "Required fields are name, brand ID, category, and price range." : "Autosave is not configured for this editor."}</p>
             </div>
           </div>
 
           <Badge className="border border-zinc-700 bg-zinc-950 text-zinc-400">
-            {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving" : saveState === "error" ? "Error" : "Not synced"}
+            {saveState === "saved" ? (isCreateMode ? "Created" : "Saved") : saveState === "saving" ? (isCreateMode ? "Creating" : "Saving") : saveState === "error" ? "Error" : isCreateMode ? "New item" : "Not synced"}
           </Badge>
         </div>
       </Card>
@@ -303,13 +316,13 @@ export function GearEditor({ item }: GearEditorProps) {
         <div className="space-y-4">
           <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
             <CardContent className="space-y-6 p-5">
-              <SectionHeader title="Basic Information" description="Primary product information stored on the selected catalog item." badge={<Badge className="border border-zinc-700 bg-zinc-950 text-zinc-300">{item.id}</Badge>} />
+              <SectionHeader title="Basic Information" description="Primary product information stored on the selected catalog item." badge={<Badge className="border border-zinc-700 bg-zinc-950 text-zinc-300">{isCreateMode ? "New" : item?.id}</Badge>} />
 
               <div className="space-y-4">
                 <div><FieldLabel label="Gear Name" hint="Required" /><Input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Brand" hint={item.brand?.name ? `Internal ID: ${fields.brandId || "Missing"}` : "Brand relation not loaded"} />{item.brand?.name ? <p className="mb-2 text-sm font-medium text-zinc-100">{item.brand.name}</p> : null}<Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Brand" hint={item?.brand?.name ? `Internal ID: ${fields.brandId || "Missing"}` : isCreateMode ? "Required" : "Brand relation not loaded"} />{item?.brand?.name ? <p className="mb-2 text-sm font-medium text-zinc-100">{item.brand.name}</p> : null}<Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
                   <div><FieldLabel label="Category" /><select value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 
@@ -360,7 +373,7 @@ export function GearEditor({ item }: GearEditorProps) {
 
           <EditorSection title="Intensity Compatibility" description="No separate intensity model exists; workout context can only be inferred from tags." defaultOpen={false}><div className="flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></EditorSection>
 
-          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? "Saving…" : "Save Changes"}</Button><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Archive className="mr-2 size-4" />Archive unavailable</Button></div></div></CardContent></Card>
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item?.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Archive className="mr-2 size-4" />Archive unavailable</Button></div></div></CardContent></Card>
         </div>
       </div>
     </div>

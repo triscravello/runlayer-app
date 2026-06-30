@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { GearEditor, type GearEditorItem } from "@/components/admin/gear/GearEditor";
 import { GearFilters, type GearFilterState } from "@/components/admin/gear/GearFilters";
 import { GearTable } from "@/components/admin/gear/GearTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { ADMIN_GEAR_ADD_EVENT } from "./AdminGearActions";
 
 type AdminGearCatalogProps = {
   items: GearEditorItem[];
@@ -45,18 +47,47 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
     imageStatus: "all",
     metadataStatus: "all",
   });
-  const [selectedItemId, setSelectedItemId] = useState(items[0]?.id ?? null);
+  const router = useRouter();
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(items[0]?.id ?? null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createdItem, setCreatedItem] = useState<GearEditorItem | null>(null);
+  const catalogItems = useMemo(() => {
+    if (!createdItem || items.some((item) => item.id === createdItem.id)) return items;
+    return [createdItem, ...items];
+  }, [createdItem, items]);
 
   const filteredItems = useMemo(
-    () => items.filter((item) => matchesFilters(item, filters)),
-    [filters, items],
+    () => catalogItems.filter((item) => matchesFilters(item, filters)),
+    [catalogItems, filters],
   );
 
-  const selectedItem = items.find((item) => item.id === selectedItemId) ?? filteredItems[0] ?? items[0] ?? null;
+  useEffect(() => {
+    const handleAddGear = () => {
+        setIsCreating(true);
+        setSelectedItemId(null);
+    };
+
+    window.addEventListener(ADMIN_GEAR_ADD_EVENT, handleAddGear);
+    return () => window.removeEventListener(ADMIN_GEAR_ADD_EVENT, handleAddGear);
+  }, []);
+
+  const selectedItem = isCreating ? null : catalogItems.find((item) => item.id === selectedItemId) ?? filteredItems[0] ?? catalogItems[0] ?? null;
+
+  const handleSelectItem = (itemId: string) => {
+    setIsCreating(false);
+    setSelectedItemId(itemId);
+  };
+
+  const handleCreated = (created: GearEditorItem) => {
+    setCreatedItem(created);
+    setIsCreating(false);
+    setSelectedItemId(created.id);
+    router.refresh();
+  };
 
   return (
     <>
-      <GearFilters filters={filters} items={items} resultCount={filteredItems.length} onFiltersChange={setFilters} />
+      <GearFilters filters={filters} items={catalogItems} resultCount={filteredItems.length} onFiltersChange={setFilters} />
 
       <section className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="min-w-0 rounded-2xl border-zinc-800/70 bg-zinc-900/60">
@@ -65,10 +96,10 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
             <CardDescription className="text-zinc-400">Review gear details, metadata coverage, and update status.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <GearTable items={filteredItems} onSelectItem={setSelectedItemId} />
+            <GearTable items={filteredItems} onSelectItem={handleSelectItem} />
           </CardContent>
         </Card>
-        <GearEditor item={selectedItem} />
+        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} />
       </section>
     </>
   );

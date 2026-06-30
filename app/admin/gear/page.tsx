@@ -1,6 +1,6 @@
-import { Boxes, CheckCircle2, Download, PackagePlus, Sparkles, UploadCloud, type LucideIcon } from "lucide-react";
+import { Boxes, CheckCircle2, Sparkles, UploadCloud, type LucideIcon } from "lucide-react";
 import { AdminGearCatalog } from "@/components/admin/gear/AdminGearCatalog";
-import { Button } from "@/components/ui/Button";
+import { AdminGearActions } from "@/components/admin/gear/AdminGearActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getGear } from "@/services/gearService";
 import { requireAdmin } from "@/lib/auth";
@@ -93,17 +93,7 @@ export default async function AdminGearPage() {
                 Manage product details and recommendation metadata for the RunLayer gear catalog.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button disabled variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-500 opacity-70 hover:bg-zinc-900/80">
-                <PackagePlus className="size-4" /> Add Gear <span className="text-xs text-zinc-600">Coming Soon</span>
-              </Button>
-              <Button disabled variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-500 opacity-70 hover:bg-zinc-900/80">
-                <UploadCloud className="size-4" /> Import Catalog <span className="text-xs text-zinc-600">Coming Soon</span>
-              </Button>
-              <Button className="bg-zinc-800 text-zinc-500 opacity-70 hover:bg-zinc-800">
-                <Download className="size-4" /> Export JSON <span className="text-xs text-zinc-600">Coming Soon</span>
-              </Button>
-            </div>
+            <AdminGearActions />
           </div>
         </header>
 
