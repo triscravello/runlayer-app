@@ -3,7 +3,20 @@ export type Intensity = "recovery" | "easy" | "long-run" | "tempo" | "intervals"
 export type Terrain = "road" | "trail" | "treadmill";
 export type Season = "winter" | "summer" | "shoulder";
 export type Category = "top" | "bottom" | "accessory" | "outerwear" | "socks" | "hat" | "gloves";
-export type RecommendationUserInput = { userId?: string; weather?: WeatherCondition; intensity?: Intensity, workoutType?: string, terrain?: Terrain; category?: Category | "all"; };
+export type RecommendationWeatherSnapshotInput = {
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  tempF?: number | null;
+  feelsLikeF?: number | null;
+  humidity?: number | null;
+  windSpeed?: number | null;
+  precipitationChance?: number | null;
+  uvIndex?: number | null;
+  condition?: string | null;
+  tempCategory?: string | null;
+};
+export type RecommendationUserInput = { userId?: string; weather?: WeatherCondition; weatherSnapshot?: RecommendationWeatherSnapshotInput | null; intensity?: Intensity, workoutType?: string, terrain?: Terrain; category?: Category | "all"; };
 export type GenderPreference = "male" | "men" | "female" | "women" | "non_binary" | "prefer_not_to_say" |"unisex";
 export type ProductVariant = { id?: string; label: string; gender: "men" | "women" | "unisex"; affiliateUrl?: string | null; imageUrl?: string | null; price?: number | null; sizes?: string[]; };
 export type UserPreferenceInput = { genderPreference?: GenderPreference | string; favoriteBrands?: string[]; preferredBrands?: string[]; avoidedBrands?: string[]; budgetRange?: "budget" | "mid" | "premium"; budgetSensitivity?: "low" | "medium" | "high"; heatSensitivity?: string; heatTolerance?: "low" | "medium" | "high" | string; coldTolerance?: "low" | "medium" | "high" | string; terrainPreference?: "road" | "trail" | "mixed" | string; cushionPreference?: "minimalist" | "max-cushion"; recentRecommendedItemIds?: string[]; frequentlySavedItemIds?: string[]; season?: Season; };
