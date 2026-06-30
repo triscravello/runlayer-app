@@ -3,9 +3,23 @@ import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVers
 import { prisma } from "../prisma";
 import type { ScoredRecommendationItem } from "../engine/types/recommendationEngine";
 
+export type CreateRecommendationWeatherSnapshotInput = {
+    location?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    tempF?: number | null;
+    humidity?: number | null;
+    windSpeed?: number | null;
+    precipitationChance?: number | null;
+    uvIndex?: number | null;
+    condition?: string | null;
+    tempCategory?: string | null;
+};
+
 export type CreateRecommendationHistoryInput = {
     userId: string;
     weatherSnapshotId?: string | null;
+    weatherSnapshot?: CreateRecommendationWeatherSnapshotInput | null;
     inputContext: Prisma.InputJsonValue;
     output: Prisma.InputJsonValue;
     topScore?: number | null;
@@ -21,13 +35,35 @@ export type RecommendationHistoryListOptions = {
     skip?: number;
 };
 
+function toWeatherSnapshotCreateInput(input?: CreateRecommendationWeatherSnapshotInput | null): Prisma.WeatherSnapshotCreateWithoutRecommendationsInput | null {
+    if (!input?.location) return null;
+
+    return {
+        location: input.location,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        tempF: input.tempF ?? null,
+        humidity: input.humidity ?? null,
+        windSpeed: input.windSpeed ?? null,
+        precipitationChance: input.precipitationChance ?? null,
+        uvIndex: input.uvIndex ?? null,
+        condition: input.condition ?? null,
+        tempCategory: input.tempCategory ?? null,
+    };
+}
+
 export async function createRecommendationHistory(input: CreateRecommendationHistoryInput) {
     const engineVersion = input.engineVersion ?? input.algorithmVersion ?? RECOMMENDATION_ENGINE_VERSION;
+    const weatherSnapshotCreateInput = input.weatherSnapshotId ? null : toWeatherSnapshotCreateInput(input.weatherSnapshot);
+    const createdWeatherSnapshot = weatherSnapshotCreateInput ? await prisma.weatherSnapshot.create({ data: weatherSnapshotCreateInput }).catch((error: unknown) => {
+        console.warn("Unable to persist recommendation weather snapshot", error);
+        return null;
+    }) : null;
 
     return prisma.recommendation.create({
         data: {
             userId: input.userId,
-            weatherSnapshotId: input.weatherSnapshotId ?? null,
+            weatherSnapshotId: input.weatherSnapshotId ?? createdWeatherSnapshot?.id ?? null,
             inputContext: input.inputContext,
             output: input.output,
             topScore: input.topScore ?? null,
