@@ -309,7 +309,7 @@ export function GearEditor({ item }: GearEditorProps) {
                 <div><FieldLabel label="Gear Name" hint="Required" /><Input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Brand ID" hint={item.brand?.name ?? "Brand relation not loaded"} /><Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Brand" hint={item.brand?.name ? `Internal ID: ${fields.brandId || "Missing"}` : "Brand relation not loaded"} />{item.brand?.name ? <p className="mb-2 text-sm font-medium text-zinc-100">{item.brand.name}</p> : null}<Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
                   <div><FieldLabel label="Category" /><select value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 

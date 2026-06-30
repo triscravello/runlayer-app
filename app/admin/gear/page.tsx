@@ -1,8 +1,5 @@
 import { Boxes, CheckCircle2, Download, PackagePlus, Sparkles, UploadCloud, type LucideIcon } from "lucide-react";
-import { GearEditor } from "@/components/admin/gear/GearEditor";
-import { GearFilters } from "@/components/admin/gear/GearFilters";
-import { GearImportForm } from "@/components/admin/gear/GearImportForm";
-import { GearTable } from "@/components/admin/gear/GearTable";
+import { AdminGearCatalog } from "@/components/admin/gear/AdminGearCatalog";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getGear } from "@/services/gearService";
@@ -97,14 +94,14 @@ export default async function AdminGearPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-800">
-                <PackagePlus className="size-4" /> Add Gear <span className="text-xs text-zinc-500">⌘N</span>
+              <Button disabled variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-500 opacity-70 hover:bg-zinc-900/80">
+                <PackagePlus className="size-4" /> Add Gear <span className="text-xs text-zinc-600">Coming Soon</span>
               </Button>
-              <Button variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-800">
-                <UploadCloud className="size-4" /> Import Catalog <span className="text-xs text-zinc-500">⌘I</span>
+              <Button disabled variant="outline" className="border-zinc-700 bg-zinc-900/80 text-zinc-500 opacity-70 hover:bg-zinc-900/80">
+                <UploadCloud className="size-4" /> Import Catalog <span className="text-xs text-zinc-600">Coming Soon</span>
               </Button>
-              <Button className="bg-gradient-to-r from-zinc-100 to-zinc-300 text-zinc-900 hover:from-white hover:to-zinc-200">
-                <Download className="size-4" /> Export JSON <span className="text-xs text-zinc-700">⌘E</span>
+              <Button className="bg-zinc-800 text-zinc-500 opacity-70 hover:bg-zinc-800">
+                <Download className="size-4" /> Export JSON <span className="text-xs text-zinc-600">Coming Soon</span>
               </Button>
             </div>
           </div>
@@ -127,22 +124,7 @@ export default async function AdminGearPage() {
           ))}
         </section>
 
-        <GearFilters />
-
-        <section className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Card className="min-w-0 rounded-2xl border-zinc-800/70 bg-zinc-900/60">
-            <CardHeader className="border-b border-zinc-800/80">
-              <CardTitle className="text-lg">Catalog items</CardTitle>
-              <CardDescription className="text-zinc-400">Review gear details, metadata coverage, and update status.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <GearTable items={items} />
-            </CardContent>
-          </Card>
-          <GearEditor item={items[0] ?? null} />
-        </section>
-
-        <GearImportForm />
+        <AdminGearCatalog items={items} />
       </div>
     </main>
   );
