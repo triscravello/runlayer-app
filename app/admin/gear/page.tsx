@@ -139,7 +139,7 @@ export default async function AdminGearPage() {
               <GearTable items={items} />
             </CardContent>
           </Card>
-          <GearEditor />
+          <GearEditor item={items[0] ?? null} />
         </section>
 
         <GearImportForm />

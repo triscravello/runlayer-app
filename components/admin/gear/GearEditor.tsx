@@ -1,30 +1,115 @@
 "use client";
-import { useMemo, useState } from "react";
-import { RefreshCcw, AlertTriangle, Archive, Check, ChevronDown, Clock3, GripVertical, Loader2, UploadCloud, Wand2 } from "lucide-react";
+
+
+import { useState } from "react";
+import Image from "next/image";
+import { AlertTriangle, Archive, Check, ChevronDown, Clock3, ImageOff, Loader2, Save, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 
-const recommendationChecks = [
-  { label: "Weather coverage", complete: true },
-  { label: "Activity tagging", complete: true }, 
-  { label: "Fallback image", complete: true },
-  { label: "Cold weather metadata", complete: true },
-];
+export type GearEditorItem = {
+  id: string;
+  name: string;
+  brandId: string;
+  brand?: { name?: string | null } | null;
+  category: "TOP" | "BOTTOM" | "ACCESSORY";
+  priceRange: "BUDGET" | "MID" | "PREMIUM";
+  genderTarget?: string | null;
+  subcategory?: string | null;
+  tags: string[];
+  bodyTypeFit: string[];
+  imageUrl?: string | null;
+  affiliateUrl?: string | null;
+  weatherHot?: number | null;
+  weatherCold?: number | null;
+  weatherRain?: number | null;
+  weatherWind?: number | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
-const metadataGroups = [
-  { label: "Activities", values: ["Road Running", "Tempo", "Interval"] },
-  { label: "Weather", values: ["Hot", "Humid", "Rain"] },
-  { label: "Fit", values: ["Slim", "Regular", "Relaxed"] ,}
-];
+type GearEditorProps = {
+  item?: GearEditorItem | null;
+};
 
-const intensityLevels = [
-  { label: "Easy", enabled: false },
-  { label: "Tempo", enabled: true },
-  { label: "Interval", enabled: true },
-  { label: "Race Day", enabled: true },
-];
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+type EditableFields = {
+  name: string;
+  brandId: string;
+  category: GearEditorItem["category"];
+  priceRange: GearEditorItem["priceRange"];
+  genderTarget: string;
+  subcategory: string;
+  imageUrl: string;
+  affiliateUrl: string;
+  tags: string;
+  bodyTypeFit: string;
+  weatherHot: string;
+  weatherCold: string;
+  weatherRain: string;
+  weatherWind: string;
+};
+
+const categoryOptions: Array<GearEditorItem["category"]> = ["TOP", "BOTTOM", "ACCESSORY"];
+const priceRangeOptions: Array<GearEditorItem["priceRange"]> = ["BUDGET", "MID", "PREMIUM"];
+const weatherFields = [
+  { key: "weatherHot", label: "Hot weather" },
+  { key: "weatherCold", label: "Cold weather" },
+  { key: "weatherRain", label: "Rain" },
+  { key: "weatherWind", label: "Wind" },
+] as const;
+
+function hasValue(value?: string | null) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function splitList(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function joinList(value?: string[] | null) {
+  return value?.length ? value.join(", ") : "";
+}
+
+function formatDate(value?: Date) {
+  if (!value) return "Pending";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(value);
+}
+
+function toFields(item?: GearEditorItem | null): EditableFields {
+  return {
+    name: item?.name ?? "",
+    brandId: item?.brandId ?? "",
+    category: item?.category ?? "TOP",
+    priceRange: item?.priceRange ?? "MID",
+    genderTarget: item?.genderTarget ?? "",
+    subcategory: item?.subcategory ?? "",
+    imageUrl: item?.imageUrl ?? "",
+    affiliateUrl: item?.affiliateUrl ?? "",
+    tags: joinList(item?.tags),
+    bodyTypeFit: joinList(item?.bodyTypeFit),
+    weatherHot: item?.weatherHot?.toString() ?? "",
+    weatherCold: item?.weatherCold?.toString() ?? "",
+    weatherRain: item?.weatherRain?.toString() ?? "",
+    weatherWind: item?.weatherWind?.toString() ?? "",
+  };
+}
+
+function parseWeatherScore(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : null;
+}
 
 function SectionHeader({
   title,
@@ -55,7 +140,7 @@ function SectionHeader({
 }
 
 function EditorSection({
-  title, 
+  title,
   description,
   children,
   defaultOpen = true,
@@ -69,8 +154,8 @@ function EditorSection({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950/45">
-      <button 
-        type="button" 
+      <button
+        type="button"
         onClick={() => setOpen((prev) => !prev)}
         className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-zinc-900/60"
       >
@@ -110,457 +195,172 @@ function FieldLabel({
   );
 }
 
-export function GearEditor() {
-  const completion = useMemo(() => {
-    const completed = recommendationChecks.filter(
-      (item) => item.complete
-    ).length;
+function EmptyBadge({ children = "Missing" }: { children?: React.ReactNode }) {
+  return <Badge className="border border-zinc-700 bg-zinc-900 text-zinc-400">{children}</Badge>
+}
 
-    return Math.round((completed / recommendationChecks.length) * 100);
-  }, []);
+export function GearEditor({ item }: GearEditorProps) {
+  const [fields, setFields] = useState<EditableFields>(() => toFields(item));
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const imageUrl = fields.imageUrl.trim();
+  const tags = splitList(fields.tags);
+  const bodyTypeFit = splitList(fields.bodyTypeFit);
+  const weatherValues = weatherFields.map(({ key }) => parseWeatherScore(fields[key]));
+  const completedFields = [
+    fields.name,
+    fields.brandId,
+    fields.category,
+    fields.priceRange,
+    fields.genderTarget,
+    fields.subcategory,
+    imageUrl,
+    fields.affiliateUrl,
+    tags.length ? "tags" : "",
+    bodyTypeFit.length ? "bodyTypeFit" : "",
+    ...weatherValues.map((value) => value === null ? "" : String(value)),
+  ].filter((value) => hasValue(String(value))).length;
+  const totalFields = 14;
+  const completion = Math.round((completedFields / totalFields) * 100);
+  const weatherComplete = weatherValues.filter((value) => value !== null).length;
+
+  const updateField = (key: keyof EditableFields, value: string) => {
+    setFields((current) => ({ ...current, [key]: value }));
+    setSaveState("idle");
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    if (!item) return;
+    setSaveState("saving");
+    setError(null);
+
+    const response = await fetch(`/api/admin/gear/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: fields.name,
+        brandId: fields.brandId,
+        category: fields.category,
+        priceRange: fields.priceRange,
+        genderTarget: fields.genderTarget.trim() || null,
+        subcategory: fields.subcategory.trim() || null,
+        tags,
+        bodyTypeFit,
+        imageUrl: imageUrl || null,
+        affiliateUrl: fields.affiliateUrl.trim() || null,
+        weatherSuitability: {
+          hot: parseWeatherScore(fields.weatherHot),
+          cold: parseWeatherScore(fields.weatherCold),
+          rain: parseWeatherScore(fields.weatherRain),
+          wind: parseWeatherScore(fields.weatherWind),
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      setSaveState("error");
+      setError("Save failed. Check the item data and try again.");
+      return;
+    };
+
+    setSaveState("saved");
+  };
+
+  if (!item) {
+    return (
+      <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
+        <CardContent className="p-5">
+          <SectionHeader title="Gear Editor" description="Select a gear item to review real catalog data" badge={<EmptyBadge>Pending</EmptyBadge>} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="min-w-0 space-y-4 2xl:sticky 2xl:top-6">
-      {/* Save State */}
-      <Card className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
+      <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60">
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
-              <Loader2 className="size-4 text-emerald-300" />
+            <div className="flex size-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/60">
+              {saveState === "saving" ? <Loader2 className="size-4 animate-spin text-zinc-300" /> : <Save className="size-4 text-zinc-400" />}
             </div>
 
             <div>
-              <p className="text-sm font-medium text-emerald-100">
-                Autosaving changes…
-              </p>
-
-              <p className="text-xs text-emerald-200/70">
-                Last synced 12 seconds ago
-              </p>
+              <p className="text-sm font-medium text-zinc-100">Manual save only</p>
+              <p className="text-xs text-zinc-500">Autosave is not configured for this editor.</p>
             </div>
           </div>
 
-          <Badge className="border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-            Synced
+          <Badge className="border border-zinc-700 bg-zinc-950 text-zinc-400">
+            {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving" : saveState === "error" ? "Error" : "Not synced"}
           </Badge>
         </div>
       </Card>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-1">
-        {/* LEFT COLUMN */}
         <div className="space-y-4">
-          {/* Basic Info */}
           <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
             <CardContent className="space-y-6 p-5">
-              <SectionHeader
-                title="Basic Information"
-                description="Primary product information used throughout the catalog and recommendation surfaces."
-                badge={
-                  <Badge className="border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                    Draft
-                  </Badge>
-                }
-              />
+              <SectionHeader title="Basic Information" description="Primary product information stored on the selected catalog item." badge={<Badge className="border border-zinc-700 bg-zinc-950 text-zinc-300">{item.id}</Badge>} />
 
               <div className="space-y-4">
-                <div>
-                  <FieldLabel
-                    label="Gear Name"
-                    hint="Required"
-                  />
+                <div><FieldLabel label="Gear Name" hint="Required" /><Input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
 
-                  <Input
-                    defaultValue="AeroDry Performance Tee"
-                    className="border-zinc-700 bg-zinc-950 text-zinc-100"
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><FieldLabel label="Brand ID" hint={item.brand?.name ?? "Brand relation not loaded"} /><Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Category" /><select value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel label="Brand" />
-
-                    <Input
-                      defaultValue="Nike"
-                      className="border-zinc-700 bg-zinc-950 text-zinc-100"
-                    />
-                  </div>
-
-                  <div>
-                    <FieldLabel label="Category" />
-
-                    <select className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">
-                      <option>Top</option>
-                      <option>Bottom</option>
-                      <option>Outerwear</option>
-                      <option>Accessory</option>
-                    </select>
-                  </div>
+                  <div><FieldLabel label="Subcategory" /><Input value={fields.subcategory} onChange={(event) => updateField("subcategory", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Price range" /><select value={fields.priceRange} onChange={(event) => updateField("priceRange", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{priceRangeOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
-
-                <div>
-                  <FieldLabel
-                    label="Description"
-                    hint="142 / 240 characters"
-                  />
-
-                  <textarea
-                    rows={5}
-                    defaultValue="Lightweight technical tee designed for warm-weather runs with moisture-wicking mesh zones and fast-drying performance fabric."
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-100 outline-none transition focus:border-zinc-500"
-                  />
-
-                  <p className="mt-2 text-[11px] text-zinc-500">
-                    Keep this concise and useful for runners comparing catalog items. 
-                  </p>
-                </div>
+                <div><FieldLabel label="Description" hint="No description field exists on this item" /><textarea rows={4} value="" disabled placeholder="Missing" className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-500 outline-none" /><p className="mt-2 text-[11px] text-zinc-500">Description is unavailable because the current schema does not provide one.</p></div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Media */}
-          <EditorSection
-            title="Media Library"
-            description="Review and manage product imagery."
-          >
+          <EditorSection title="Media Library" description="Shows the selected item's current imageUrl status.">
             <div className="space-y-4">
               <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-                {/* Primary */}
                 <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-                  <div className="aspect-[4/3] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_60%)]" />
-
-                  <div className="absolute left-3 top-3">
-                    <Badge className="bg-black/70 text-white backdrop-blur">
-                      Primary Image
-                    </Badge>
-                  </div>
-
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur">
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        aerodry-front.jpg
-                      </p>
-
-                      <p className="text-xs text-zinc-300">
-                        2400 × 2400
-                      </p>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="bg-white text-black hover:bg-zinc-200"
-                    >
-                      Replace
-                    </Button>
-                  </div>
+                  {imageUrl ? <Image src={imageUrl} alt={fields.name || "Gear item image"} width={640} height={480} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] flex-col items-center justify-center bg-zinc-950 text-zinc-500"><ImageOff className="mb-2 size-8" /><span className="text-sm">No image yet</span></div>}
+                  <div className="absolute left-3 top-3"><Badge className="bg-black/70 text-white backdrop-blur">Primary Image</Badge></div>
+                  <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur"><p className="truncate text-sm font-medium text-white">{imageUrl || "No image yet"}</p><p className="text-xs text-zinc-300">imageUrl {imageUrl ? "configured" : "missing"}</p></div>
                 </div>
 
-                {/* Gallery */}
                 <div className="grid grid-cols-2 gap-3">
-                  {[1, 2, 3].map((item) => (
-                    <div
-                      key={item}
-                      className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900"
-                    >
-                      <div className="aspect-square bg-zinc-950" />
-
-                      <button className="absolute right-2 top-2 rounded-md border border-white/10 bg-black/50 p-1 text-zinc-300 opacity-0 transition group-hover:opacity-100">
-                        <GripVertical className="size-3.5" />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/60 transition hover:border-zinc-500 hover:bg-zinc-900">
-                    <UploadCloud className="mb-2 size-5 text-zinc-500" />
-
-                    <span className="text-xs text-zinc-400">
-                      Upload Image
-                    </span>
-                  </button>
+                  {Array.from({ length: 3 }).map((_, index) => <div key={index} className="flex aspect-square items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 text-xs text-zinc-500">Pending</div>)}
+                  <button type="button" disabled className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 text-zinc-600"><ImageOff className="mb-2 size-5" /><span className="text-xs">Upload not configured</span></button>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="bg-emerald-500/10 text-emerald-300">
-                  4 images uploaded
-                </Badge>
-
-                <Badge className="bg-zinc-800 text-zinc-300">
-                  CDN Optimized
-                </Badge>
-
-                <Badge className="bg-zinc-800 text-zinc-300">
-                  WebP Generated
-                </Badge>
-              </div>
+              <div className="flex flex-wrap items-center gap-2"><Badge className={imageUrl ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-800 text-zinc-400"}>{imageUrl ? "Image URL configured" : "No image yet"}</Badge></div>
             </div>
           </EditorSection>
 
           {/* Recommendation preview */}
-          <EditorSection
-            title="Recommendation Notes"
-            description="Preview the runner-facing explanation for this gear."
-          >
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex gap-3">
-                  <div className="mt-0.5 flex size-9 items-center justify-center rounded-full border border-violet-500/20 bg-violet-500/10">
-                    <Wand2 className="size-4 text-violet-300" />
-                  </div>
-
-                  <div>
-                    <p className="text-sm leading-relaxed text-zinc-300">
-                      Optimized for{" "}
-                      <span className="font-medium text-white">
-                        tempo and interval workouts
-                      </span>{" "}
-                      in{" "}
-                      <span className="font-medium text-white">
-                        warm, humid conditions
-                      </span>
-                      , where lightweight moisture management improves cooling
-                      and comfort over extended efforts.
-                    </p>
-
-                    <p className="mt-2 text-xs text-zinc-500">
-                      Updated 2 minutes ago · Match score 82%
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="border-zinc-700 bg-zinc-900"
-                >
-                  <RefreshCcw className="mr-2 size-3.5" />
-                  Refresh
-                </Button>
-              </div>
-            </div>
+          <EditorSection title="Recommendation Notes" description="Generated recommendation previews are not implemented here.">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4"><div className="flex gap-3"><div className="mt-0.5 flex size-9 items-center justify-center rounded-full border border-violet-500/20 bg-violet-500/10"><Wand2 className="size-4 text-violet-300" /></div><div><p className="text-sm leading-relaxed text-zinc-300">Recommendation note preview is <span className="font-medium text-white">Pending</span>.</p><p className="mt-2 text-xs text-zinc-500">No refresh action or match score is configured for this editor.</p></div></div></div>
           </EditorSection>
         </div>
 
-        {/* RIGHT COLUMN */}
         <div className="space-y-4">
-          {/* Quality */}
-          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60">
-            <CardContent className="space-y-5 p-5">
-              <SectionHeader
-                title="Metadata Quality"
-                description="Completeness for catalog filtering and recommendations."
-              />
+          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60"><CardContent className="space-y-5 p-5"><SectionHeader title="Metadata Quality" description="Completeness based on actual editable fields." /><div><div className="mb-2 flex items-end justify-between"><div><p className="text-4xl font-semibold tracking-tight text-white">{completion}%</p><p className="text-xs text-zinc-500">Metadata completeness</p></div><Badge className={completion >= 80 ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}>{completion >= 80 ? "Ready" : "Pending"}</Badge></div><div className="h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-zinc-100" style={{ width: `${completion}%` }} /></div></div><div className="space-y-2">{[{ label: "Required basics", complete: hasValue(fields.name) && hasValue(fields.brandId) && hasValue(fields.category) }, { label: "Tags", complete: tags.length > 0 }, { label: "Weather scores", complete: weatherComplete > 0 }, { label: "Image URL", complete: hasValue(imageUrl) }].map((check) => <div key={check.label} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"><div className="flex items-center gap-2">{check.complete ? <Check className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm text-zinc-300">{check.label}</span></div><span className="text-xs text-zinc-500">{check.complete ? "Configured" : "Missing"}</span></div>)}</div></CardContent></Card>
 
-              <div>
-                <div className="mb-2 flex items-end justify-between">
-                  <div>
-                    <p className="text-4xl font-semibold tracking-tight text-white">
-                      {completion}%
-                    </p>
-
-                    <p className="text-xs text-zinc-500">
-                      Metadata readiness
-                    </p>
-                  </div>
-
-                  <Badge className="bg-emerald-500/10 text-emerald-300">
-                    Ready
-                  </Badge>
-                </div>
-
-                <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-zinc-100"
-                    style={{ width: `${completion}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {recommendationChecks.map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      {item.complete ? (
-                        <Check className="size-4 text-emerald-300" />
-                      ) : (
-                        <AlertTriangle className="size-4 text-amber-300" />
-                      )}
-
-                      <span className="text-sm text-zinc-300">
-                        {item.label}
-                      </span>
-                    </div>
-
-                    <span className="text-xs text-zinc-500">
-                      {item.complete ? "Complete" : "Needs attention"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Metadata */}
-          <EditorSection
-            title="Recommendation Metadata"
-            description="Tags used for catalog filtering and recommendations."
-          >
+          <EditorSection title="Recommendation Metadata" description="Actual tags and metadata stored in this item">
             <div className="space-y-4">
-              {metadataGroups.map((group) => (
-                <div key={group.label}>
-                  <FieldLabel label={group.label} />
-
-                  <div className="flex flex-wrap gap-2">
-                    {group.values.map((value) => (
-                      <button
-                        key={value}
-                        className="group inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800"
-                      >
-                        {value}
-
-                        <span className="text-zinc-500 transition group-hover:text-zinc-300">
-                          ×
-                        </span>
-                      </button>
-                    ))}
-
-                    <button className="rounded-full border border-dashed border-zinc-700 px-3 py-1.5 text-xs text-zinc-500 transition hover:border-zinc-500 hover:text-zinc-300">
-                      + Add
-                    </button>
-                  </div>
-                </div>
-              ))}
+              <div><FieldLabel label="Tags" hint="Comma-separated" /><Input value={fields.tags} onChange={(event) => updateField("tags", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Missing</EmptyBadge>}</div></div>
+              <div><FieldLabel label="Body type fit" hint="Comma-separated" /><Input value={fields.bodyTypeFit} onChange={(event) => updateField("bodyTypeFit", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{bodyTypeFit.length ? bodyTypeFit.map((fit) => <Badge key={fit} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{fit}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></div>
             </div>
           </EditorSection>
 
-          {/* Weather */}
-          <EditorSection
-            title="Weather Conditions"
-            description="Environmental compatibility details."
-          >
-            <div className="space-y-4">
-              <div>
-                <FieldLabel label="Temperature Range (°F)" />
+          <EditorSection title="Weather Conditions" description="Stored weather suitability scores from 0 to 1."><div className="grid gap-4 sm:grid-cols-2">{weatherFields.map(({ key, label }) => <div key={key}><FieldLabel label={label} /><Input value={fields[key]} onChange={(event) => updateField(key, event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950" /></div>)}</div></EditorSection>
 
-                <div className="flex items-center gap-2">
-                  <Input
-                    defaultValue="62"
-                    className="border-zinc-700 bg-zinc-950"
-                  />
+          <EditorSection title="Intensity Compatibility" description="No separate intensity model exists; workout context can only be inferred from tags." defaultOpen={false}><div className="flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></EditorSection>
 
-                  <span className="text-zinc-500">to</span>
-
-                  <Input
-                    defaultValue="88"
-                    className="border-zinc-700 bg-zinc-950"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel label="Precipitation Tolerance" />
-
-                <select className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100">
-                  <option>Dry only</option>
-                  <option>Light drizzle</option>
-                  <option>Rain-ready</option>
-                </select>
-              </div>
-            </div>
-          </EditorSection>
-
-          {/* Intensity */}
-          <EditorSection
-            title="Intensity Compatibility"
-            description="Select workout types supported by this gear."
-            defaultOpen={false}
-          >
-            <div className="space-y-2">
-              {intensityLevels.map((item) => (
-                <label
-                  key={item.label}
-                  className={`flex cursor-pointer items-center justify-between rounded-xl border px-3 py-3 transition ${
-                    item.enabled
-                      ? "border-zinc-700 bg-zinc-900"
-                      : "border-zinc-800 bg-zinc-950/50"
-                  }`}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">
-                      {item.label}
-                    </p>
-
-                    <p className="text-xs text-zinc-500">
-                      Supported workout context
-                    </p>
-                  </div>
-
-                  <input
-                    type="checkbox"
-                    defaultChecked={item.enabled}
-                    className="size-4 accent-zinc-100"
-                  />
-                </label>
-              ))}
-            </div>
-          </EditorSection>
-
-          {/* Item status */}
-          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
-            <CardContent className="space-y-5 p-5">
-              <SectionHeader
-                title="Catalog Status"
-                description="Track visibility and metadata readiness."
-              />
-
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <Clock3 className="mt-0.5 size-4 text-amber-300" />
-
-                  <div>
-                    <p className="text-sm font-medium text-amber-100">
-                      Needs metadata
-                    </p>
-
-                    <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
-                      Missing cold-weather details before this item is fully ready.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-xs text-zinc-500">
-                <p>Last updated · May 28, 2026 at 07:51 UTC</p>
-
-                <p>Edited by · admin@runlayer.io</p>
-              </div>
-
-              <div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 bg-zinc-900"
-                  >
-                    Save 
-                  </Button>
-
-                  <Button className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">
-                    Save Changes
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 bg-zinc-900"
-                  >
-                    <Archive className="mr-2 size-4" />
-                    Archive
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? "Saving…" : "Save Changes"}</Button><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Archive className="mr-2 size-4" />Archive unavailable</Button></div></div></CardContent></Card>
         </div>
       </div>
     </div>
