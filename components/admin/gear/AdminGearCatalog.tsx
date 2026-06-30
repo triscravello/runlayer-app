@@ -51,10 +51,12 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(items[0]?.id ?? null);
   const [isCreating, setIsCreating] = useState(false);
   const [createdItem, setCreatedItem] = useState<GearEditorItem | null>(null);
+  const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(() => new Set());
   const catalogItems = useMemo(() => {
-    if (!createdItem || items.some((item) => item.id === createdItem.id)) return items;
-    return [createdItem, ...items];
-  }, [createdItem, items]);
+    const activeItems = items.filter((item) => !deletedItemIds.has(item.id));
+    if (!createdItem || activeItems.some((item) => item.id === createdItem.id) || deletedItemIds.has(createdItem.id)) return activeItems;
+    return [createdItem, ...activeItems];
+  }, [createdItem, deletedItemIds, items]);
 
   const filteredItems = useMemo(
     () => catalogItems.filter((item) => matchesFilters(item, filters)),
@@ -85,6 +87,14 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
     router.refresh();
   };
 
+  const handleDeleted = (deletedId: string) => {
+    setDeletedItemIds((current) => new Set(current).add(deletedId));
+    setCreatedItem((current) => current?.id === deletedId ? null : current);
+    setSelectedItemId((current) => current === deletedId ? null : current);
+    setIsCreating(false);
+    router.refresh();
+  };
+
   return (
     <>
       <GearFilters filters={filters} items={catalogItems} resultCount={filteredItems.length} onFiltersChange={setFilters} />
@@ -99,7 +109,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
             <GearTable items={filteredItems} onSelectItem={handleSelectItem} />
           </CardContent>
         </Card>
-        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} />
+        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} onDeleted={handleDeleted} />
       </section>
     </>
   );

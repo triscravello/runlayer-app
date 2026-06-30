@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { AlertTriangle, Archive, Check, ChevronDown, Clock3, ImageOff, Loader2, Save, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Clock3, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -34,9 +34,11 @@ type GearEditorProps = {
   item?: GearEditorItem | null;
   mode?: "edit" | "create";
   onCreated?: (item: GearEditorItem) => void;
+  onDeleted?: (itemId: string) => void;
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+type DeleteState = "idle" | "deleting" | "deleted" | "error";
 
 type EditableFields = {
   name: string;
@@ -201,10 +203,11 @@ function EmptyBadge({ children = "Missing" }: { children?: React.ReactNode }) {
   return <Badge className="border border-zinc-700 bg-zinc-900 text-zinc-400">{children}</Badge>
 }
 
-export function GearEditor({ item, mode = "edit", onCreated }: GearEditorProps) {
+export function GearEditor({ item, mode = "edit", onCreated, onDeleted }: GearEditorProps) {
   const [fields, setFields] = useState<EditableFields>(() => toFields(item));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState>("idle");
 
   const isCreateMode = mode === "create";
 
@@ -234,6 +237,29 @@ export function GearEditor({ item, mode = "edit", onCreated }: GearEditorProps) 
     setSaveState("idle");
     setError(null);
   };
+
+  const handleDelete = async () => {
+    if (isCreateMode || !item) return;
+
+    const confirmed = window.confirm(`Delete ${item.name} from the gear catalog? This permanently removes the item and its variants because this schema does not have an archive/status field. This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeleteState("deleting");
+    setError(null);
+
+    const response = await fetch(`/api/admin/gear/${item.id}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      setDeleteState("error");
+      setError("Delete failed. The item may already be used by related records, or the server rejected the request.");
+      return;
+    }
+
+    setDeleteState("deleted");
+    onDeleted?.(item.id);
+  }
 
   const handleSave = async () => {
     if (!isCreateMode && !item) return;
@@ -373,7 +399,7 @@ export function GearEditor({ item, mode = "edit", onCreated }: GearEditorProps) 
 
           <EditorSection title="Intensity Compatibility" description="No separate intensity model exists; workout context can only be inferred from tags." defaultOpen={false}><div className="flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></EditorSection>
 
-          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item?.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Archive className="mr-2 size-4" />Archive unavailable</Button></div></div></CardContent></Card>
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item?.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button>{isCreateMode ? <Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Trash2 className="mr-2 size-4" />Delete unavailable</Button> : <Button type="button" variant="outline" onClick={handleDelete} disabled={deleteState === "deleting" || deleteState === "deleted"} className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"><Trash2 className="mr-2 size-4" />{deleteState === "deleting" ? "Deleting…" : deleteState === "deleted" ? "Deleted" : "Delete Gear"}</Button>}</div></div></CardContent></Card>
         </div>
       </div>
     </div>
