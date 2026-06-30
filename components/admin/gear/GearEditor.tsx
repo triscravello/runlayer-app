@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Sparkles, RefreshCcw, AlertTriangle, Archive, Check, ChevronDown, Clock3, GripVertical, Loader2, UploadCloud, Wand2 } from "lucide-react";
+import { RefreshCcw, AlertTriangle, Archive, Check, ChevronDown, Clock3, GripVertical, Loader2, UploadCloud, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -68,11 +68,11 @@ function EditorSection({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/60">
+    <div className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950/45">
       <button 
         type="button" 
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between px-4 py-4 text-left transition hover:bg-zinc-900/60"
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-zinc-900/60"
       >
         <div>
           <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
@@ -86,7 +86,7 @@ function EditorSection({
       </button>
 
       {open ? (
-        <div className="border-t border-zinc-800/80 p-4">{children}</div>
+        <div className="border-t border-zinc-800/70 p-4">{children}</div>
       ) : null}
     </div>
   )
@@ -120,7 +120,7 @@ export function GearEditor() {
   }, []);
 
   return (
-    <div className="space-y-4 xl:sticky xl:top-24">
+    <div className="min-w-0 space-y-4 2xl:sticky 2xl:top-6">
       {/* Save State */}
       <Card className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
         <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -146,15 +146,15 @@ export function GearEditor() {
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-1">
         {/* LEFT COLUMN */}
         <div className="space-y-4">
           {/* Basic Info */}
-          <Card className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80 shadow-2xl shadow-black/20">
+          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
             <CardContent className="space-y-6 p-5">
               <SectionHeader
                 title="Basic Information"
-                description="Primary product information used throughout recommendation surfaces and search indexing."
+                description="Primary product information used throughout the catalog and recommendation surfaces."
                 badge={
                   <Badge className="border border-amber-500/20 bg-amber-500/10 text-amber-300">
                     Draft
@@ -198,37 +198,20 @@ export function GearEditor() {
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <FieldLabel
-                      label="Description"
-                      hint="142 / 240 characters"
-                    />
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 gap-1 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                    >
-                      <Sparkles className="size-3.5" />
-                      Improve with AI
-                    </Button>
-                  </div>
+                  <FieldLabel
+                    label="Description"
+                    hint="142 / 240 characters"
+                  />
 
                   <textarea
                     rows={5}
                     defaultValue="Lightweight technical tee designed for warm-weather runs with moisture-wicking mesh zones and fast-drying performance fabric."
-                    className="w-full rounded-xl border border-amber-500/30 bg-zinc-950 px-3 py-3 text-sm text-zinc-100 shadow-[0_0_0_1px_rgba(245,158,11,0.12)] outline-none transition focus:border-zinc-500"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-100 outline-none transition focus:border-zinc-500"
                   />
 
-                  <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-zinc-500">
-                      AI-enhanced description
-                    </span>
-
-                    <span className="text-emerald-300">
-                      Recommendation confidence: High
-                    </span>
-                  </div>
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Keep this concise and useful for runners comparing catalog items. 
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -237,7 +220,7 @@ export function GearEditor() {
           {/* Media */}
           <EditorSection
             title="Media Library"
-            description="Upload, reorder, and manage product imagery."
+            description="Review and manage product imagery."
           >
             <div className="space-y-4">
               <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
@@ -313,10 +296,10 @@ export function GearEditor() {
             </div>
           </EditorSection>
 
-          {/* AI Preview */}
+          {/* Recommendation preview */}
           <EditorSection
-            title="Recommendation Explanation"
-            description="Preview how the recommendation engine explains this gear to runners."
+            title="Recommendation Notes"
+            description="Preview the runner-facing explanation for this gear."
           >
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -340,7 +323,7 @@ export function GearEditor() {
                     </p>
 
                     <p className="mt-2 text-xs text-zinc-500">
-                      Generated 2 minutes ago · Confidence score 82%
+                      Updated 2 minutes ago · Match score 82%
                     </p>
                   </div>
                 </div>
@@ -350,7 +333,7 @@ export function GearEditor() {
                   className="border-zinc-700 bg-zinc-900"
                 >
                   <RefreshCcw className="mr-2 size-3.5" />
-                  Regenerate
+                  Refresh
                 </Button>
               </div>
             </div>
@@ -360,11 +343,11 @@ export function GearEditor() {
         {/* RIGHT COLUMN */}
         <div className="space-y-4">
           {/* Quality */}
-          <Card className="rounded-3xl border border-zinc-800/80 bg-zinc-900/80">
+          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60">
             <CardContent className="space-y-5 p-5">
               <SectionHeader
-                title="Recommendation Quality"
-                description="Metadata completeness and recommendation readiness."
+                title="Metadata Quality"
+                description="Completeness for catalog filtering and recommendations."
               />
 
               <div>
@@ -375,12 +358,12 @@ export function GearEditor() {
                     </p>
 
                     <p className="text-xs text-zinc-500">
-                      Recommendation readiness
+                      Metadata readiness
                     </p>
                   </div>
 
                   <Badge className="bg-emerald-500/10 text-emerald-300">
-                    High Confidence
+                    Ready
                   </Badge>
                 </div>
 
@@ -422,7 +405,7 @@ export function GearEditor() {
           {/* Metadata */}
           <EditorSection
             title="Recommendation Metadata"
-            description="Controls recommendation engine targeting."
+            description="Tags used for catalog filtering and recommendations."
           >
             <div className="space-y-4">
               {metadataGroups.map((group) => (
@@ -455,7 +438,7 @@ export function GearEditor() {
           {/* Weather */}
           <EditorSection
             title="Weather Conditions"
-            description="Controls environmental compatibility."
+            description="Environmental compatibility details."
           >
             <div className="space-y-4">
               <div>
@@ -510,7 +493,7 @@ export function GearEditor() {
                     </p>
 
                     <p className="text-xs text-zinc-500">
-                      Optimized recommendation support
+                      Supported workout context
                     </p>
                   </div>
 
@@ -524,12 +507,12 @@ export function GearEditor() {
             </div>
           </EditorSection>
 
-          {/* Publishing */}
-          <Card className="overflow-hidden rounded-3xl border border-zinc-700/80 bg-zinc-950 shadow-2xl shadow-black/20">
+          {/* Item status */}
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
             <CardContent className="space-y-5 p-5">
               <SectionHeader
-                title="Publishing Workflow"
-                description="Control visibility and deployment status."
+                title="Catalog Status"
+                description="Track visibility and metadata readiness."
               />
 
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
@@ -538,12 +521,11 @@ export function GearEditor() {
 
                   <div>
                     <p className="text-sm font-medium text-amber-100">
-                      Draft pending review
+                      Needs metadata
                     </p>
 
                     <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
-                      Missing cold-weather metadata before recommendation
-                      indexing is fully enabled.
+                      Missing cold-weather details before this item is fully ready.
                     </p>
                   </div>
                 </div>
@@ -561,11 +543,11 @@ export function GearEditor() {
                     variant="outline"
                     className="border-zinc-700 bg-zinc-900"
                   >
-                    Save Draft
+                    Save 
                   </Button>
 
                   <Button className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">
-                    Publish Update
+                    Save Changes
                   </Button>
 
                   <Button
