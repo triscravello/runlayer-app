@@ -137,10 +137,20 @@ function buildEngineContext(profile: UserProfile | null, weather: NormalizedWeat
   };
 }
 
-function toRecommendationInput(context: EngineContext, userId: string): UserInput {
+function toRecommendationInput(context: EngineContext, userId: string, weather: NormalizedWeather | null): UserInput {
   return {
     userId,
     weather: context.weather,
+    weatherSnapshot: weather ? {
+      location: weather.location,
+      tempF: weather.tempF,
+      humidity: weather.humidity,
+      windSpeed: weather.windSpeed,
+      precipitationChance: weather.precipitationChance,
+      uvIndex: weather.uvIndex,
+      condition: weather.condition,
+      tempCategory: weather.tempCategory,
+    } : null,
     intensity: context.runType,
     workoutType: context.runType,
     terrain: context.terrain,
@@ -251,7 +261,7 @@ export function RecommendationPageClient({ user, profile, engineVersion }: Recom
         if (controller.signal.aborted) return;
         setWeather(liveWeather);
         const nextContext = buildEngineContext(profile, liveWeather, user.location, selectedRunType);
-        const nextResult = await recommendationService.generateRecommendations(toRecommendationInput(nextContext, user.id), { signal: controller.signal });
+        const nextResult = await recommendationService.generateRecommendations(toRecommendationInput(nextContext, user.id, liveWeather), { signal: controller.signal });
         if (!controller.signal.aborted) setResult(nextResult);
       } catch (err) {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Unable to load recommendations.");
