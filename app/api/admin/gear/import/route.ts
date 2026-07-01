@@ -1,45 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { withAdmin } from "@/lib/auth/api";
 import { BadRequestError } from "@/lib/http/apiErrors";
-import { importGear } from "@/lib/ingestion/importGear";
+import { listBrands } from "@/lib/db/brandRepository";
+import { parseAdminGearImportFile } from "@/lib/ingestion/parseAdminGearImport";
+import { validateBulkGearImportRows } from "@/lib/validation/adminGearImport";
 import { bulkUpsertGearItems } from "@/services/gearService";
-import { importGearItemsSchema } from "@/lib/validation/adminGear";
-
-async function parseImportPayload(request: NextRequest) {
-    const contentType = request.headers.get("content-type") || "";
-
-    if (contentType.includes("application/json")) {
-        return importGearItemsSchema.parse(await request.json());
-    }
-
-    if (contentType.includes("multipart/form-data")) {
-        const form = await request.formData();
-        const file = form.get("file");
-
-        if (!(file instanceof File)) {
-            throw new BadRequestError("Missing file");
-        }
-
-        try {
-            return importGearItemsSchema.parse(JSON.parse(await file.text()));
-        } catch (error) {
-            if (error instanceof SyntaxError) {
-                throw new BadRequestError("Uploaded file must contain at valid JSON");
-            }
-
-            throw error;
-        }
-    }
-
-    return null;
-}
 
 export const POST = withAdmin(async (request: NextRequest) => {
-    const payload = await parseImportPayload(request);
+    const form = await request.formData();
+    const mode = form.get("mode");
+    const file = form.get("file");
 
-    if (!payload) {
-        return NextResponse.json(await importGear());
+    if (mode !== "dry-run" && mode !== "commit") {
+        throw new BadRequestError("Import mode must be dry-run or commit");
     }
 
-    return NextResponse.json(await bulkUpsertGearItems(payload));
+    if (!(file instanceof File)) {
+        throw new BadRequestError("Missing import file");
+    }
+
+    const rawRows = await parseAdminGearImportFile(file);
+    const brands = await listBrands();
+    const validation = validateBulkGearImportRows(rawRows, brands);
+
+    if (mode === "dry-run") {
+        return NextResponse.json({ mode, ...validation, validItems: undefined });
+    }
+
+    if (validation.validRows === 0) {
+        return NextResponse.json({ mode, ...validation, validItems: undefined, imported: { total: 0, inserted: 0, updated: 0, failed: [] }, status: 400 });
+    }
+
+    const imported = await bulkUpsertGearItems(validation.validItems);
+
+    return NextResponse.json({ mode, ...validation, validItems: undefined, imported });
 })
