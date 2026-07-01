@@ -5,6 +5,8 @@ const priceRangeSchema = z.enum(["BUDGET", "MID", "PREMIUM"]);
 
 const trimmedString = z.string().trim();
 const nullableStringWithDefault = trimmedString.nullable().default(null);
+const nullableUrlWithDefault = trimmedString.url().nullable().default(null);
+const optionalNullableUrl = trimmedString.url().optional().nullable();
 const optionalNullableString = trimmedString.optional().nullable();
 const stringListSchema = z.array(trimmedString.min(1)).default([]);
 const weatherScoreSchema = z.number().min(0).max(1).nullable();
@@ -13,7 +15,7 @@ const productVariantSchema = z.object({
     label: trimmedString.min(1),
     gender: z.enum(["men", "women", "unisex"]),
     affiliateUrl: nullableStringWithDefault,
-    imageUrl: nullableStringWithDefault.optional(),
+    imageUrl: optionalNullableUrl,
     price: z.number().min(0).optional().nullable(),
     sizes: stringListSchema.optional(),
 });
@@ -36,8 +38,8 @@ const baseGearWriteSchema = z.object({
     subcategory: optionalNullableString,
     tags: stringListSchema.optional(),
     bodyTypeFit: stringListSchema.optional(),
-    imageUrl: nullableStringWithDefault,
-    affiliateUrl: nullableStringWithDefault,
+    imageUrl: nullableUrlWithDefault,
+    affiliateUrl: nullableUrlWithDefault,
     variants: z.array(productVariantSchema).optional(),
     weatherSuitability: weatherSuitabilitySchema.optional(),
 });

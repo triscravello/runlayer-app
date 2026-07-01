@@ -79,6 +79,17 @@ function hasValue(value?: string | null) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isValidHttpUrl(value: string) {
+  if (!value.trim()) return false;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function splitList(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
@@ -243,6 +254,8 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
   const completion = Math.round((completedFields / totalFields) * 100);
   const weatherComplete = weatherValues.filter((value) => value !== null).length;
   const selectedBrand = brands.find((brand) => brand.id === fields.brandId) ?? null;
+  const hasPreviewableImageUrl = isValidHttpUrl(imageUrl);
+  const hasInvalidImageUrl = hasValue(imageUrl) && !hasPreviewableImageUrl;
 
   const updateField = (key: keyof EditableFields, value: string) => {
     setFields((current) => ({ ...current, [key]: value }));
@@ -314,6 +327,12 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
 
   const handleSave = async () => {
     if (!isCreateMode && !item) return;
+    if (hasInvalidImageUrl) {
+      setSaveState("error");
+      setError("Image URL must be a valid http or https URL.");
+      return;
+    }
+
     if (!fields.name.trim() || !fields.brandId.trim() || !fields.category || !fields.priceRange) {
       setSaveState("error");
       setError("Name, brand ID, category, and price range are required.");
@@ -352,8 +371,8 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
     };
 
     const savedItem = await response.json() as GearEditorItem;
-    const savedBrand = brands.find((brand) => brand.id === savedItem.brandId) ?? null;
-    const savedItemWithBrand = savedBrand ? { ...savedItem, brand: savedBrand } : savedItem;
+    const savedBrand = brands.find((brand) => brand.id === savedItem.brandId);
+    const savedItemWithBrand = savedBrand ? { ...savedItem, brand: { name: savedBrand.name } } : savedItem;
     setSaveState("saved");
     if (isCreateMode) {
       onCreated?.(savedItemWithBrand);
@@ -414,21 +433,15 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
             </CardContent>
           </Card>
 
-          <EditorSection title="Media Library" description="Shows the selected item's current imageUrl status.">
+          <EditorSection title="Image URL" description="Store one primary image URL. Upload storage is not configured for this app yet.">
             <div className="space-y-4">
-              <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-                <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-                  {imageUrl ? <Image src={imageUrl} alt={fields.name || "Gear item image"} width={640} height={480} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] flex-col items-center justify-center bg-zinc-950 text-zinc-500"><ImageOff className="mb-2 size-8" /><span className="text-sm">No image yet</span></div>}
-                  <div className="absolute left-3 top-3"><Badge className="bg-black/70 text-white backdrop-blur">Primary Image</Badge></div>
-                  <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur"><p className="truncate text-sm font-medium text-white">{imageUrl || "No image yet"}</p><p className="text-xs text-zinc-300">imageUrl {imageUrl ? "configured" : "missing"}</p></div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {Array.from({ length: 3 }).map((_, index) => <div key={index} className="flex aspect-square items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 text-xs text-zinc-500">Pending</div>)}
-                  <button type="button" disabled className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 text-zinc-600"><ImageOff className="mb-2 size-5" /><span className="text-xs">Upload not configured</span></button>
-                </div>
+              <div><FieldLabel label="Primary image URL" hint="Optional http(s) URL" /><Input value={fields.imageUrl} onChange={(event) => updateField("imageUrl", event.target.value)} placeholder="https://example.com/image.jpg" className="border-zinc-700 bg-zinc-950 text-zinc-100" />{hasInvalidImageUrl ? <p className="mt-2 text-xs text-rose-300">Enter a valid http or https URL before saving.</p> : null}</div>
+              <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+                {hasPreviewableImageUrl ? <div role="img" aria-label={fields.name || "Gear item image"} className="aspect-[4/3] w-full bg-cover bg-center" style={{ backgroundImage: `url(${imageUrl})` }} /> : <div className="flex aspect-[4/3] flex-col items-center justify-center bg-zinc-950 text-zinc-500"><ImageOff className="mb-2 size-8" /><span className="text-sm">{imageUrl ? "Invalid image URL" : "No image yet"}</span></div>}
+                <div className="absolute left-3 top-3"><Badge className="bg-black/70 text-white backdrop-blur">Primary Image</Badge></div>
+                <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur"><p className="truncate text-sm font-medium text-white">{imageUrl || "No image yet"}</p><p className="text-xs text-zinc-300">imageUrl {hasPreviewableImageUrl ? "configured" : imageUrl ? "invalid" : "missing"}</p></div>
               </div>
-              <div className="flex flex-wrap items-center gap-2"><Badge className={imageUrl ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-800 text-zinc-400"}>{imageUrl ? "Image URL configured" : "No image yet"}</Badge></div>
+              <div className="flex flex-wrap items-center gap-2"><Badge className={hasPreviewableImageUrl ? "bg-emerald-500/10 text-emerald-300" : imageUrl ? "bg-rose-500/10 text-rose-300" : "bg-zinc-800 text-zinc-400"}>{hasPreviewableImageUrl ? "Image URL configured" : imageUrl ? "Invalid image URL" : "No image yet"}</Badge><Button type="button" disabled variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-500">Upload not configured</Button></div>
             </div>
           </EditorSection>
 
