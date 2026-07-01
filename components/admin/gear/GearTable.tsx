@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MoreHorizontal, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { Pencil, ChevronDown, ChevronUp, ChevronsUpDown, Columns3 } from "lucide-react";
 import Image from "next/image";
 
 import { Badge } from "@/components/ui/Badge";
@@ -119,6 +119,7 @@ function getInitials(name: string) {
 export function GearTable({ items, onSelectItem }: GearTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState>({ key: "updatedAt", direction: "desc" });
+  const [isCompact, setIsCompact] = useState(false);
 
   const sortedItems = useMemo(() => {
     const cloned = [...items];
@@ -159,31 +160,29 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
   return (
     <div className="min-w-0 space-y-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/45 px-3 py-2 text-sm">
-        {hasSelected ? (
-          <>
-            <span className="text-zinc-200">{selectedIds.size} selected</span>
-            <div className="flex flex-wrap gap-2">{["Publish", "Hide", "Delete", "Re-score", "Export"].map((action) => <Button key={action} size="sm" variant="outline" className="border-zinc-700 bg-zinc-900">{action}</Button>)}</div>
-          </>
-        ) : (
-          <span className="text-zinc-400">Select rows to enable bulk actions.</span>
-        )}
+        <span className="text-zinc-400">
+          {hasSelected ? `${selectedIds.size} selected. Bulk actions are not enabled yet.` : "Select rows for future bulk actions, or click a product name to edit it."}
+        </span>
+        <Button type="button" size="sm" variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-200" onChange={() => setIsCompact((current) => !current)} aria-pressed={isCompact}>
+          <Columns3 className="size-4" /> {isCompact ? "Comfort columns" : "Compact columns"}
+        </Button>
       </div>
       <div className="min-w-0 overflow-hidden rounded-xl border border-zinc-800/80">
         <div className="max-h-[560px] overflow-auto">
-          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+          <table className={`w-full table-fixed text-left text-sm ${isCompact ? "min-w-[760px]" : "min-w-[1040px]"}`}>
             <thead className="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/90 text-zinc-400 backdrop-blur">
               <tr>
                 <th className="w-10 px-3 py-3 font-medium">
                   <span className="sr-only">Select row</span>
                 </th>
-                <th className="w-16 px-3 py-3 font-medium">Image</th>
-                <th className="w-[22%] px-3 py-3 font-medium">Name</th>
-                <th className="w-[11%] px-3 py-3 font-medium">Brand</th>
-                <th className="w-[10%] px-3 py-3 font-medium">Category</th>
-                <th className="w-[8%] px-3 py-3 font-medium">Price</th>
-                <th className="w-[13%] px-3 py-3 font-medium">Weather</th>
-                <th className="w-[9%] px-3 py-3 font-medium">Intensity</th>
-                <th className="px-3 py-3 font-medium"><SortableHeader label="Rec. Score" sortKey="recommendationScore" sort={sort} onSort={toggleSort} /></th>
+                {!isCompact ? <th className="w-16 px-3 py-3 font-medium">Image</th> : null}
+                <th className={isCompact ? "w-[32%] px-3 py-3 font-medium" : "w-[24%] px-3 py-3 font-medium"}>Name</th>
+                <th className={isCompact ? "w-[18%] px-3 py-3 font-medium" : "w-[14%] px-3 py-3 font-medium"}>Brand</th>
+                <th className="w-[11%] px-3 py-3 font-medium">Category</th>
+                <th className="w-[10%] px-3 py-3 font-medium">Price</th>
+                {!isCompact ? <th className="w-[14%] px-3 py-3 font-medium">Weather</th> : null}
+                {!isCompact ? <th className="w-[10%] px-3 py-3 font-medium">Fit</th> : null}
+                {!isCompact ? <th className="px-3 py-3 font-medium"><SortableHeader label="Rec. Score" sortKey="recommendationScore" sort={sort} onSort={toggleSort} /></th> : null}
                 <th className="px-3 py-3 font-medium"><SortableHeader label="Status" sortKey="status" sort={sort} onSort={toggleSort} /></th>
                 <th className="px-3 py-3 font-medium"><SortableHeader label="Last Updated" sortKey="updatedAt" sort={sort} onSort={toggleSort} /></th>
                 <th className="px-3 py-3 font-medium">Actions</th>
@@ -192,7 +191,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
             <tbody>
               {sortedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-16 text-center text-zinc-500">No gear found. Try adjusting filters or importing a new catalog.</td>
+                  <td colSpan={isCompact ? 8 : 12} className="px-6 py-16 text-center text-zinc-500">No gear found. Try adjusting filters or importing a new catalog.</td>
                 </tr>
               ) : (
                 sortedItems.map((item) => {
@@ -212,15 +211,17 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                           className="rounded border-zinc-700 bg-zinc-900 accent-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                         />
                       </td>
-                      <td className="px-3 py-3">
-                        {hasValidImageUrl ? (
-                          <Image src={item.imageUrl ?? ""} alt={item.name} width={36} height={36} className="size-9 rounded-md object-cover" />
-                        ) : (
-                          <div className="flex size-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-semibold text-zinc-300">
-                            {getInitials(item.name)}
-                          </div>
-                        )}
-                      </td>
+                      {!isCompact ? (
+                        <td className="px-3 py-3">
+                          {hasValidImageUrl ? (
+                            <Image src={item.imageUrl ?? ""} alt={item.name} width={36} height={36} className="size-9 rounded-md object-cover" />
+                          ) : (
+                            <div className="flex size-9 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-semibold text-zinc-300">
+                              {getInitials(item.name)}
+                            </div>
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-3 py-3">
                         <button 
                           type="button" 
@@ -231,20 +232,20 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                           }}
                         >
                           <p className="truncate font-semibold text-zinc-100">{item.name}</p>
-                          <p className="truncate text-xs text-zinc-500">ID: {item.id}</p>
+                          <p className="truncate text-xs text-zinc-500">{item.imageUrl ? "Image configured" : "Missing image"} • ID: {item.id}</p>
                         </button>
                       </td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.brand?.name ?? item.brandId ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.category ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.priceRange ?? <EmptyStateCell />}</td>
-                      <td className="px-3 py-3 text-zinc-300"><span className="line-clamp-2">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="Needs metadata" />}</span></td>
-                      <td className="truncate px-3 py-3 text-zinc-300">{item.intensity ?? <EmptyStateCell />}</td>
-                      <td className="px-3 py-3"><ScoreCell score={item.recommendationScore} /></td>
+                      {!isCompact ? <td className="px-3 py-3 text-zinc-300"><span className="line-clamp-2">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="Needs metadata" />}</span></td> : null}
+                      {!isCompact ? <td className="truncate px-3 py-3 text-zinc-300">{item.intensity ?? <EmptyStateCell />}</td> : null}
+                      {!isCompact ? <td className="px-3 py-3"><ScoreCell score={item.recommendationScore} /></td> : null}
                       <td className="px-3 py-3"><StatusBadge status={item.status} /></td>
                       <td className="whitespace-nowrap px-3 py-3 text-zinc-400">{formatRelativeDate(item.updatedAt) ?? <EmptyStateCell message="Pending" />}</td>
                       <td className="px-3 py-3">
-                        <Button size="icon" variant="ghost" className="text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:ring-2 focus-visible:ring-sky-500">
-                          <MoreHorizontal className="size-4" />
+                        <Button type="button" size="sm" variant="ghost" className="text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:ring-2 focus-visible:ring-sky-500" onClick={() => onSelectItem?.(item.id)}>
+                          <Pencil className="size-4" /> Edit
                         </Button>
                       </td>
                     </tr>
@@ -255,7 +256,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
           </table>
         </div>
       </div>
-      <p className="text-sm text-zinc-400">Showing {sortedItems.length} items • infinite scroll enabled</p>
+      <p className="text-sm text-zinc-400">Showing {sortedItems.length} items in {isCompact ? "compact" : "comfort"} table mode.</p>
     </div>
   );
 }

@@ -13,7 +13,8 @@ type AdminGearCatalogProps = {
 };
 
 function hasMetadataGaps(item: GearEditorItem) {
-  return item.tags.length === 0 || item.bodyTypeFit.length === 0 || !item.imageUrl;
+  const hasWeatherMetadata = [item.weatherHot, item.weatherCold, item.weatherRain, item.weatherWind].some((value) => typeof value === "number");
+  return item.tags.length === 0 || item.bodyTypeFit.length === 0 || !item.imageUrl || !item.subcategory || !hasWeatherMetadata;
 }
 
 function matchesSearch(item: GearEditorItem, query: string) {
@@ -33,6 +34,8 @@ function matchesSearch(item: GearEditorItem, query: string) {
 
 function matchesFilters(item: GearEditorItem, filters: GearFilterState) {
   if (filters.category !== "all" && item.category !== filters.category) return false;
+  if (filters.priceRange !== "all" && item.priceRange !== filters.priceRange) return false;
+  if (filters.brandId !== "all" && item.brandId !== filters.brandId) return false;
   if (filters.imageStatus === "with-image" && !item.imageUrl) return false;
   if (filters.imageStatus === "missing-image" && item.imageUrl) return false;
   if (filters.metadataStatus === "needs-metadata" && !hasMetadataGaps(item)) return false;
@@ -44,6 +47,8 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
   const [filters, setFilters] = useState<GearFilterState>({
     searchQuery: "",
     category: "all",
+    priceRange: "all",
+    brandId: "all",
     imageStatus: "all",
     metadataStatus: "all",
   });
@@ -119,7 +124,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
 
   return (
     <>
-      <GearFilters filters={filters} items={catalogItems} resultCount={filteredItems.length} onFiltersChange={setFilters} />
+      <GearFilters filters={filters} items={catalogItems} brands={brands} resultCount={filteredItems.length} onFiltersChange={setFilters} />
 
       <section className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="min-w-0 rounded-2xl border-zinc-800/70 bg-zinc-900/60">

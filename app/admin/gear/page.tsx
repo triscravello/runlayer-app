@@ -1,6 +1,7 @@
 import { Boxes, CheckCircle2, Sparkles, UploadCloud, type LucideIcon } from "lucide-react";
 import { AdminGearCatalog } from "@/components/admin/gear/AdminGearCatalog";
 import { AdminGearActions } from "@/components/admin/gear/AdminGearActions";
+import { GearImportForm } from "@/components/admin/gear/GearImportForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getGear } from "@/services/gearService";
 import { requireAdmin } from "@/lib/auth";
@@ -115,6 +116,7 @@ export default async function AdminGearPage() {
         </section>
 
         <AdminGearCatalog items={items} />
+        <GearImportForm />
       </div>
     </main>
   );
