@@ -30,19 +30,28 @@ export type GearEditorItem = {
   updatedAt?: Date;
 };
 
+export type GearBrandOption = {
+  id: string;
+  name: string;
+}
+
 type GearEditorProps = {
   item?: GearEditorItem | null;
   mode?: "edit" | "create";
   onCreated?: (item: GearEditorItem) => void;
   onDeleted?: (itemId: string) => void;
+  brands?: GearBrandOption[];
+  onBrandCreated?: (brand: GearBrandOption) => void;
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type DeleteState = "idle" | "deleting" | "deleted" | "error";
+type BrandCreateState = "idle" | "creating" | "created" | "error";
 
 type EditableFields = {
   name: string;
   brandId: string;
+  newBrandName: string;
   category: GearEditorItem["category"];
   priceRange: GearEditorItem["priceRange"];
   genderTarget: string;
@@ -94,6 +103,7 @@ function toFields(item?: GearEditorItem | null): EditableFields {
   return {
     name: item?.name ?? "",
     brandId: item?.brandId ?? "",
+    newBrandName: "",
     category: item?.category ?? "TOP",
     priceRange: item?.priceRange ?? "MID",
     genderTarget: item?.genderTarget ?? "",
@@ -203,11 +213,12 @@ function EmptyBadge({ children = "Missing" }: { children?: React.ReactNode }) {
   return <Badge className="border border-zinc-700 bg-zinc-900 text-zinc-400">{children}</Badge>
 }
 
-export function GearEditor({ item, mode = "edit", onCreated, onDeleted }: GearEditorProps) {
+export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands = [], onBrandCreated }: GearEditorProps) {
   const [fields, setFields] = useState<EditableFields>(() => toFields(item));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState>("idle");
+  const [brandCreateState, setBrandCreateState] = useState<BrandCreateState>("idle");
 
   const isCreateMode = mode === "create";
 
@@ -231,11 +242,51 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted }: GearEd
   const totalFields = 14;
   const completion = Math.round((completedFields / totalFields) * 100);
   const weatherComplete = weatherValues.filter((value) => value !== null).length;
+  const selectedBrand = brands.find((brand) => brand.id === fields.brandId) ?? null;
 
   const updateField = (key: keyof EditableFields, value: string) => {
     setFields((current) => ({ ...current, [key]: value }));
     setSaveState("idle");
     setError(null);
+    if (key === "newBrandName") setBrandCreateState("idle");
+  };
+
+  const handleCreateBrand = async () => {
+    const brandName = fields.newBrandName.trim();
+    if (!brandName) {
+      setBrandCreateState("error");
+      setError("Enter a brand name before creating a brand.");
+      return;
+    }
+
+    const existingBrand = brands.find((brand) => brand.name.toLowerCase() === brandName.toLowerCase());
+    if (existingBrand) {
+      updateField("brandId", existingBrand.id);
+      updateField("newBrandName", "");
+      setBrandCreateState("created");
+      return;
+    }
+
+    setBrandCreateState("creating");
+    setError(null);
+
+    const response = await fetch("/api/admin/brands", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: brandName }),
+    });
+
+    if (!response.ok) {
+      setBrandCreateState("error");
+      setError("Brand creation failed. Check the brand name and try again.");
+      return;
+    }
+
+    const createdBrand = await response.json() as GearBrandOption;
+    onBrandCreated?.(createdBrand);
+    updateField("brandId", createdBrand.id);
+    updateField("newBrandName", "");
+    setBrandCreateState("created");
   };
 
   const handleDelete = async () => {
@@ -301,9 +352,11 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted }: GearEd
     };
 
     const savedItem = await response.json() as GearEditorItem;
+    const savedBrand = brands.find((brand) => brand.id === savedItem.brandId) ?? null;
+    const savedItemWithBrand = savedBrand ? { ...savedItem, brand: savedBrand } : savedItem;
     setSaveState("saved");
     if (isCreateMode) {
-      onCreated?.(savedItem);
+      onCreated?.(savedItemWithBrand);
     }
   };
 
@@ -348,7 +401,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted }: GearEd
                 <div><FieldLabel label="Gear Name" hint="Required" /><Input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Brand" hint={item?.brand?.name ? `Internal ID: ${fields.brandId || "Missing"}` : isCreateMode ? "Required" : "Brand relation not loaded"} />{item?.brand?.name ? <p className="mb-2 text-sm font-medium text-zinc-100">{item.brand.name}</p> : null}<Input value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Brand" hint={selectedBrand ? `Selected: ${selectedBrand.name}` : isCreateMode ? "Required" : "Select by name"} /><select value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Select a brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select><div className="mt-3 flex gap-2"><Input value={fields.newBrandName} onChange={(event) => updateField("newBrandName", event.target.value)} placeholder="New brand name" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><Button type="button" variant="outline" onClick={handleCreateBrand} disabled={brandCreateState === "creating"} className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800">{brandCreateState === "creating" ? "Adding…" : "Add"}</Button></div><p className="mt-2 text-[11px] text-zinc-500">Brand ID is stored automatically after selecting or creating a brand.</p></div>
                   <div><FieldLabel label="Category" /><select value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 

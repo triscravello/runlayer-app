@@ -15,6 +15,7 @@ export type GearTableItem = {
   category?: string;
   priceRange?: string;
   brandId?: string;
+  brand?: { name?: string | null } | null;
   status?: GearStatus;
   recommendationScore?: number;
   weatherTags?: string[];
@@ -233,7 +234,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                           <p className="truncate text-xs text-zinc-500">ID: {item.id}</p>
                         </button>
                       </td>
-                      <td className="truncate px-3 py-3 text-zinc-300">{item.brandId ?? <EmptyStateCell />}</td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{item.brand?.name ?? item.brandId ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.category ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.priceRange ?? <EmptyStateCell />}</td>
                       <td className="px-3 py-3 text-zinc-300"><span className="line-clamp-2">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="Needs metadata" />}</span></td>

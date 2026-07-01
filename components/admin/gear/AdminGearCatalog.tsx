@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GearEditor, type GearEditorItem } from "@/components/admin/gear/GearEditor";
+import { GearEditor, type GearBrandOption,type GearEditorItem } from "@/components/admin/gear/GearEditor";
 import { GearFilters, type GearFilterState } from "@/components/admin/gear/GearFilters";
 import { GearTable } from "@/components/admin/gear/GearTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -51,6 +51,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(items[0]?.id ?? null);
   const [isCreating, setIsCreating] = useState(false);
   const [createdItem, setCreatedItem] = useState<GearEditorItem | null>(null);
+  const [brands, setBrands] = useState<GearBrandOption[]>([]);
   const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(() => new Set());
   const catalogItems = useMemo(() => {
     const activeItems = items.filter((item) => !deletedItemIds.has(item.id));
@@ -64,9 +65,26 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
   );
 
   useEffect(() => {
+    let ignore = false;
+
+    async function loadBrands() {
+      const response = await fetch("/api/admin/brands");
+      if (!response.ok || ignore) return;
+      const loadedBrands = await response.json() as GearBrandOption[];
+      setBrands(loadedBrands);
+    }
+
+    void loadBrands();
+
+    return () => {
+      ignore = true;
+    }
+  }, []);
+
+  useEffect(() => {
     const handleAddGear = () => {
-        setIsCreating(true);
-        setSelectedItemId(null);
+      setIsCreating(true);
+      setSelectedItemId(null);
     };
 
     window.addEventListener(ADMIN_GEAR_ADD_EVENT, handleAddGear);
@@ -85,6 +103,10 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
     setIsCreating(false);
     setSelectedItemId(created.id);
     router.refresh();
+  };
+
+  const handleBrandCreated = (brand: GearBrandOption) => {
+    setBrands((current) => current.some((item) => item.id === brand.id) ? current : [...current, brand].sort((a, b) => a.name.localeCompare(b.name)));
   };
 
   const handleDeleted = (deletedId: string) => {
@@ -109,7 +131,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
             <GearTable items={filteredItems} onSelectItem={handleSelectItem} />
           </CardContent>
         </Card>
-        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} onDeleted={handleDeleted} />
+        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} onDeleted={handleDeleted} brands={brands} onBrandCreated={handleBrandCreated} />
       </section>
     </>
   );
