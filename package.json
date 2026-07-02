@@ -23,12 +23,14 @@
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "pg": "^8.20.0",
+    "prom-client": "^15.1.3",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.79.0",
     "tailwind-merge": "^3.5.0",
     "upstash": "^0.0.1",
+    "winston": "^3.19.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
