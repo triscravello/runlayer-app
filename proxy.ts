@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { globalLimiter, getClientIp } from "./lib/rate-limit";
 
 const AUTH_COOKIE_NAME = "runlayer_session";
 const protectedPrefixes = ["/dashboard", "/admin"];
 
+// keep your existing getAuthSecret, hmacSha256Hex, hasValidSession functions here
 function getAuthSecret() {
     const secret = process.env.BETTER_AUTH_SECRET;
 
@@ -43,24 +45,61 @@ async function hasValidSession(token?: string) {
 }
 
 export async function proxy(req: NextRequest) {
-    const path = req.nextUrl.pathname;
-    const isProtectedRoute = protectedPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  const path = req.nextUrl.pathname;
 
-    if (!isProtectedRoute) {
-        return NextResponse.next();
+  // Global API rate limiting
+  if (path.startsWith("/api/")) {
+    const ip = getClientIp(req);
+    const { success, limit, remaining, reset } = await globalLimiter.limit(ip);
+    const retryAfter = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
+
+    if (!success) {
+      return NextResponse.json(
+        {
+          error: "Too many requests",
+          message: "You have exceeded the rate limit. Please try again later.",
+          retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": limit.toString(),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": reset.toString(),
+            "Retry-After": retryAfter.toString(),
+          },
+        }
+      );
     }
 
-    const validSession = await hasValidSession(req.cookies.get(AUTH_COOKIE_NAME)?.value);
+    const response = NextResponse.next();
+    response.headers.set("X-RateLimit-Limit", limit.toString());
+    response.headers.set("X-RateLimit-Remaining", remaining.toString());
+    response.headers.set("X-RateLimit-Reset", reset.toString());
 
-    if (!validSession) {
-        const loginUrl = new URL("/login", req.url);
-        loginUrl.searchParams.set("redirect", `${req.nextUrl.pathname}${req.nextUrl.search}`);
-        return NextResponse.redirect(loginUrl);
-    }
+    return response;
+  }
 
+  // Existing page protection
+  const isProtectedRoute = protectedPrefixes.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
+
+  if (!isProtectedRoute) {
     return NextResponse.next();
+  }
+
+  const validSession = await hasValidSession(req.cookies.get(AUTH_COOKIE_NAME)?.value);
+
+  if (!validSession) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("redirect", `${req.nextUrl.pathname}${req.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: ["/dashboard/:path*", "/admin/:path*"],
-}
+  matcher: ["/api/:path*", "/dashboard/:path*", "/admin/:path*"],
+};
