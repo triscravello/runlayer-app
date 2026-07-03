@@ -1,6 +1,9 @@
 services:
   prometheus:
     image: prom/prometheus:v3.13.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-remote-write-receiver'
     ports:
       - "9090:9090"
     volumes:
@@ -21,3 +24,8 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

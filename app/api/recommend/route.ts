@@ -6,7 +6,8 @@ import { parseJsonBody } from "@/lib/http/validation";
 import type { UserInput } from "@/lib/engine/recommendationEngine";
 import { recommendationsLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { withInstrumentation, recordRecommendation, recordRateLimitHit } from "@/lib/instrumentation";
-
+import { redis } from "@/lib/redis";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -66,11 +67,23 @@ export const POST = withInstrumentation(
       recommendationInputSchema
     );
 
+    const cacheKey = crypto.createHash("sha256").update(JSON.stringify({ userId: user.id, body })).digest("hex");
+
+    const redisKey = `recommendation:${cacheKey}`;
+
+    const cached = await redis.get(redisKey);
+
+    if (cached) {
+      return NextResponse.json(JSON.parse(cached), { headers });
+    }
+
     const recommendations = await generateGearRecommendations(
       { ...body, userId: user.id },
       undefined,
       user.id
     );
+
+    await redis.set(redisKey, JSON.stringify(recommendations), "EX", 60);
 
     recordRecommendation();
 
