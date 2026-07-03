@@ -1,0 +1,91 @@
+{
+    "title": "RunLayer API Observability",
+    "uid": "runlayer-observability",
+    "schemaVersion": 39,
+    "version": 1,
+    "timezone": "browser",
+    "refresh": "10s",
+    "time": { "from": "now-30m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate by Route",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(runlayer_http_requests_total[5m])) by (route)",
+            "legendFormat": "{{route}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Latency Percentiles (p50 / p95 / p99)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(runlayer_http_request_duration_seconds_bucket[5m])) by (le, route))",
+            "legendFormat": "p50 {{route}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(runlayer_http_request_duration_seconds_bucket[5m])) by (le, route))",
+            "legendFormat": "p95 {{route}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(runlayer_http_request_duration_seconds_bucket[5m])) by (le, route))",
+            "legendFormat": "p99 {{route}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Rate Limit Hits",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(runlayer_rate_limit_hits_total[5m])) by (route)",
+            "legendFormat": "{{route}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Auth Failures",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(runlayer_auth_failures_total[5m])) by (reason)",
+            "legendFormat": "{{reason}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Requests",
+        "type": "gauge",
+        "gridPos": { "h": 8, "w": 4, "x": 16, "y": 8 },
+        "targets": [
+          {
+            "expr": "runlayer_active_requests",
+            "legendFormat": "active"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Recommendations Served (1h)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 4, "x": 20, "y": 8 },
+        "targets": [
+          {
+            "expr": "increase(runlayer_recommendations_total[1h])",
+            "legendFormat": "recommendations"
+          }
+        ]
+      }
+    ]
+}
