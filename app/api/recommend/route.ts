@@ -5,6 +5,7 @@ import { generateGearRecommendations } from "@/services/recommendationServerServ
 import { parseJsonBody } from "@/lib/http/validation";
 import type { UserInput } from "@/lib/engine/recommendationEngine";
 import { recommendationsLimiter, rateLimitHeaders } from "@/lib/rate-limit";
+import { withInstrumentation, recordRecommendation, recordRateLimitHit } from "@/lib/instrumentation";
 
 
 export const runtime = "nodejs";
@@ -33,36 +34,47 @@ const recommendationInputSchema = z.object({
     category: z.enum(["top", "bottom", "accessory", "outerwear", "socks", "hat", "gloves", "all"]).optional(),
 })
 
-export const POST = withAuth(async (request: NextRequest, _context, user) => {
-  const { success, limit, remaining, reset } = await recommendationsLimiter.limit(user.id);
+export const POST = withInstrumentation(
+  withAuth(async (request: NextRequest, _context, user) => {
+    const { success, limit, remaining, reset } =
+      await recommendationsLimiter.limit(user.id);
 
-  const headers = rateLimitHeaders(limit, remaining, reset);
-  const retryAfter = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
+    const headers = rateLimitHeaders(limit, remaining, reset);
+    const retryAfter = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
 
-  if (!success) {
-    return NextResponse.json(
-      {
-        error: "Rate limit exceeded",
-        message: "Too many recommendation requests. Please wait.",
-        retryAfter,
-      },
-      {
-        status: 429,
-        headers: {
-          ...rateLimitHeaders(limit, 0, reset),
-          "Retry-After": retryAfter.toString(),
+    if (!success) {
+      recordRateLimitHit("/api/recommend");
+
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Too many recommendation requests. Please wait.",
+          retryAfter,
         },
-      }
+        {
+          status: 429,
+          headers: {
+            ...rateLimitHeaders(limit, 0, reset),
+            "Retry-After": retryAfter.toString(),
+          },
+        }
+      );
+    }
+
+    const body = await parseJsonBody<UserInput>(
+      request,
+      recommendationInputSchema
     );
-  }
 
-  const body = await parseJsonBody<UserInput>(request, recommendationInputSchema);
+    const recommendations = await generateGearRecommendations(
+      { ...body, userId: user.id },
+      undefined,
+      user.id
+    );
 
-  const recommendations = await generateGearRecommendations(
-    { ...body, userId: user.id },
-    undefined,
-    user.id
-  );
+    recordRecommendation();
 
-  return NextResponse.json(recommendations, { headers });
-});
+    return NextResponse.json(recommendations, { headers });
+  }),
+  "/api/recommend"
+);

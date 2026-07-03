@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { globalLimiter, getClientIp } from "./lib/rate-limit";
+import { recordRateLimitHit } from "./lib/instrumentation";
 
 const AUTH_COOKIE_NAME = "runlayer_session";
 const protectedPrefixes = ["/dashboard", "/admin"];
@@ -54,6 +55,7 @@ export async function proxy(req: NextRequest) {
     const retryAfter = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
 
     if (!success) {
+      recordRateLimitHit(path);
       return NextResponse.json(
         {
           error: "Too many requests",

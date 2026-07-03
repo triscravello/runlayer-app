@@ -10,11 +10,11 @@ import {
 } from './metrics';
 
 // Define the shape of a Next.js route handler
-type RouteHandler = (request: NextRequest) => Promise<NextResponse>;
+type RouteHandler = (request: NextRequest, context: object) => Promise<Response>;
 
 // Higher-order function that wraps any route handler with instrumentation
 export function withInstrumentation(handler: RouteHandler, routeName: string): RouteHandler {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, context: object) => {
     // Generate a unique ID to correlate all logs for this request
     const requestId = crypto.randomUUID();
     const method = request.method;
@@ -30,7 +30,7 @@ export function withInstrumentation(handler: RouteHandler, routeName: string): R
     let statusCode = 500;
 
     try {
-      const response = await handler(request);
+      const response = await handler(request, context);
       statusCode = response.status;
       return response;
     } catch (error) {

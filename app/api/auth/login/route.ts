@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAuthCookies, verifyPassword } from "@/lib/auth";
 import { authLimiter, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
+import { withInstrumentation, recordAuthFailure, recordRateLimitHit } from "@/lib/instrumentation";
 
 type LoginPayload = {
     email?: unknown;
@@ -15,12 +16,13 @@ function invalidCredentials() {
     );
 }
 
-export async function POST(request: Request) {
+export const POST = withInstrumentation(async (request: NextRequest) => {
     const ip = getClientIp(request);
     const { success, limit, remaining, reset } = await authLimiter.limit(ip);
     const headers = rateLimitHeaders(limit, remaining, reset);
 
     if (!success) {
+        recordRateLimitHit("/api/auth/login");
         return NextResponse.json(
             {
                 error: "Too many login attempts",
@@ -40,6 +42,7 @@ export async function POST(request: Request) {
         const { email, password } = (await request.json()) as LoginPayload;
 
         if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password) {
+            recordAuthFailure("/api/auth/login", "validation_error");
             return NextResponse.json(
                 { success: false, error: { code: "VALIDATION_ERROR", message: "Email and password are required" } }, 
                 { status: 400, headers },
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
         });
 
         if (!user || !verifyPassword(password, user.passwordHash)) {
+            recordAuthFailure("/api/auth/login", "invalid_credentials");
             const response = invalidCredentials();
             Object.entries(headers).forEach(([key, value]) => response.headers.set(key, value));
             return response;
@@ -89,7 +93,8 @@ export async function POST(request: Request) {
         response.cookies.set(name, token, options);
         return response;
     } catch (error) {
+        recordAuthFailure("/api/auth/login", "login_error");
         console.error("Error logging in:", error);
         return invalidCredentials();
     }
-}
+}, "/api/auth/login");
