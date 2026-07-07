@@ -6,7 +6,7 @@ import { parseJsonBody } from "@/lib/http/validation";
 import type { UserInput } from "@/lib/engine/recommendationEngine";
 import { recommendationsLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { withInstrumentation, recordRecommendation, recordRateLimitHit } from "@/lib/instrumentation";
-import { redis } from "@/lib/redis";
+import { getCachedJson, setCachedJson } from "@/lib/redis";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -24,6 +24,8 @@ const weatherSnapshotSchema = z.object({
     condition: z.string().optional().nullable(),
     tempCategory: z.string().optional().nullable(),
 });
+
+type RecommendationResponse = Awaited<ReturnType<typeof generateGearRecommendations>>;
 
 const recommendationInputSchema = z.object({
     userId: z.string().optional(),
@@ -71,10 +73,10 @@ export const POST = withInstrumentation(
 
     const redisKey = `recommendation:${cacheKey}`;
 
-    const cached = await redis.get(redisKey);
+    const cached = await getCachedJson<RecommendationResponse>(redisKey);
 
     if (cached) {
-      return NextResponse.json(JSON.parse(cached), { headers });
+      return NextResponse.json(cached, { headers });
     }
 
     const recommendations = await generateGearRecommendations(
@@ -83,7 +85,7 @@ export const POST = withInstrumentation(
       user.id
     );
 
-    await redis.set(redisKey, JSON.stringify(recommendations), "EX", 60);
+    await setCachedJson(redisKey, recommendations, 60);
 
     recordRecommendation();
 

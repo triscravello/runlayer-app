@@ -15,7 +15,7 @@ export const options = {
     },
 };
 
-export default function() {
+export default function baselineScenario() {
     const payload = JSON.stringify({
         weather: "warm",
         intensity: "easy",

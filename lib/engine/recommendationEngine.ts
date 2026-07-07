@@ -6,7 +6,7 @@ import { preferenceFilter } from "./filters/preferenceFilter";
 import { genderFilter } from "./filters/genderFilter";
 import { recommendationRanker } from "./rankers/recommendationRanker";
 import { outfitBuilder } from "./builders/outfitBuilder";
-import type { AlternativesByCategory, RecommendationCategoryDiagnostics, RecommendationCategoryDiagnosticsCounts, RecommendationCategoryDiagnosticsRankedItem, RecommendationGearItem, RecommendationUserInput, RecommendedOutfit, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
+import type { AlternativesByCategory, RecommendationCategoryDiagnostics, RecommendationCategoryDiagnosticsCounts, RecommendationGearItem, RecommendationUserInput, RecommendedOutfit, ScoredRecommendationItem, UserPreferenceInput } from "./types/recommendationEngine";
 
 export type UserInput = RecommendationUserInput;
 export type GearItem = RecommendationGearItem;

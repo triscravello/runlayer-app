@@ -2,7 +2,6 @@
 
 
 import { useState } from "react";
-import Image from "next/image";
 import { AlertTriangle, Check, ChevronDown, Clock3, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";

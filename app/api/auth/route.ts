@@ -1,8 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { withInstrumentation, recordAuthFailure } from "@/lib/instrumentation";
 
-export const GET = withInstrumentation(async (_request: NextRequest) => {
+export const GET = withInstrumentation(async () => {
   const user = await getSessionUser();
 
   if (!user) {

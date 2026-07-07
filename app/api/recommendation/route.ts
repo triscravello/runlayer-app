@@ -26,7 +26,7 @@ export const GET = withAuth(async (_request: NextRequest, _context, user) => {
   }
 
   const recommendations = await getRecommendationHistory(user.id);
-  return NextResponse.json(recommendations);
+  return NextResponse.json(recommendations, { headers });
 })
 
 export const POST = withAuth(async (request: NextRequest, _context, user) => {
