@@ -16,6 +16,25 @@ type SafeRateLimiter = {
 
 const hasUpstashConfig = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 const redis = hasUpstashConfig ? Redis.fromEnv() : null;
+const RATE_LIMIT_LOG_THROTTLE_MS = 60_000;
+const rateLimitLastLogAt = new Map<string, number>();
+
+function logRateLimitWarning(message: string, context: Record<string, unknown>): void {
+    const key = `${message}:${String(context.limiter ?? "unknown")}`;
+    const now = Date.now();
+    const lastLogAt = rateLimitLastLogAt.get(key) ?? 0;
+
+    if (now - lastLogAt < RATE_LIMIT_LOG_THROTTLE_MS) {
+        return;
+    }
+
+    rateLimitLastLogAt.set(key, now);
+    if (process.env.NODE_ENV === 'production') {
+        logger.warn(message, context);
+    } else {
+        logger.info(message, context);
+    }
+}
 
 function fallbackResponse(limit: number): RateLimitResult {
     return {
@@ -39,7 +58,7 @@ function createSafeLimiter({
     limiter: RatelimitConfig["limiter"];
 }): SafeRateLimiter {
     if (!redis) {
-        logger.warn("Rate limiting disabled because Upstash Redis is not configured", { limiter: name });
+        logRateLimitWarning("Rate limiting disabled because Upstash Redis is not configured", { limiter: name });
         return {
             async limit() {
                 return fallbackResponse(limit);
@@ -59,9 +78,9 @@ function createSafeLimiter({
             try {
                 return await ratelimit.limit(identifier);
             } catch (error) {
-                logger.error("Rate limiter failed open", {
+                logRateLimitWarning("Rate limiter failed open", {
                     limiter: name,
-                    error: error instanceof Error ? error.message: String(error),
+                    error: error instanceof Error ? error.message : String(error),
                 });
                 return fallbackResponse(limit);
             }
