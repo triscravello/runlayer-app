@@ -89,10 +89,10 @@ Each recommendation returns:
 | Framework | [Next.js 16](https://nextjs.org) (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 4 |
-| UI Components | Radix UI + `class-variance-authority` + `tailwind-merge`
+| UI Components | Radix UI + `class-variance-authority` + `tailwind-merge` |
 | Database | Supabase (PostgreSQL) + Prisma ORM 5 |
-| Validation | Zod
-| State | Zustand |
+| Validation | Zod |
+| State | Zustand
 | Fonts | Geist (Vercel) |
 
 ## Database Schema
@@ -111,49 +111,111 @@ Core entities:
 ## API Routes
 
 ### Authentication
-| Method | Route | Description | Body |
-|--------|-------|-------------|------|
-| `POST` | `/api/auth/signup` | Register a new user | `{ email, password }` |
-| `POST` | `/api/auth/login` | Log in an existing user | `{ email, password }` |
-| `POST` | `/api/auth/logout` | Log out current user | — |
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/auth` | Check current authentication status |
+| `POST` | `/api/auth/signup` | Register a new user |
+| `POST` | `/api/auth/login` | Log in an existing user |
+| `POST` | `/api/auth/logout` | Log out current user |
 
 ### Weather
-| Method | Route | Description | Query/Body |
-|--------|-------|-------------|------------|
-| `GET` | `/api/weather` | Fetch current weather for a location | `?location={city}` |
+
+| Method | Route | Description | Query |
+|--------|-------|-------------|-------|
+| `GET` | `/api/weather` | Fetch current weather for a location | `?location=Boston,%20MA` |
 
 ### Recommendations
-| Method | Route | Description | Body |
-|--------|-------|-------------|------|
-| `GET` | `/api/recommendation` | List all recommendations with user & weather data | — |
-| `POST` | `/api/recommendation` | Create a new recommendation | `{ userId, inputContext, output, weatherSnapshotId? }` |
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/api/recommend` | Generate a personalized outfit recommendation |
+| `GET` | `/api/recommendations/history` | Get recommendation history |
+| `GET` | `/api/recommendations/history/[id]` | Get one recommendation history record |
+| `DELETE` | `/api/recommendations/history/[id]` | Delete one recommendation history record |
+| `POST` | `/api/recommendation/feedback` | Submit feedback for a recommendation |
 
 ### Gear Catalog
-| Method | Route | Description | Body |
-|--------|-------|-------------|------|
-| `GET` | `/api/gear` | List all gear items | — |
-| `POST` | `/api/gear` | Add a new gear item | `{ name, brand, category, subcategory, genderTarget, priceRange, tags, weatherSuitability, bodyTypeFit, imageUrl?, affiliateUrl? }` |
-| `PUT` | `/api/gear` | Full update of gear item | `{ id, name, brand, ... }` |
-| `PATCH` | `/api/gear` | Partial update of gear item | `{ id, name?, brand?, ... }` |
-| `DELETE` | `/api/gear` | Remove a gear item | `{ id }` |
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/gear` | List gear items |
+| `GET` | `/api/admin/gear` | List gear items for admin management |
+| `POST` | `/api/admin/gear` | Create a gear item |
+| `GET` | `/api/admin/gear/[id]` | Get one gear item |
+| `PUT` | `/api/admin/gear/[id]` | Update one gear item |
+| `DELETE` | `/api/admin/gear/[id]` | Delete one gear item |
+| `POST` | `/api/admin/gear/import` | Bulk import gear items |
+| `GET` | `/api/admin/brands` | List brands |
+| `POST` | `/api/admin/brands` | Create a brand |
 
 ### Saved Outfits
-| Method | Route | Description | Query/Body |
-|--------|-------|-------------|------------|
-| `GET` | `/api/outfit/save` | Get saved outfits for a user | `?userId={id}` |
-| `POST` | `/api/outfit/save` | Save an outfit | `{ userId, recommendationId?, name?, isFavorite? }` |
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/outfit/save` | Get saved outfits for the current user |
+| `POST` | `/api/outfit/save` | Save an outfit |
+| `GET` | `/api/outfit/[id]` | Get one saved outfit |
+| `DELETE` | `/api/outfit/[id]` | Delete one saved outfit |
 
 ### User Profile
-| Method | Route | Description | Query/Body |
-|--------|-------|-------------|------------|
-| `GET` | `/api/profile` | Get user profile | `?userId={id}` |
-| `PUT` | `/api/profile` | Update or create user profile | `{ userId, heightCm?, weightLbs?, bodyType?, heatSensitivity?, chafeProne?, stylePreference?, budgetLevel?, preferredFit? }` |
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/profile` | Get the current user profile |
+| `PUT` | `/api/profile` | Update or create the current user profile |
+
+### Dashboard & Observability
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/api/dashboard` | Get dashboard summary data |
+| `GET` | `/api/metrics` | Expose Prometheus metrics |
+
 
 ## Project Structure
 
-\`\`\`
-├── app/ # Next.js App Router │ ├── api/ # API routes │ │ ├── auth/[...all] # Better Auth catch-all handler │ │ ├── gear/ # Gear catalog CRUD │ │ ├── outfit/save/ # Saved outfits │ │ ├── profile/ # User profile │ │ ├── recommendation/# Recommendation engine │ │ └── weather/ # Weather API proxy │ ├── auth/ # Authentication pages (sign-in, sign-up) │ ├── dashboard/ # User dashboard │ ├── recommendation/ # Recommendation UI │ ├── layout.tsx # Root layout │ └── page.tsx # Landing page ├── components/ # React components │ ├── layout/ # Layout components │ ├── profile/ # Profile forms │ ├── recommendation/ # Recommendation displays │ ├── saved/ # Saved outfits UI │ └── ui/ # Generic UI primitives (shadcn/ui pattern) ├── config/ # App configuration (env, weather rules, brand configs) ├── content/ # Static content & prompts ├── context/ # React Context providers (Auth, App) ├── docs/ # Documentation ├── hooks/ # Custom React hooks (useAuth, useGear, useWeather, etc.) ├── lib/ # Core library code │ ├── db/ # Database repositories & Prisma client │ ├── engine/ # Recommendation algorithms │ ├── types/ # TypeScript interfaces │ └── utils/ # Helpers & validators ├── prisma/ # Prisma schema, migrations & seed data ├── scripts/ # Utility & deployment scripts ├── services/ # Business logic layer (auth, gear, weather, outfits) └── store/ # State management (React Context / custom hooks)
-\`\`\`
+```txt
+├── app/                         # Next.js App Router routes and API endpoints
+│   ├── api/                     # Auth, weather, gear, profile, recommendation, saved outfit APIs
+│   ├── admin/                   # Admin analytics and gear management pages
+│   ├── dashboard/               # User dashboard, profile, history, insights, saved outfits
+│   ├── auth/                    # Login and signup pages
+│   ├── recommendation/          # Recommendation UI
+│   └── layout.tsx               # Root layout
+├── components/                  # Reusable React components
+│   ├── admin/                   # Admin gear and analytics components
+│   ├── auth/                    # Login/signup forms
+│   ├── compare/                 # Gear comparison UI
+│   ├── dashboard/               # Dashboard client components
+│   ├── layout/                  # Navbar, sidebar, app shell
+│   ├── profile/                 # Runner profile form
+│   ├── recommendation/          # Outfit cards, explanations, feedback, insights
+│   ├── saved/                   # Saved outfit/kit components
+│   └── ui/                      # Shared UI primitives
+├── config/                      # Environment, scoring, weather rules, engine version config
+├── content/gear/                # Seed gear data JSON files
+├── context/                     # Auth context provider
+├── docs/                        # Project documentation
+├── grafana/                     # Grafana dashboards and provisioning
+├── hooks/                       # Custom React hooks
+├── lib/                         # Core application logic
+│   ├── auth/                    # Auth helpers
+│   ├── db/                      # Prisma repositories
+│   ├── engine/                  # Recommendation filters, scorers, rankers, builders
+│   ├── http/                    # API error and validation helpers
+│   ├── ingestion/               # Gear import parsing, mapping, validation
+│   ├── recommendations/         # Recommendation service/types/run type data
+│   ├── validation/              # Zod schemas
+│   └── weather/                 # Weather client and normalizer
+├── prisma/                      # Prisma schema, migrations, and seed scripts
+├── public/                      # Static assets
+├── scripts/                     # Utility scripts
+├── services/                    # Server/client business service layer
+├── store/                       # Zustand preference, UI, and user stores
+├── package.json                 # Scripts and dependencies
+└── docker-compose.observability.yml
+```
 
 ## Getting Started
 
@@ -177,14 +239,31 @@ Core entities:
 
 ## Environment Setup
 
-Required environment variables (see [`config/env.ts`](./config/env.ts)):
+Create a `.env` file in the project root with the following variables:
 
-\`\`\`
-DATABASE_URL=           # Supabase connection string
-SUPABASE_URL=           # Supabase project URL
-SUPABASE_ANON_KEY=      # Supabase anon key
-WEATHER_API_KEY=        # Weather API key
-\`\`\`
+```env
+# PostgreSQL / Prisma
+DATABASE_URL=
+
+# Application
+AUTH_SECRET=
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Redis (optional)
+REDIS_URL=
+
+# Optional (only if using Upstash Redis instead of ioredis)
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+> **Notes**
+>
+> - `DATABASE_URL` is required for Prisma and PostgreSQL.
+> - `AUTH_SECRET` is required for signing authentication tokens.
+> - `NEXT_PUBLIC_APP_URL` should point to your application URL (for local development: `http://localhost:3000`).
+> - `REDIS_URL` enables caching and rate limiting. If Redis is unavailable, RunLayer gracefully falls back to operating without cache.
+> - Only configure the Upstash variables if you're using Upstash Redis instead of a standard Redis server.
 
 ## Scripts
 
@@ -196,6 +275,15 @@ WEATHER_API_KEY=        # Weather API key
 | \`npm run lint\` | Run ESLint |
 | \`npm run db:seed\` | Seed the database with initial data |
 | \`npm run postinstall\` | Automatically generates Prisma client after install |
+
+## Deployment Readiness
+
+- Production build passes
+- ESLint passes
+- Test suite passes: 14/14
+- Prisma Client generates successfully
+- Redis gracefully degrades when unavailable
+- Weather, auth, recommendations, saved outfits, and history smoke tested
 
 ## Future Enhancements
 
