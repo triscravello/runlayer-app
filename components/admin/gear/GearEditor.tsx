@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { toDate, type SerializableDate } from "@/lib/utils/date";
 
 export type GearEditorItem = {
   id: string;
@@ -25,8 +26,8 @@ export type GearEditorItem = {
   weatherCold?: number | null;
   weatherRain?: number | null;
   weatherWind?: number | null;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: SerializableDate;
+  updatedAt?: SerializableDate;
 };
 
 export type GearBrandOption = {
@@ -97,8 +98,9 @@ function joinList(value?: string[] | null) {
   return value?.length ? value.join(", ") : "";
 }
 
-function formatDate(value?: Date) {
-  if (!value) return "Pending";
+function formatDate(value?: SerializableDate) {
+  const date = toDate(value);
+  if (!date) return "Pending";
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
@@ -106,7 +108,7 @@ function formatDate(value?: Date) {
     hour: "2-digit",
     minute: "2-digit",
     timeZoneName: "short",
-  }).format(value);
+  }).format(date);
 }
 
 function toFields(item?: GearEditorItem | null): EditableFields {

@@ -6,6 +6,7 @@ import Image from "next/image";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { toTimestamp, type SerializableDate } from "@/lib/utils/date";
 
 export type GearStatus = "Ready" | "Missing Metadata" | "Needs Scoring" | "Hidden";
 
@@ -20,7 +21,7 @@ export type GearTableItem = {
   recommendationScore?: number;
   weatherTags?: string[];
   intensity?: string;
-  updatedAt?: Date;
+  updatedAt?: SerializableDate;
   imageUrl?: string | null;
 };
 
@@ -102,9 +103,10 @@ function SortableHeader({
   );
 }
 
-function formatRelativeDate(updatedAt?: Date) {
-  if (!updatedAt) return null;
-  const diff = Date.now() - updatedAt.getTime();
+function formatRelativeDate(updatedAt?: SerializableDate) {
+  const timestamp = toTimestamp(updatedAt);
+  if (!timestamp) return null;
+  const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60)
@@ -129,7 +131,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
         return ((a.recommendationScore ?? -1) - (b.recommendationScore ?? -1)) * directionMultiplier;
       }
       if (sort.key === "updatedAt") {
-        return ((a.updatedAt?.getTime() ?? 0) - (b.updatedAt?.getTime() ?? 0)) * directionMultiplier;
+        return (toTimestamp(a.updatedAt) - toTimestamp(b.updatedAt)) * directionMultiplier;
       }
       return ((statusOrder[a.status ?? "Hidden"] - statusOrder[b.status ?? "Hidden"]) * directionMultiplier);
     });
