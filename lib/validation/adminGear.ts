@@ -5,8 +5,14 @@ const priceRangeSchema = z.enum(["BUDGET", "MID", "PREMIUM"]);
 
 const trimmedString = z.string().trim();
 const nullableStringWithDefault = trimmedString.nullable().default(null);
-const nullableUrlWithDefault = trimmedString.url().nullable().default(null);
-const optionalNullableUrl = trimmedString.url().optional().nullable();
+const httpUrlSchema = trimmedString
+  .url()
+  .refine(
+    (value) => value.startsWith("http://") || value.startsWith("https://"),
+    "URL must start with http:// or https://",
+  );
+const nullableUrlWithDefault = httpUrlSchema.nullable().default(null);
+const optionalNullableUrl = httpUrlSchema.optional().nullable();
 const optionalNullableString = trimmedString.optional().nullable();
 const stringListSchema = z.array(trimmedString.min(1)).default([]);
 const weatherScoreSchema = z.number().min(0).max(1).nullable();

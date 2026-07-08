@@ -2,7 +2,7 @@
 
 
 import { useState } from "react";
-import { AlertTriangle, Check, ChevronDown, Clock3, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Clock3, ExternalLink, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -33,7 +33,7 @@ export type GearEditorItem = {
 export type GearBrandOption = {
   id: string;
   name: string;
-}
+};
 
 type GearEditorProps = {
   item?: GearEditorItem | null;
@@ -99,7 +99,10 @@ function isValidHttpUrl(value: string) {
 }
 
 function splitList(value: string) {
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function joinList(value?: string[] | null) {
@@ -153,8 +156,8 @@ function parseWeatherScore(value: string) {
 function SectionHeader({
   title,
   description,
-  badge
-} : {
+  badge,
+}: {
   title: string;
   description?: string;
   badge?: React.ReactNode;
@@ -248,6 +251,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
   const isCreateMode = mode === "create";
 
   const imageUrl = fields.imageUrl.trim();
+  const affiliateUrl = fields.affiliateUrl.trim();
   const tags = splitList(fields.tags);
   const bodyTypeFit = splitList(fields.bodyTypeFit);
   const weatherValues = weatherFields.map(({ key }) => parseWeatherScore(fields[key]));
@@ -259,7 +263,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
     fields.genderTarget,
     fields.subcategory,
     imageUrl,
-    fields.affiliateUrl,
+    affiliateUrl,
     tags.length ? "tags" : "",
     bodyTypeFit.length ? "bodyTypeFit" : "",
     ...weatherValues.map((value) => value === null ? "" : String(value)),
@@ -270,6 +274,8 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
   const selectedBrand = brands.find((brand) => brand.id === fields.brandId) ?? null;
   const hasPreviewableImageUrl = isValidHttpUrl(imageUrl);
   const hasInvalidImageUrl = hasValue(imageUrl) && !hasPreviewableImageUrl;
+  const hasAffiliateUrl = hasValue(affiliateUrl);
+  const hasInvalidAffiliateUrl = hasAffiliateUrl && !isValidHttpUrl(affiliateUrl);
 
   const updateField = (key: keyof EditableFields, value: string) => {
     setFields((current) => ({ ...current, [key]: value }));
@@ -347,6 +353,12 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
       return;
     }
 
+    if (hasInvalidAffiliateUrl) {
+      setSaveState("error");
+      setError("Affiliate URL must be blank or a valid http or https URL.");
+      return;
+    }
+
     if (!fields.name.trim() || !fields.brandId.trim() || !fields.category || !fields.priceRange) {
       setSaveState("error");
       setError("Name, brand ID, category, and price range are required.");
@@ -374,7 +386,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
         tags,
         bodyTypeFit,
         imageUrl: imageUrl || null,
-        affiliateUrl: fields.affiliateUrl.trim() || null,
+        affiliateUrl: affiliateUrl || null,
         weatherSuitability: {
           hot: parseWeatherScore(fields.weatherHot),
           cold: parseWeatherScore(fields.weatherCold),
@@ -457,15 +469,126 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
             </CardContent>
           </Card>
 
-          <EditorSection title="Image URL" description="Store one primary image URL. Upload storage is not configured for this app yet.">
+          <EditorSection title="Product Links" description="Store optional shopper-facing URLs for the catalog item.">
             <div className="space-y-4">
               <div><FieldLabel label="Primary image URL" hint="Optional http(s) URL" /><Input value={fields.imageUrl} onChange={(event) => updateField("imageUrl", event.target.value)} placeholder="https://example.com/image.jpg" className="border-zinc-700 bg-zinc-950 text-zinc-100" />{hasInvalidImageUrl ? <p className="mt-2 text-xs text-rose-300">Enter a valid http or https URL before saving.</p> : null}</div>
               <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-                {hasPreviewableImageUrl ? <div role="img" aria-label={fields.name || "Gear item image"} className="aspect-[4/3] w-full bg-cover bg-center" style={{ backgroundImage: `url(${imageUrl})` }} /> : <div className="flex aspect-[4/3] flex-col items-center justify-center bg-zinc-950 text-zinc-500"><ImageOff className="mb-2 size-8" /><span className="text-sm">{imageUrl ? "Invalid image URL" : "No image yet"}</span></div>}
-                <div className="absolute left-3 top-3"><Badge className="bg-black/70 text-white backdrop-blur">Primary Image</Badge></div>
-                <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur"><p className="truncate text-sm font-medium text-white">{imageUrl || "No image yet"}</p><p className="text-xs text-zinc-300">imageUrl {hasPreviewableImageUrl ? "configured" : imageUrl ? "invalid" : "missing"}</p></div>
+                {hasPreviewableImageUrl ? (
+                  <div
+                    role="img"
+                    aria-label={fields.name || "Gear item image"}
+                    className="aspect-[4/3] w-full bg-cover bg-center"
+                    style={{ backgroundImage: `url(${imageUrl})` }}
+                  />
+                ) : (
+                  <div className="flex aspect-[4/3] flex-col items-center justify-center bg-zinc-950 text-zinc-500">
+                    <ImageOff className="mb-2 size-8" />
+                    <span className="text-sm">
+                      {imageUrl ? "Invalid image URL" : "No image yet"}
+                    </span>
+                  </div>
+                )}
+                <div className="absolute left-3 top-3">
+                  <Badge className="bg-black/70 text-white backdrop-blur">
+                    Primary Image
+                  </Badge>
+                </div>
+                <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur">
+                  <p className="truncate text-sm font-medium text-white">
+                    {imageUrl || "No image yet"}
+                  </p>
+                  <p className="text-xs text-zinc-300">
+                    imageUrl{" "}
+                    {hasPreviewableImageUrl
+                      ? "configured"
+                      : imageUrl
+                        ? "invalid"
+                        : "missing"}
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2"><Badge className={hasPreviewableImageUrl ? "bg-emerald-500/10 text-emerald-300" : imageUrl ? "bg-rose-500/10 text-rose-300" : "bg-zinc-800 text-zinc-400"}>{hasPreviewableImageUrl ? "Image URL configured" : imageUrl ? "Invalid image URL" : "No image yet"}</Badge><Button type="button" disabled variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-500">Upload not configured</Button></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className={
+                    hasPreviewableImageUrl
+                      ? "bg-emerald-500/10 text-emerald-300"
+                      : imageUrl
+                        ? "bg-rose-500/10 text-rose-300"
+                        : "bg-zinc-800 text-zinc-400"
+                  }
+                >
+                  {hasPreviewableImageUrl
+                    ? "Image URL configured"
+                    : imageUrl
+                      ? "Invalid image URL"
+                      : "No image yet"}
+                </Badge>
+                <Button
+                  type="button"
+                  disabled
+                  variant="outline"
+                  className="border-zinc-700 bg-zinc-900 text-zinc-500"
+                >
+                  Upload not configured
+                </Button>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <FieldLabel
+                      label="Affiliate URL"
+                      hint="Optional http(s) URL"
+                    />
+                    <Input
+                      value={fields.affiliateUrl}
+                      onChange={(event) =>
+                        updateField("affiliateUrl", event.target.value)
+                      }
+                      placeholder="https://example.com/product"
+                      className="border-zinc-700 bg-zinc-950 text-zinc-100"
+                    />
+                    {hasInvalidAffiliateUrl ? (
+                      <p className="mt-2 text-xs text-rose-300">
+                        Enter a valid URL beginning with http:// or https://
+                        before saving.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-zinc-500">
+                        Leave blank to store no affiliate link for this item.
+                      </p>
+                    )}
+                  </div>
+                  {hasAffiliateUrl && !hasInvalidAffiliateUrl ? (
+                    <Button
+                      asChild
+                      type="button"
+                      variant="outline"
+                      className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                    >
+                      <a href={affiliateUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="size-4" /> Open affiliate link
+                      </a>
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="mt-3">
+                  <Badge
+                    className={
+                      hasAffiliateUrl && !hasInvalidAffiliateUrl
+                        ? "bg-emerald-500/10 text-emerald-300"
+                        : hasInvalidAffiliateUrl
+                          ? "bg-rose-500/10 text-rose-300"
+                          : "bg-zinc-800 text-zinc-400"
+                    }
+                  >
+                    {hasAffiliateUrl && !hasInvalidAffiliateUrl
+                      ? "Affiliate link configured"
+                      : hasInvalidAffiliateUrl
+                        ? "Invalid affiliate URL"
+                        : "No affiliate link"}
+                  </Badge>
+                </div>
+              </div>
             </div>
           </EditorSection>
 
@@ -476,7 +599,79 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
         </div>
 
         <div className="space-y-4">
-          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60"><CardContent className="space-y-5 p-5"><SectionHeader title="Metadata Quality" description="Completeness based on actual editable fields." /><div><div className="mb-2 flex items-end justify-between"><div><p className="text-4xl font-semibold tracking-tight text-white">{completion}%</p><p className="text-xs text-zinc-500">Metadata completeness</p></div><Badge className={completion >= 80 ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}>{completion >= 80 ? "Ready" : "Pending"}</Badge></div><div className="h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-zinc-100" style={{ width: `${completion}%` }} /></div></div><div className="space-y-2">{[{ label: "Required basics", complete: hasValue(fields.name) && hasValue(fields.brandId) && hasValue(fields.category) }, { label: "Gender", complete: hasValue(fields.genderTarget) }, { label: "Tags", complete: tags.length > 0 }, { label: "Weather scores", complete: weatherComplete > 0 }, { label: "Image URL", complete: hasValue(imageUrl) }].map((check) => <div key={check.label} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"><div className="flex items-center gap-2">{check.complete ? <Check className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm text-zinc-300">{check.label}</span></div><span className="text-xs text-zinc-500">{check.complete ? "Configured" : "Missing"}</span></div>)}</div></CardContent></Card>
+          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60">
+            <CardContent className="space-y-5 p-5">
+              <SectionHeader
+                title="Metadata Quality"
+                description="Completeness based on actual editable fields."
+              />
+              <div>
+                <div className="mb-2 flex items-end justify-between">
+                  <div>
+                    <p className="text-4xl font-semibold tracking-tight text-white">
+                      {completion}%
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Metadata completeness
+                    </p>
+                  </div>
+                  <Badge
+                    className={
+                      completion >= 80
+                        ? "bg-emerald-500/10 text-emerald-300"
+                        : "bg-amber-500/10 text-amber-300"
+                    }
+                  >
+                    {completion >= 80 ? "Ready" : "Pending"}
+                  </Badge>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-zinc-100"
+                    style={{ width: `${completion}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                {[
+                  {
+                    label: "Required basics",
+                    complete:
+                      hasValue(fields.name) &&
+                      hasValue(fields.brandId) &&
+                      hasValue(fields.category),
+                  },
+                  { label: "Gender", complete: hasValue(fields.genderTarget) },
+                  { label: "Tags", complete: tags.length > 0 },
+                  { label: "Weather scores", complete: weatherComplete > 0 },
+                  { label: "Image URL", complete: hasValue(imageUrl) },
+                  {
+                    label: "Affiliate URL",
+                    complete: hasAffiliateUrl && !hasInvalidAffiliateUrl,
+                  },
+                ].map((check) => (
+                  <div
+                    key={check.label}
+                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      {check.complete ? (
+                        <Check className="size-4 text-emerald-300" />
+                      ) : (
+                        <AlertTriangle className="size-4 text-amber-300" />
+                      )}
+                      <span className="text-sm text-zinc-300">
+                        {check.label}
+                      </span>
+                    </div>
+                    <span className="text-xs text-zinc-500">
+                      {check.complete ? "Configured" : "Missing"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
           <EditorSection title="Recommendation Metadata" description="Actual tags and metadata stored in this item">
             <div className="space-y-4">

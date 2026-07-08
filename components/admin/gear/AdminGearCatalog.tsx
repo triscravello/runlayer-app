@@ -14,7 +14,7 @@ type AdminGearCatalogProps = {
 
 function hasMetadataGaps(item: GearEditorItem) {
   const hasWeatherMetadata = [item.weatherHot, item.weatherCold, item.weatherRain, item.weatherWind].some((value) => typeof value === "number");
-  return item.tags.length === 0 || item.bodyTypeFit.length === 0 || !item.imageUrl || !item.genderTarget || !item.subcategory || !hasWeatherMetadata;
+  return item.tags.length === 0 || item.bodyTypeFit.length === 0 || !item.imageUrl || !item.affiliateUrl || !item.genderTarget || !item.subcategory || !hasWeatherMetadata;
 }
 
 function matchesSearch(item: GearEditorItem, query: string) {
@@ -28,6 +28,7 @@ function matchesSearch(item: GearEditorItem, query: string) {
     item.category,
     item.genderTarget ?? "",
     item.subcategory ?? "",
+    item.affiliateUrl ?? "",
     ...item.tags,
     ...item.bodyTypeFit,
   ].some((value) => value.toLowerCase().includes(normalizedQuery));
