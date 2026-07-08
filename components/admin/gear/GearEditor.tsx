@@ -48,6 +48,8 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 type DeleteState = "idle" | "deleting" | "deleted" | "error";
 type BrandCreateState = "idle" | "creating" | "created" | "error";
 
+type GenderTargetOption = "MEN" | "WOMEN" | "UNISEX";
+
 type EditableFields = {
   name: string;
   brandId: string;
@@ -68,6 +70,12 @@ type EditableFields = {
 
 const categoryOptions: Array<GearEditorItem["category"]> = ["TOP", "BOTTOM", "ACCESSORY"];
 const priceRangeOptions: Array<GearEditorItem["priceRange"]> = ["BUDGET", "MID", "PREMIUM"];
+const genderTargetOptions: Array<{ value: GenderTargetOption; label: string }> = [
+  { value: "MEN", label: "Men" },
+  { value: "WOMEN", label: "Women" },
+  { value: "UNISEX", label: "Unisex" },
+];
+const allowedGenderTargets = new Set(genderTargetOptions.map((option) => option.value));
 const weatherFields = [
   { key: "weatherHot", label: "Hot weather" },
   { key: "weatherCold", label: "Cold weather" },
@@ -98,6 +106,11 @@ function joinList(value?: string[] | null) {
   return value?.length ? value.join(", ") : "";
 }
 
+function normalizeGenderTarget(value?: string | null) {
+  const normalized = value?.trim().toUpperCase();
+  return normalized && allowedGenderTargets.has(normalized as GenderTargetOption) ? normalized : "";
+}
+
 function formatDate(value?: SerializableDate) {
   const date = toDate(value);
   if (!date) return "Pending";
@@ -118,7 +131,7 @@ function toFields(item?: GearEditorItem | null): EditableFields {
     newBrandName: "",
     category: item?.category ?? "TOP",
     priceRange: item?.priceRange ?? "MID",
-    genderTarget: item?.genderTarget ?? "",
+    genderTarget: normalizeGenderTarget(item?.genderTarget),
     subcategory: item?.subcategory ?? "",
     imageUrl: item?.imageUrl ?? "",
     affiliateUrl: item?.affiliateUrl ?? "",
@@ -339,6 +352,12 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
       setError("Name, brand ID, category, and price range are required.");
       return;
     }
+
+    if (fields.genderTarget && !allowedGenderTargets.has(fields.genderTarget as GenderTargetOption)) {
+      setSaveState("error");
+      setError("Gender must be Men, Women, or Unisex");
+      return;
+    }
     setSaveState("saving");
     setError(null);
 
@@ -429,6 +448,10 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
                   <div><FieldLabel label="Subcategory" /><Input value={fields.subcategory} onChange={(event) => updateField("subcategory", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
                   <div><FieldLabel label="Price range" /><select value={fields.priceRange} onChange={(event) => updateField("priceRange", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{priceRangeOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><FieldLabel label="Gender" /><select value={fields.genderTarget} onChange={(event) => updateField("genderTarget", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Not configured</option>{genderTargetOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><p className="mt-2 text-[11px] text-zinc-500">Leave blank to preserve items without a gender target.</p></div>
+                </div>
                 <div><FieldLabel label="Description" hint="No description field exists on this item" /><textarea rows={4} value="" disabled placeholder="Missing" className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-500 outline-none" /><p className="mt-2 text-[11px] text-zinc-500">Description is unavailable because the current schema does not provide one.</p></div>
               </div>
             </CardContent>
@@ -453,7 +476,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
         </div>
 
         <div className="space-y-4">
-          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60"><CardContent className="space-y-5 p-5"><SectionHeader title="Metadata Quality" description="Completeness based on actual editable fields." /><div><div className="mb-2 flex items-end justify-between"><div><p className="text-4xl font-semibold tracking-tight text-white">{completion}%</p><p className="text-xs text-zinc-500">Metadata completeness</p></div><Badge className={completion >= 80 ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}>{completion >= 80 ? "Ready" : "Pending"}</Badge></div><div className="h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-zinc-100" style={{ width: `${completion}%` }} /></div></div><div className="space-y-2">{[{ label: "Required basics", complete: hasValue(fields.name) && hasValue(fields.brandId) && hasValue(fields.category) }, { label: "Tags", complete: tags.length > 0 }, { label: "Weather scores", complete: weatherComplete > 0 }, { label: "Image URL", complete: hasValue(imageUrl) }].map((check) => <div key={check.label} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"><div className="flex items-center gap-2">{check.complete ? <Check className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm text-zinc-300">{check.label}</span></div><span className="text-xs text-zinc-500">{check.complete ? "Configured" : "Missing"}</span></div>)}</div></CardContent></Card>
+          <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60"><CardContent className="space-y-5 p-5"><SectionHeader title="Metadata Quality" description="Completeness based on actual editable fields." /><div><div className="mb-2 flex items-end justify-between"><div><p className="text-4xl font-semibold tracking-tight text-white">{completion}%</p><p className="text-xs text-zinc-500">Metadata completeness</p></div><Badge className={completion >= 80 ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}>{completion >= 80 ? "Ready" : "Pending"}</Badge></div><div className="h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-zinc-100" style={{ width: `${completion}%` }} /></div></div><div className="space-y-2">{[{ label: "Required basics", complete: hasValue(fields.name) && hasValue(fields.brandId) && hasValue(fields.category) }, { label: "Gender", complete: hasValue(fields.genderTarget) }, { label: "Tags", complete: tags.length > 0 }, { label: "Weather scores", complete: weatherComplete > 0 }, { label: "Image URL", complete: hasValue(imageUrl) }].map((check) => <div key={check.label} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"><div className="flex items-center gap-2">{check.complete ? <Check className="size-4 text-emerald-300" /> : <AlertTriangle className="size-4 text-amber-300" />}<span className="text-sm text-zinc-300">{check.label}</span></div><span className="text-xs text-zinc-500">{check.complete ? "Configured" : "Missing"}</span></div>)}</div></CardContent></Card>
 
           <EditorSection title="Recommendation Metadata" description="Actual tags and metadata stored in this item">
             <div className="space-y-4">

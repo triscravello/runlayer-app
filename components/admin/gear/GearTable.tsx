@@ -15,6 +15,7 @@ export type GearTableItem = {
   name: string;
   category?: string;
   priceRange?: string;
+  genderTarget?: string | null;
   brandId?: string;
   brand?: { name?: string | null } | null;
   status?: GearStatus;
@@ -114,6 +115,14 @@ function formatRelativeDate(updatedAt?: SerializableDate) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function formatGenderTarget(value?: string | null) {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === "MEN") return "Men";
+  if (normalized === "WOMEN") return "Women";
+  if (normalized === "UNISEX") return "Unisex";
+  return null;
+}
+
 function getInitials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join("");
 }
@@ -171,7 +180,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
       </div>
       <div className="min-w-0 overflow-hidden rounded-xl border border-zinc-800/80">
         <div className="max-h-[560px] overflow-auto">
-          <table className={`w-full table-fixed text-left text-sm ${isCompact ? "min-w-[760px]" : "min-w-[1040px]"}`}>
+          <table className={`w-full table-fixed text-left text-sm ${isCompact ? "min-w-[840px]" : "min-w-[1120px]"}`}>
             <thead className="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/90 text-zinc-400 backdrop-blur">
               <tr>
                 <th className="w-10 px-3 py-3 font-medium">
@@ -182,6 +191,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                 <th className={isCompact ? "w-[18%] px-3 py-3 font-medium" : "w-[14%] px-3 py-3 font-medium"}>Brand</th>
                 <th className="w-[11%] px-3 py-3 font-medium">Category</th>
                 <th className="w-[10%] px-3 py-3 font-medium">Price</th>
+                <th className="w-[10%] px-3 py-3 font-medium">Gender</th>
                 {!isCompact ? <th className="w-[14%] px-3 py-3 font-medium">Weather</th> : null}
                 {!isCompact ? <th className="w-[10%] px-3 py-3 font-medium">Fit</th> : null}
                 {!isCompact ? <th className="px-3 py-3 font-medium"><SortableHeader label="Rec. Score" sortKey="recommendationScore" sort={sort} onSort={toggleSort} /></th> : null}
@@ -193,7 +203,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
             <tbody>
               {sortedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={isCompact ? 8 : 12} className="px-6 py-16 text-center text-zinc-500">No gear found. Try adjusting filters or importing a new catalog.</td>
+                  <td colSpan={isCompact ? 9 : 13} className="px-6 py-16 text-center text-zinc-500">No gear found. Try adjusting filters or importing a new catalog.</td>
                 </tr>
               ) : (
                 sortedItems.map((item) => {
@@ -240,6 +250,7 @@ export function GearTable({ items, onSelectItem }: GearTableProps) {
                       <td className="truncate px-3 py-3 text-zinc-300">{item.brand?.name ?? item.brandId ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.category ?? <EmptyStateCell />}</td>
                       <td className="truncate px-3 py-3 text-zinc-300">{item.priceRange ?? <EmptyStateCell />}</td>
+                      <td className="truncate px-3 py-3 text-zinc-300">{formatGenderTarget(item.genderTarget) ?? <EmptyStateCell />}</td>
                       {!isCompact ? <td className="px-3 py-3 text-zinc-300"><span className="line-clamp-2">{item.weatherTags?.length ? item.weatherTags.join(", ") : <EmptyStateCell message="Needs metadata" />}</span></td> : null}
                       {!isCompact ? <td className="truncate px-3 py-3 text-zinc-300">{item.intensity ?? <EmptyStateCell />}</td> : null}
                       {!isCompact ? <td className="px-3 py-3"><ScoreCell score={item.recommendationScore} /></td> : null}
