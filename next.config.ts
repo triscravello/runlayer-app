@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         hostname: "img.runningwarehouse.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "expntlathletics.com",
+      }
     ],
   },
 };
