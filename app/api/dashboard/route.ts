@@ -161,7 +161,29 @@ export async function GET(request: Request) {
 
     const location = getSavedLocation(user);
     const runType = getRunType(request);
-    const weather = await getDashboardWeather(location);
+
+    let weather: DashboardWeather;
+
+    try {
+      weather = await getDashboardWeather(location);
+    } catch (error) {
+      console.error("Dashboard weather unavailable; using fallback weather", error);
+
+      weather = {
+        location,
+        temperature: 72,
+        feelsLike: 72,
+        condition: "Weather unavailable",
+        humidity: 50,
+        precipitationChance: 0,
+        windSpeed: 5,
+        uvIndex: 3,
+        impactLabel: "Balanced conditions",
+        labels: ["Weather fallback"],
+        recommendationNote: "Live weather is temporarily unavailable, so recommendations are using safe balanced conditions"
+      }
+    }
+    
     const runData = getRunTypeRecommendation(runType, weather);
 
     return NextResponse.json({

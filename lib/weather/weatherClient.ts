@@ -88,16 +88,23 @@ export const weatherClient = {
             appid: apiKey,
         });
 
-        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params.toString()}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
 
-        if (!res.ok) {
-            if (res.status === 404) {
-                throw new BadRequestError("Weather location not found");
+        try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params.toString()}`);
+            
+            if (!res.ok) {
+                if (res.status === 404) {
+                    throw new BadRequestError("Weather location not found");
+                }
+                
+                throw new HttpError(res.status, "Weather provider request failed", "WEATHER_PROVIDER_ERROR");
             }
-
-            throw new HttpError(res.status, "Weather provider request failed", "WEATHER_PROVIDER_ERROR");
+            
+            return res.json();
+        } finally {
+            clearTimeout(timeout);
         }
-
-        return res.json();
-    }
-}
+    },
+};
