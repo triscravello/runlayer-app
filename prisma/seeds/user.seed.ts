@@ -1,60 +1,76 @@
 // prisma/seeds/user.seed.ts
-import { randomBytes, scryptSync } from "node:crypto";
-import { prisma } from "../../lib/prisma.ts";
+// Erasable TypeScript only; runs under `node --experimental-strip-types`.
+import { hashPassword } from "../../lib/auth/password.ts";
+import { disconnectSeedClient, prepareSeed, reportSeedFailure } from "./context.ts";
+import type { SeedDeps } from "./context.ts";
+import { SeedSafetyError, validateSeedPassword } from "./safety.ts";
 
-function hashPassword(password: string) {
-    const salt = randomBytes(16).toString("hex");
-    const hash = scryptSync(password, salt, 64).toString("hex");
-    return `${salt}:${hash}`;
-}
+// The seeded demo account uses the reserved example.com domain, so it can never collide with a real signup.
+export const SEED_USER_EMAIL = "user@example.com";
 
-export async function seedUserProfile() {
-    const email = "user@example.com";
-    const hashedPassword = hashPassword("Password123");
-    
-    const users = await prisma.$queryRaw<Array<{ id: string; email: string }>>`
-        INSERT INTO users (id, email, password_hash, created_at, updated_at)
-        VALUES ('user-id-1', ${email}, ${hashedPassword}, NOW(), NOW())
-        ON CONFLICT (email)
-        DO UPDATE SET updated_at = NOW(), password_hash = EXCLUDED.password_hash
-        RETURNING id, email
-    `;
-    
-    const user = users[0];
-    
-    if (!user) {
-        throw new Error("Failed to seed user");
+/**
+ * Creates the demo user (and profile) if it does not exist. CREATE-ONLY: an existing account is never modified,
+ * and its password and profile are never overwritten. The password comes from SEED_USER_PASSWORD (no default).
+ * Returns the real database id, which callers must use instead of any assumed id.
+ */
+export async function seedUserProfile(deps: SeedDeps = {}): Promise<{ userId: string; created: boolean }> {
+    // Safety guard first: nothing below runs unless the target is a confirmed, dedicated, local database.
+    const { prisma, env } = await prepareSeed(deps);
+
+    // Validate the credential before any query, so a weak or missing password aborts with zero reads or writes.
+    const password = env.SEED_USER_PASSWORD;
+    const problem = validateSeedPassword(password, SEED_USER_EMAIL);
+    if (problem || password === undefined) {
+        throw new SeedSafetyError("invalid_password", problem ?? "SEED_USER_PASSWORD is required.");
     }
 
-    await prisma.userProfile.upsert({
-        where: { userId: user.id },
-        update: {
-            location: "Denver, CO",
-            genderPreference: "male",
-        },
-        create: {
-            userId: user.id,
-            location: "Denver, CO",
-            heightCm: 180,
-            weightLbs: 170,
-            bodyType: "ATHLETIC",
-            genderPreference: "male",
-            heatSensitivity: "high",
-            chafeProne: true,
-            stylePreference: "performance",
-            budgetLevel: "MID",
-            preferredFit: "slim"
+    const existing = await prisma.user.findUnique({ where: { email: SEED_USER_EMAIL }, select: { id: true } });
+    if (existing) {
+        console.log("Demo user already exists; left unchanged.");
+        return { userId: existing.id, created: false };
+    }
+
+    try {
+        const user = await prisma.user.create({
+            data: {
+                email: SEED_USER_EMAIL,
+                passwordHash: hashPassword(password),
+                profile: {
+                    create: {
+                        location: "Denver, CO",
+                        heightCm: 180,
+                        weightLbs: 170,
+                        bodyType: "ATHLETIC",
+                        genderPreference: "male",
+                        heatSensitivity: "high",
+                        chafeProne: true,
+                        stylePreference: "performance",
+                        budgetLevel: "MID",
+                        preferredFit: "slim",
+                    },
+                },
+            },
+            select: { id: true },
+        });
+
+        console.log("Demo user created.");
+        return { userId: user.id, created: true };
+    } catch (error) {
+        // Lost a race with another seed run: the account now exists, so leave it untouched.
+        if ((error as { code?: unknown }).code === "P2002") {
+            const raced = await prisma.user.findUnique({ where: { email: SEED_USER_EMAIL }, select: { id: true } });
+            if (raced) return { userId: raced.id, created: false };
         }
-    });
-};
+
+        throw error;
+    }
+}
 
 if (process.argv[1]?.endsWith("user.seed.ts")) {
     seedUserProfile()
-        .catch((e) => {
-            console.error(e);
-            process.exit(1);
+        .catch((error) => {
+            reportSeedFailure(error);
+            process.exitCode = 1;
         })
-        .finally(async () => {
-            await prisma.$disconnect();
-        });
+        .finally(disconnectSeedClient);
 }

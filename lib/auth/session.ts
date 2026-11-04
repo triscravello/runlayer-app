@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "./crypto";
+import { describeErrorForLog } from "./logSafe";
 
 /**
  * Session revocation.
@@ -65,16 +66,8 @@ export async function revokeSession<TUser extends { sessionVersion: number }>(
     return updated ? "revoked" : "stale";
 }
 
-/**
- * A log-safe description of an error: its name and, for database errors, its code. Messages are deliberately
- * excluded because database error messages can contain query arguments such as user identifiers.
- */
-export function describeErrorForLog(error: unknown): string {
-    if (!(error instanceof Error)) return "UnknownError";
-
-    const code = (error as { code?: unknown }).code;
-    return typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code) ? `${error.name}:${code}` : error.name;
-}
+// Defined in a pure module so seed scripts can share it; re-exported here for existing callers.
+export { describeErrorForLog };
 
 /**
  * Handles POST /api/auth/logout. The browser cookie is ALWAYS cleared (with the same attributes as before). If

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "prisma db seed",
+    "db:seed:local": "node --env-file=.env.seed.local ./node_modules/.bin/prisma db seed",
+    "db:seed:check": "node --experimental-strip-types scripts/checkSeedTarget.ts",
     "postinstall": "prisma generate",
     "db:deploy": "prisma migrate deploy",
     "test": "tsx --test"

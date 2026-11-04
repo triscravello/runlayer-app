@@ -226,11 +226,15 @@ Core entities:
    npm install
    \`\`\`
 
-2. **Set up the database:**
-   \`\`\`bash
-   npx prisma migrate dev
-   npx prisma db seed
-   \`\`\`
+2. **Set up a local database and seed it** (see [Seeding safely](#seeding-safely) first). The seed commands only ever run against a dedicated database on this machine, never against a hosted one:
+
+   ```bash
+   createdb runlayer_dev                      # a local database whose name starts with "runlayer"
+   DATABASE_URL="postgresql://localhost:5432/runlayer_dev" npx prisma migrate deploy
+   # create .env.seed.local (see below), then:
+   npm run db:seed:check                      # read-only: shows whether seeding would be allowed
+   npm run db:seed:local
+   ```
 
 3. **Run the development server:**
    \`\`\`bash
@@ -301,6 +305,32 @@ RECOMMENDATION_DEBUG=
 > - `LOG_LEVEL` sets the Winston log level (default `info`). `RECOMMENDATION_DEBUG=true` prints recommendation-engine diagnostics (always on in development).
 > - Never commit `.env` files or real credentials, tokens, or session cookies.
 
+## Seeding safely
+
+The seed (`prisma db seed`, the individual files in `prisma/seeds/`, and `scripts/importGear.ts`) can only run against a **dedicated local database**. There is no force flag and no override. Before anything is written it requires **all** of the following:
+
+- `NODE_ENV` is not `production`, and no hosting-provider environment is detected.
+- `DATABASE_URL` points at this machine: `localhost`, `127.x.x.x`, `::1`, or a local Unix socket (`?host=/absolute/path`). Hosted providers (Supabase, Neon, RDS, ...), LAN addresses, Docker service names, alternate spellings of loopback, and connection-string tricks (extra `@`, multiple hosts, `hostaddr=`/`host=` redirects, ...) are rejected.
+- The database name starts with `runlayer` (for example `runlayer_dev`), and `RUNLAYER_SEED_CONFIRM_DATABASE` is set to that exact name.
+- After connecting, the server itself must report the same database name, a loopback address and the same port, one read-only query. This catches a `localhost` URL that is really an SSH tunnel or port-forward to a hosted database. If the identity cannot be verified, nothing runs.
+- `SEED_USER_PASSWORD` is set (12-128 characters, not a common or predictable password, not containing the account email). There is no default password.
+
+Seeding is **create-only**: an existing account (its password and profile), an existing catalog item (including admin edits and variants), and an existing demo outfit are left exactly as they are, so repeating it is safe. The demo account is `user@example.com`; it is never an administrator.
+
+**Seed versus import.** `npm run db:seed` is **create-only**: it adds missing demo data and never modifies an existing account, profile, catalog item (including its variants and admin edits) or outfit. `scripts/importGear.ts` is an **updating** utility: for each item in `content/gear/*.json` whose name and brand match an existing item, it overwrites that item's fields and **replaces all of its variants** on every run. Both run only against a confirmed, dedicated local database and share the same safety checks (`--force` does not exist). The two catalogs currently do not overlap (78 seed items, 3 import items), so running both is additive today. To load or change a catalog in a hosted environment, use the authenticated admin import.
+
+**Recommended workflow.** Keep seed settings out of `.env` (which may point at a hosted database). Create a git-ignored `.env.seed.local`:
+
+```env
+DATABASE_URL=postgresql://localhost:5432/runlayer_dev
+RUNLAYER_SEED_CONFIRM_DATABASE=runlayer_dev
+SEED_USER_PASSWORD=<a strong password you choose>
+```
+
+Then run `npm run db:seed:check` and `npm run db:seed:local`. Variables already set in your shell win over both files, and `db:seed:check` accounts for that. The check cannot verify the server's identity (that needs a connection); the seed does.
+
+**These Prisma commands are not protected by this guard:** `prisma migrate dev`, `prisma migrate reset` (which drops all data and then runs the seed) and `prisma db push` act on whatever `DATABASE_URL` is set. Always set `DATABASE_URL` explicitly for them, as above, and use `prisma migrate deploy` (non-destructive) for hosted databases. To load the catalog into a hosted environment use the authenticated admin import, not the scripts.
+
 ## Scripts
 
 | Command | Description |
@@ -309,7 +339,9 @@ RECOMMENDATION_DEBUG=
 | \`npm run build\` | Production build |
 | \`npm run start\` | Start production server |
 | \`npm run lint\` | Run ESLint |
-| \`npm run db:seed\` | Seed the database with initial data |
+| \`npm run db:seed\` | Seed using the `DATABASE_URL` in `.env`. **Refused unless that is a confirmed, dedicated local database** (a hosted `.env` is rejected). |
+| \`npm run db:seed:local\` | Seed using `.env.seed.local` (the recommended workflow below) |
+| \`npm run db:seed:check\` | Read-only report of whether the seed commands would be allowed. Makes **no database connection**. |
 | \`npm run postinstall\` | Automatically generates Prisma client after install |
 
 ## Deployment Readiness

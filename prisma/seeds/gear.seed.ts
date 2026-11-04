@@ -1,6 +1,8 @@
 import { Category, PriceRange } from "@prisma/client";
 import type { Brand } from "@prisma/client";
-import { prisma } from "../../lib/prisma.ts";
+// Erasable TypeScript only; runs under `node --experimental-strip-types`.
+import { disconnectSeedClient, prepareSeed, reportSeedFailure } from "./context.ts";
+import type { SeedDeps, SeedPrisma } from "./context.ts";
 import { loadGearSeedData } from "./data/gear.data.ts";
 import type { GearSeedItem } from "./data/gear.data.ts";
 
@@ -40,7 +42,7 @@ function toBodyTypeFit(bodyTypeFit: BodyTypeFitScores) {
         .map(([bodyType]) => bodyType);
 }
 
-async function resolveBrands(items: GearSeedItem[]): Promise<Map<string, Brand>> {
+async function resolveBrands(prisma: SeedPrisma, items: GearSeedItem[]): Promise<Map<string, Brand>> {
     const brandNames = [...new Set(items.map((item) => item.brand))];
     const brandCache = new Map<string, Brand>();
 
@@ -86,25 +88,16 @@ function buildGearRecords(items: GearSeedItem[], brandCache: Map<string, Brand>)
                 affiliateUrl: item.variants[0]?.affiliateUrl ?? null,
                 variants: { create: item.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) },
             },
-            update: {
-                genderTarget: item.genderTarget,
-                category: toGearCategory(item.category),
-                subcategory: item.subcategory,
-                priceRange: toGearPriceRange(item.priceRange),
-                tags: item.tags,
-                weatherHot: item.weatherSuitability.hot,
-                weatherCold: item.weatherSuitability.cold,
-                weatherRain: item.weatherSuitability.rain,
-                bodyTypeFit: toBodyTypeFit(item.bodyTypeFit),
-                imageUrl: item.variants[0]?.imageUrl ?? null,
-                affiliateUrl: item.variants[0]?.affiliateUrl ?? null,
-                variants: { create: item.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) },
-            },
         };
     });
 }
 
-async function seedGearItems(records: ReturnType<typeof buildGearRecords>) {
+// CREATE-ONLY: an item that already exists (same name and brand) is left exactly as it is. Nothing is updated and
+// no variants are deleted, so catalog edits made through the admin UI survive repeated seeding.
+async function seedGearItems(prisma: SeedPrisma, records: ReturnType<typeof buildGearRecords>) {
+    let created = 0;
+    let skipped = 0;
+
     for (const record of records) {
         const existing = await prisma.gearItem.findFirst({
             where: record.where,
@@ -112,35 +105,39 @@ async function seedGearItems(records: ReturnType<typeof buildGearRecords>) {
         });
 
         if (existing) {
-            await prisma.gearItem.update({
-                where: { id: existing.id },
-                data: { ...record.update, variants: { deleteMany: {}, create: record.create.variants.create }},
-            });
-        } else {
-            await prisma.gearItem.create({
-                data: record.create,
-            });
+            skipped += 1;
+            continue;
         }
+
+        await prisma.gearItem.create({
+            data: record.create,
+        });
+        created += 1;
     }
+
+    return { created, skipped };
 }
 
-export async function seedGearCatalog() {
+export async function seedGearCatalog(deps: SeedDeps = {}): Promise<{ created: number; skipped: number }> {
+    // Safety guard first: nothing below runs unless the target is a confirmed, dedicated, local database.
+    const { prisma } = await prepareSeed(deps);
+
     const gearData = loadGearSeedData();
-    const brandCache = await resolveBrands(gearData);
+    const brandCache = await resolveBrands(prisma, gearData);
     const gearRecords = buildGearRecords(gearData, brandCache);
 
-    await seedGearItems(gearRecords);
+    const result = await seedGearItems(prisma, gearRecords);
 
-    console.log(`Gear seed completed with ${gearData.length} records`);
+    console.log(`Gear seed completed: ${result.created} created, ${result.skipped} already present and left unchanged`);
+
+    return result;
 }
 
 if (process.argv[1]?.endsWith("gear.seed.ts")) {
-  seedGearCatalog()
-    .catch((e) => {
-      console.error(e);
-      process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
+    seedGearCatalog()
+        .catch((error) => {
+            reportSeedFailure(error);
+            process.exitCode = 1;
+        })
+        .finally(disconnectSeedClient);
 }
