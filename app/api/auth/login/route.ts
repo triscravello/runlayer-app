@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAuthCookies, verifyPassword } from "@/lib/auth";
 import { authLimiters, getClientIp, getEmailRateLimitKey, rateLimitHeaders } from "@/lib/rate-limit";
 import { buildRateLimitedResponse, checkEmailLimit, checkNetworkLimits, mostRestrictive } from "@/lib/rateLimit/authThrottle";
+import { describeErrorForLog } from "@/lib/auth/session";
 import type { RateLimitResult } from "@/lib/rateLimit/createRateLimiter";
 import { withInstrumentation, recordAuthFailure, recordRateLimitHit } from "@/lib/instrumentation";
 
@@ -74,6 +75,7 @@ export const POST = withInstrumentation(async (request: NextRequest) => {
                 email: true,
                 passwordHash: true,
                 role: true,
+                sessionVersion: true,
                 profile: {
                     select: {
                         location: true,
@@ -89,7 +91,7 @@ export const POST = withInstrumentation(async (request: NextRequest) => {
             return response;
         }
 
-        const token = createSessionToken(user.id);
+        const token = createSessionToken(user.id, user.sessionVersion);
         const { name, options } = getAuthCookies();
         const response = NextResponse.json(
             {
@@ -111,7 +113,8 @@ export const POST = withInstrumentation(async (request: NextRequest) => {
         return response;
     } catch (error) {
         recordAuthFailure("/api/auth/login", "login_error");
-        console.error("Error logging in:", error);
+        // Log only the error type: database error messages can contain query arguments such as the email address.
+        console.error("Error logging in:", describeErrorForLog(error));
         return invalidCredentials();
     }
 }, "/api/auth/login");

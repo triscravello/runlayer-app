@@ -9,6 +9,11 @@ const protectedPrefixes = ["/dashboard", "/admin"];
 
 // Page gating only checks the token signature and expiry, using the same verifier as the API routes.
 // A misconfigured secret fails closed (treated as no session) and is logged.
+//
+// IMPORTANT: this does NOT establish that a session is still valid. Revocation (logout) is recorded in the
+// database as User.sessionVersion, which this check never reads, so a revoked-but-unexpired token still passes
+// here. Every protected page and API route re-checks through requireAuth/requireAdmin/getSessionUser
+// (lib/auth/session.ts), which is what rejects revoked tokens. Never rely on this proxy alone for authorization.
 function hasValidSession(token?: string) {
     if (!token) return false;
 

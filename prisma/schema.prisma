@@ -63,6 +63,10 @@ model User {
 
   role UserRole @default(USER)
 
+  // Incremented to revoke every session issued for this user; a session token is valid only while the version
+  // it carries equals this value (see lib/auth/session.ts).
+  sessionVersion Int @default(0) @map("session_version")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 

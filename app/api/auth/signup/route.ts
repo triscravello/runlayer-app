@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAuthCookies, hashPassword } from "@/lib/auth";
 import { authLimiters, getClientIp, getEmailRateLimitKey, rateLimitHeaders } from "@/lib/rate-limit";
 import { buildRateLimitedResponse, checkEmailLimit, checkNetworkLimits, mostRestrictive } from "@/lib/rateLimit/authThrottle";
+import { describeErrorForLog } from "@/lib/auth/session";
 import type { RateLimitResult } from "@/lib/rateLimit/createRateLimiter";
 import { recordRateLimitHit } from "@/lib/instrumentation";
 
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
                 id: true,
                 email: true,
                 role: true,
+                sessionVersion: true,
                 profile: {
                     select: {
                         location: true,
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
             },
         });
 
-        const token = createSessionToken(user.id);
+        const token = createSessionToken(user.id, user.sessionVersion);
         const { name, options } = getAuthCookies();
         const response = NextResponse.json(
             {
@@ -130,7 +132,8 @@ export async function POST(request: Request) {
             );
         }
 
-        console.error("Error signing up:", error);
+        // Log only the error type: database error messages can contain query arguments such as the email address.
+        console.error("Error signing up:", describeErrorForLog(error));
         return NextResponse.json(
             { success: false, error: { code: "SIGNUP_FAILED", message: "Unable to create account" } },
             { status: 500, headers },

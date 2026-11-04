@@ -1,6 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { verifySessionToken, createSessionToken, SESSION_TTL_SECONDS } from "./auth/crypto";
+import { createSessionToken, SESSION_TTL_SECONDS } from "./auth/crypto";
+import { createPrismaSessionStore } from "./auth/prismaSessionStore";
+import { resolveSessionUser } from "./auth/session";
 import { ForbiddenError, UnauthorizedError } from "./http/apiErrors";
 import { prisma } from "./prisma";
 
@@ -42,30 +44,15 @@ export function getAuthCookies() {
 
 export type SessionUser = Awaited<ReturnType<typeof getSessionUser>> extends infer User ? NonNullable<User> : never;
 
+// Prisma-backed store for session resolution and revocation (see lib/auth/session.ts).
+export const sessionStore = createPrismaSessionStore(prisma);
+
 export async function getSessionUser() {
     const cookieStore = await cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-    if (!token) return null;
-
-    const session = verifySessionToken(token);
-    if (!session) return null;
-
-    const user = await prisma.user.findUnique({
-        where: { id: session.userId },
-        select: {
-            id: true,
-            email: true,
-            role: true,
-            createdAt: true,
-            updatedAt: true,
-            profile: {
-                select: {
-                    location: true,
-                },
-            },
-        },
-    });
+    // Verifies the token and that its session version is still current (i.e. the session was not revoked).
+    const user = await resolveSessionUser(token, sessionStore);
 
     if (!user) return null;
 
