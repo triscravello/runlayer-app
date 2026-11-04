@@ -1,3 +1,5 @@
+// Usage: supply a session cookie for a local test user at runtime. Never commit a real cookie.
+//   k6 run -e RUNLAYER_COOKIE="runlayer_session=<value from your browser>" load-test.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
@@ -58,7 +60,7 @@ export function browseRecommendations() {
   const params = {
     headers: {
       "Content-Type": "application/json",
-      Cookie: "runlayer_session=111e3b92-1de2-45f9-8269-3c5ae9ee4c33.1783701511487.821c806a9cc59feaf7d4a8d53e6d5f2ee274f7f2125d8e2a9a54ed04dd5195da",
+      Cookie: __ENV.RUNLAYER_COOKIE,
     },
   };
 

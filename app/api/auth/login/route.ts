@@ -1,7 +1,9 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAuthCookies, verifyPassword } from "@/lib/auth";
-import { authLimiter, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
+import { authLimiters, getClientIp, getEmailRateLimitKey, rateLimitHeaders } from "@/lib/rate-limit";
+import { buildRateLimitedResponse, checkEmailLimit, checkNetworkLimits, mostRestrictive } from "@/lib/rateLimit/authThrottle";
+import type { RateLimitResult } from "@/lib/rateLimit/createRateLimiter";
 import { withInstrumentation, recordAuthFailure, recordRateLimitHit } from "@/lib/instrumentation";
 
 type LoginPayload = {
@@ -16,28 +18,31 @@ function invalidCredentials() {
     );
 }
 
-export const POST = withInstrumentation(async (request: NextRequest) => {
-    const ip = getClientIp(request);
-    const { success, limit, remaining, reset } = await authLimiter.limit(ip);
-    const headers = rateLimitHeaders(limit, remaining, reset);
+// One response for every throttling layer (global, IP, account), so it never reveals which one triggered.
+function tooManyLoginAttempts(result: RateLimitResult) {
+    recordRateLimitHit("/api/auth/login");
+    const { status, body, headers } = buildRateLimitedResponse(result, Date.now(), {
+        error: "Too many login attempts",
+        message: "Please wait before trying again.",
+    });
 
-    if (!success) {
-        recordRateLimitHit("/api/auth/login");
-        return NextResponse.json(
-            {
-                error: "Too many login attempts",
-                message: "Please wait before trying again.",
-                retryAfter: Math.ceil((reset - Date.now()) / 1000),
-            },
-            {
-                status: 429,
-                headers: {
-                    ...rateLimitHeaders(limit, 0, reset),
-                    "Retry-After": Math.ceil((reset - Date.now()) / 1000).toString(),
-                },
-            }
-        );
+    return NextResponse.json(body, { status, headers });
+}
+
+export const POST = withInstrumentation(async (request: NextRequest) => {
+    // Layers 1 and 2 run before the body is read: the shared flood guard, then the per-IP limiter when a
+    // trusted client IP exists (skipped for CLIENT_IP_STRATEGY=none).
+    const network = await checkNetworkLimits(
+        { flood: authLimiters.loginFlood, ip: authLimiters.loginIp },
+        getClientIp(request),
+    );
+
+    if (!network.allowed) {
+        return tooManyLoginAttempts(network.result);
     }
+
+    let headers = rateLimitHeaders(network.result.limit, network.result.remaining, network.result.reset);
+
     try {
         const { email, password } = (await request.json()) as LoginPayload;
 
@@ -50,6 +55,18 @@ export const POST = withInstrumentation(async (request: NextRequest) => {
         }
 
         const normalizedEmail = email.trim().toLowerCase();
+
+        // Layer 3: per-account limit on the hashed email, applied identically whether or not the account
+        // exists, and before the database lookup and password hashing.
+        const account = await checkEmailLimit(authLimiters.loginEmail, getEmailRateLimitKey(normalizedEmail));
+
+        if (!account.allowed) {
+            return tooManyLoginAttempts(account.result);
+        }
+
+        const decisive = mostRestrictive(network.result, account.result);
+        headers = rateLimitHeaders(decisive.limit, decisive.remaining, decisive.reset);
+
         const user = await prisma.user.findUnique({
             where: { email: normalizedEmail },
             select: {

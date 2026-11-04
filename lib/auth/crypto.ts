@@ -1,19 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveAuthSecret } from "./secret";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getAuthSecret() {
-    const secret = process.env.BETTER_AUTH_SECRET;
-    
-    if (secret) {
-        return secret;
-    }
-
-    if (process.env.NODE_ENV === "production") {
-        throw new Error("Missing BETTER_AUTH_SECRET");
-    }
-
-    return "dev-only-secret-change-me";
+    return resolveAuthSecret(process.env);
 }
 
 function signSessionPayload(payload: string) {

@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# the example file contains placeholders only and is tracked
+!.env.example
+# local credential files (for example the Prometheus metrics token); never commit
+/secrets/
 
 # vercel
 .vercel

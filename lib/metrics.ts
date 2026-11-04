@@ -31,6 +31,15 @@ export const rateLimitHitsTotal = new client.Counter({
   registers: [registry],
 });
 
+// Counter: tracks degradation of the rate-limit backend (Upstash errors, memory evictions, memory-in-production).
+// Labels are bounded: limiter is one of the fixed limiter names, event is one of a fixed set.
+export const rateLimitBackendEventsTotal = new client.Counter({
+  name: 'runlayer_rate_limit_backend_events_total',
+  help: 'Total number of rate-limit backend degradation events',
+  labelNames: ['limiter', 'event'] as const,
+  registers: [registry],
+});
+
 // Counter: tracks authentication failures with a reason label
 export const authFailuresTotal = new client.Counter({
   name: 'runlayer_auth_failures_total',

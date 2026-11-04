@@ -80,8 +80,6 @@ export const weatherClient = {
 
         const normalizedLocation = normalizeLocationQuery(location);
 
-        console.log(`[weatherClient] normalized location query: ${normalizedLocation}`);
-
         const params = new URLSearchParams({
             q: normalizedLocation,
             units: "imperial",

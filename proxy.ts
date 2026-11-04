@@ -2,47 +2,22 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { globalLimiter, getClientIp } from "./lib/rate-limit";
 import { recordRateLimitHit } from "./lib/instrumentation";
+import { verifySessionToken } from "./lib/auth/crypto";
 
 const AUTH_COOKIE_NAME = "runlayer_session";
 const protectedPrefixes = ["/dashboard", "/admin"];
 
-// keep your existing getAuthSecret, hmacSha256Hex, hasValidSession functions here
-function getAuthSecret() {
-    const secret = process.env.BETTER_AUTH_SECRET;
-
-    if (secret) return secret;
-    if (process.env.NODE_ENV === "production") return null;
-    return "dev-only-secret-change-me";
-}
-
-async function hmacSha256Hex(payload: string, secret: string) {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-    return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function hasValidSession(token?: string) {
+// Page gating only checks the token signature and expiry, using the same verifier as the API routes.
+// A misconfigured secret fails closed (treated as no session) and is logged.
+function hasValidSession(token?: string) {
     if (!token) return false;
 
-    const parts = token.split(".");
-    if (parts.length !== 3) return false;
-
-    const [userId, expiresAtStr, signature] = parts;
-    const expiresAt = Number(expiresAtStr);
-    const secret = getAuthSecret();
-
-    if (!secret || !userId || !Number.isFinite(expiresAt) || !signature) return false;
-    if (Date.now() > expiresAt) return false;
-
-    const expected = await hmacSha256Hex(`${userId}.${expiresAt}`, secret);
-    return signature === expected;
+    try {
+        return verifySessionToken(token) !== null;
+    } catch (error) {
+        console.error("Session verification unavailable:", error instanceof Error ? error.message : "unknown error");
+        return false;
+    }
 }
 
 export async function proxy(req: NextRequest) {
@@ -91,7 +66,7 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const validSession = await hasValidSession(req.cookies.get(AUTH_COOKIE_NAME)?.value);
+  const validSession = hasValidSession(req.cookies.get(AUTH_COOKIE_NAME)?.value);
 
   if (!validSession) {
     const loginUrl = new URL("/login", req.url);

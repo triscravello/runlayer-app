@@ -1,0 +1,17 @@
+# Overlay for docker-compose.observability.yml: makes Prometheus scrape /api/metrics with a bearer token.
+#
+# 1. Put the same value as your app's METRICS_TOKEN in an untracked file (the `secrets/` folder is git-ignored):
+#      mkdir -p secrets && chmod 700 secrets
+#      (umask 077; printf '%s' "$METRICS_TOKEN" > secrets/metrics_token)
+#    Generate a token with:  openssl rand -base64 48
+# 2. Start the stack with both files:
+#      METRICS_TOKEN_FILE=./secrets/metrics_token \
+#        docker compose -f docker-compose.observability.yml -f docker-compose.observability.auth.yml up
+#
+# Without this overlay Prometheus sends no credentials, which only works while METRICS_TOKEN is unset and the
+# app runs with NODE_ENV=development.
+services:
+  prometheus:
+    volumes:
+      - ./prometheus.auth.yml:/etc/prometheus/prometheus.yml:ro
+      - ${METRICS_TOKEN_FILE:?Set METRICS_TOKEN_FILE to a file containing the metrics token}:/etc/prometheus/metrics_token:ro
