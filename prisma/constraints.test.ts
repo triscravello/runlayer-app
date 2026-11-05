@@ -69,11 +69,21 @@ test("schema: brand uniqueness is untouched (deferred to a later phase)", () => 
 
 // --- Migration ----------------------------------------------------------------------------------------------------
 
-test("migration: it is the newest migration and contains only migration.sql", () => {
+test("migration: it sorts after every migration that existed before it and contains only migration.sql", () => {
     const dir = `${root}prisma/migrations`;
     const names = readdirSync(dir).filter((entry) => statSync(`${dir}/${entry}`).isDirectory()).sort();
 
-    assert.equal(names.at(-1), MIGRATION_NAME, "sorts after every earlier migration");
+    assert.deepEqual(names.filter((name) => name < MIGRATION_NAME), [
+        "20260528183058_add_user_roles",
+        "20260601163001_add_recommendation_history_feedback",
+        "20260602152307_personalization_saved_kits",
+        "20260603140249_recommendation_engine_versioning",
+        "20260611190351_add_user_profile_location",
+        "20260617180201_add_user_profile_gender_preference",
+        "20260629195746_add_gear_item_variants",
+        "20261104160000_add_user_session_version",
+    ], "the eight earlier migrations, all sorting before it (later migrations may follow it)");
+    assert.ok(names.includes(MIGRATION_NAME));
     assert.deepEqual(readdirSync(`${dir}/${MIGRATION_NAME}`), ["migration.sql"], "no backup/remediation files inside the migration directory");
 });
 
@@ -263,4 +273,41 @@ test("the opt-in lifecycle integration test is gated by the shared local-databas
     const assignments = [...source.matchAll(/process\.env\.DATABASE_URL\s*=\s*([^;]+);/g)].map((match) => match[1].trim());
     assert.ok(assignments.length >= 1, "it pins the app's DATABASE_URL to the test URL");
     assert.ok(assignments.every((value) => value.startsWith("check.url")), "DATABASE_URL is only ever set to the guarded test URL");
+});
+
+test("the Phase 2C lifecycle test is pinned to the Phase 2C schema and does not depend on the Phase 2D brand key", () => {
+    const source = read("prisma/outfitConstraints.integration.test.ts");
+    const code = source.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+
+    assert.doesNotMatch(code, /normalized_?[nN]ame|toBrandIdentity|brandResolution/, "no reference to the Phase 2D column or code");
+    assert.doesNotMatch(code, /client\.brand\.(create|createMany|upsert)/, "the historical brand fixture is raw SQL, not the Prisma client");
+    assert.match(code, /INSERT INTO brands \(id, name\) VALUES \(\$1, \$1\)/, "raw SQL compatible with the schema before Phase 2D");
+    assert.match(code, /const beforeMigrations = buildWorkdir\(\(entry\) => entry < MIGRATION_NAME\)/, "the starting schema is everything BEFORE the Phase 2C migration");
+    assert.match(code, /const allMigrations = buildWorkdir\(\(entry\) => entry <= MIGRATION_NAME\)/, "the lifecycle applies migrations only THROUGH Phase 2C, so later index additions cannot disturb its comparisons");
+    assert.doesNotMatch(code, /const allMigrations = buildWorkdir\(\(\) => true\)/);
+});
+
+test("the Phase 2C lifecycle keeps its original assertions (duplicate detection, refusal, atomicity, remediation, restore, uniqueness, rollback)", () => {
+    const source = read("prisma/outfitConstraints.integration.test.ts");
+
+    for (const expected of [
+        'assert.equal(detect.lines[0], "3|4"',
+        "detection and preview changed nothing",
+        "the guard stops the migration",
+        "no index was created",
+        "the index set is exactly as before",
+        "no data changed",
+        "survivors and untouched rows only",
+        "no parent rows were touched",
+        "a second run must not overwrite the backup",
+        "the refused run changed nothing",
+        "restore brings back exactly the original rows",
+        "the refused restore changed nothing",
+        "a raw duplicate insert violates the unique index",
+        "the real P2002 is recognized",
+        "the index set is back to the pre-migration state",
+        "rolling back the indexes loses no data",
+    ]) {
+        assert.ok(source.includes(expected), `assertion text missing: ${expected}`);
+    }
 });

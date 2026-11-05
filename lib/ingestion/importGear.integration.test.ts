@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { checkTestDatabase } from "../auth/testDatabaseGuard";
-import { BRAND_FAILURE } from "./brandResolution";
+import { BRAND_FAILURE, toBrandIdentity } from "./brandResolution";
 import { resolveImportBrands } from "./brandStore";
 import { importGear } from "./importGear";
 import { parseGearJsonFiles } from "./parsers/jsonGearParser";
@@ -42,6 +42,7 @@ test(
         const marker = `p2a-${randomUUID().slice(0, 8)}`;
         const dirs: string[] = [];
         const nameOf = (suffix: string) => `${marker}-${suffix}`;
+        const brandData = (name: string) => toBrandIdentity(name) as NonNullable<ReturnType<typeof toBrandIdentity>>;
 
         async function runImport(items: unknown[]) {
             const dir = await mkdtemp(path.join(tmpdir(), "runlayer-import-test-"));
@@ -76,7 +77,7 @@ test(
             assert.equal(Number(reached.port), Number(target.port || 5432), "connected to the intended server port");
 
             // Unrelated catalog records that must survive every import untouched.
-            const sentinelBrand = await prisma.brand.create({ data: { name: nameOf("sentinel-brand") } });
+            const sentinelBrand = await prisma.brand.create({ data: brandData(nameOf("sentinel-brand")) });
             const sentinelItem = await prisma.gearItem.create({
                 data: {
                     name: nameOf("sentinel-item"),
@@ -124,7 +125,7 @@ test(
             });
 
             await t.test("an existing brand is reused case-insensitively", async () => {
-                const existing = await prisma.brand.create({ data: { name: nameOf("Casing") } });
+                const existing = await prisma.brand.create({ data: brandData(nameOf("Casing")) });
                 const result = await runImport([item("casing-item", nameOf("casing"))]);
 
                 assert.deepEqual(result.failed, []);
@@ -154,7 +155,15 @@ test(
             });
 
             await t.test("invalid brand references fail their rows and create nothing", async () => {
-                await prisma.brand.createMany({ data: [{ name: nameOf("Twin") }, { name: nameOf("TWIN") }] });
+                // Two brands whose names are equivalent can no longer be created normally (the database enforces the
+                // normalized key). This simulates LEGACY / INCONSISTENT data - rows written before keys existed - by
+                // giving them different stored keys, so the importer's ambiguity protection is still exercised.
+                await prisma.brand.createMany({
+                    data: [
+                        { name: nameOf("Twin"), normalizedName: nameOf("twin") },
+                        { name: nameOf("TWIN"), normalizedName: `legacy-${nameOf("twin")}` },
+                    ],
+                });
                 const known = await prisma.brand.findFirstOrThrow({ where: { name: nameOf("nike") } });
 
                 const result = await runImport([

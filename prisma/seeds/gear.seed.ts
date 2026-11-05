@@ -1,6 +1,7 @@
 import { Category, PriceRange } from "@prisma/client";
 import type { Brand } from "@prisma/client";
 // Erasable TypeScript only; runs under `node --experimental-strip-types`.
+import { toBrandIdentity } from "../../lib/ingestion/brandResolution.ts";
 import { disconnectSeedClient, prepareSeed, reportSeedFailure } from "./context.ts";
 import type { SeedDeps, SeedPrisma } from "./context.ts";
 import { loadGearSeedData } from "./data/gear.data.ts";
@@ -48,10 +49,14 @@ async function resolveBrands(prisma: SeedPrisma, items: GearSeedItem[]): Promise
 
     await Promise.all(
         brandNames.map(async (name) => {
+            // Same identity function as every other brand writer: the stored key is what makes "Nike" and "nike" one brand.
+            const identity = toBrandIdentity(name);
+            if (!identity) throw new Error(`Seed data contains an invalid brand name: ${JSON.stringify(name)}`);
+
             const brand = await prisma.brand.upsert({
-                where: { name },
+                where: { normalizedName: identity.normalizedName },
                 update: {},
-                create: { name },
+                create: identity,
             });
             brandCache.set(name, brand);
         })

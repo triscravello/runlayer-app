@@ -27,6 +27,10 @@ import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
  * scripts are psql scripts. The Prisma CLI is run from a temporary working directory with an explicit DATABASE_URL, so
  * the project's .env is never read.
  *
+ * Scope: the duplicate lifecycle (the third subtest) is pinned to the migrations up to and including the Phase 2C migration
+ * and builds its fixtures with raw SQL, so it does not depend on anything added later (such as brands.normalized_name).
+ * The first two subtests (clean path and schema/migration drift) run against the full, current migration history.
+ *
  * What it proves, in order: a clean database migrates; schema and migrations are consistent; duplicate detection and
  * preview are read-only and exact; the migration refuses to run over duplicates and changes nothing; the dedupe script
  * refuses to run unconfirmed, then backs up and removes exactly the right rows; restore reverses it; after remediation
@@ -161,8 +165,10 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
 
         await t.test("duplicates: detection, refusal, remediation, restore, migration, constraint, indexes, rollback", async () => {
             const { name, url, client } = await createScratchDatabase("life");
-            const beforeMigrations = buildWorkdir((entry) => entry !== MIGRATION_NAME);
-            const allMigrations = buildWorkdir(() => true);
+            const beforeMigrations = buildWorkdir((entry) => entry < MIGRATION_NAME);
+            // Through Phase 2C only: later migrations (for example the Phase 2D brand key) add their own indexes and columns, and
+            // this lifecycle compares the index set before and after the rollback drill.
+            const allMigrations = buildWorkdir((entry) => entry <= MIGRATION_NAME);
 
             assert.equal(prisma(beforeMigrations, url, ["migrate", "deploy"]).status, 0, "the eight existing migrations apply");
             const indexesBefore = await indexNames(client);
@@ -170,7 +176,10 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
 
             // --- Fixtures: three duplicate groups plus legitimate single rows (including the same gear in other outfits).
             const user = await client.user.create({ data: { email: `c2-${suffix}@example.invalid`, passwordHash: "not-a-real-hash" } });
-            const brand = await client.brand.create({ data: { name: `c2-brand-${suffix}` } });
+            // Raw SQL, because this database is deliberately at the Phase 2C schema: brands has no normalized_name column yet
+            // (the Phase 2D migration adds it later), and the Prisma client now writes that column.
+            const brand = { id: `c2-brand-${suffix}` };
+            await client.$executeRawUnsafe(`INSERT INTO brands (id, name) VALUES ($1, $1)`, brand.id);
             const gear = await Promise.all(["g1", "g2", "g3"].map((label) => client.gearItem.create({ data: { name: `c2-${label}-${suffix}`, brandId: brand.id, category: "TOP", priceRange: "MID", tags: [], bodyTypeFit: [] } })));
             const outfits = await Promise.all(["o1", "o2", "o3"].map((label) => client.savedOutfit.create({ data: { userId: user.id, name: `c2-${label}-${suffix}`, type: "custom" } })));
             const [g1, g2, g3] = gear.map((item) => item.id);

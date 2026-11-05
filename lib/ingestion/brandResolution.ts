@@ -70,6 +70,28 @@ export function checkBrandText(value: unknown): TextCheck {
     return { ok: true, value: trimmed };
 }
 
+export const BRAND_KEY_MAX_LENGTH = BRAND_MAX_LENGTH;
+
+/** What every brand row is written with: the display name and the stored identity key. */
+export type BrandIdentity = { name: string; normalizedName: string };
+
+/**
+ * THE one way a brand row gets its display name and its stored key. Every writer (CLI import, admin API, seed, and any
+ * future rename - which must write BOTH fields in one statement) builds the data from this function, so the stored key
+ * is always `normalizeBrandKey` of the same text. Returns null for text that cannot be a brand: not a string, blank,
+ * over BRAND_MAX_LENGTH, containing control characters, or whose key is empty or longer than BRAND_KEY_MAX_LENGTH
+ * (NFKC can expand a name, so a valid-looking name may still produce an over-long key).
+ */
+export function toBrandIdentity(value: unknown): BrandIdentity | null {
+    const text = checkBrandText(value);
+    if (!text.ok) return null;
+
+    const normalizedName = normalizeBrandKey(text.value);
+    if (normalizedName === "" || normalizedName.length > BRAND_KEY_MAX_LENGTH) return null;
+
+    return { name: cleanBrandName(text.value), normalizedName };
+}
+
 export function buildBrandIndex(brands: readonly BrandRecord[]): BrandIndex {
     const byId = new Map<string, BrandRecord>();
     const byKey = new Map<string, BrandRecord[]>();
@@ -115,6 +137,8 @@ export function resolveBrandReference(index: BrandIndex, reference: BrandReferen
     if (matches.length > 1) return failed(BRAND_FAILURE.ambiguous);
     if (matches.length === 1) return { status: "resolved", brandId: matches[0].id };
     if (policy === "require-existing") return failed(BRAND_FAILURE.unknownBrand);
+    // A brand we would create must have a storable key (the database stores it, bounded).
+    if (key.length > BRAND_KEY_MAX_LENGTH) return failed(BRAND_FAILURE.invalidName);
 
     return { status: "create", key, name: cleanBrandName((name as { ok: true; value: string }).value) };
 }

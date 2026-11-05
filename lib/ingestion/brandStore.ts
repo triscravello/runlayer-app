@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import {
     planBrandResolution,
+    toBrandIdentity,
     type BrandReference,
     type ResolvedBrandOutcome,
 } from "./brandResolution";
@@ -15,11 +16,13 @@ import {
 //   4. re-read the brands and resolve every reference to an actual brands.id.
 //
 // CONCURRENCY: the advisory lock only serialises importers that call this function. Anything else that writes
-// brands (for example the admin "create brand" endpoint) does not take the lock. That is why creation uses
-// `upsert` on the unique name, so an exact-name collision with such a writer is harmless, and why step 4 re-reads
-// and re-checks instead of trusting the plan. The one thing the database cannot enforce without a migration is
-// case-insensitive uniqueness (brands_name_key is case-sensitive): two non-participating writers could still create
-// "Nike" and "nike". If that ever happens, step 4 reports the brand as ambiguous instead of guessing.
+// brands (for example the admin "create brand" endpoint) does not take the lock. Since brands carry a unique,
+// application-computed normalized key (brands.normalized_name), creation is an `upsert` on that key: two writers asking
+// for equivalent names ("Nike", "nike", " NIKE ") end with exactly ONE row whether or not they hold the lock, so the
+// lock is now defense in depth, not the only protection. Step 4 still re-reads and re-checks instead of trusting the
+// plan, and the planner still reports a name shared by several existing brands as ambiguous instead of guessing: that
+// can only happen with legacy or inconsistent data (for example rows written before the key existed), and that
+// protection is deliberately kept.
 //
 // ATOMICITY: brand creation is committed here, before any gear item is written. Brand creation and item import are
 // NOT one all-or-nothing transaction: if items later fail, the brands created for them remain. That is intentional
@@ -44,7 +47,12 @@ export async function resolveImportBrands(references: BrandReference[], client: 
             const plan = planBrandResolution(existing, references, "create-missing");
 
             for (const name of plan.toCreate) {
-                await tx.brand.upsert({ where: { name }, update: {}, create: { name } });
+                // The stored key comes from the same function as every other writer. Looking the brand up by that
+                // unique key makes the upsert atomic, and `update: {}` means an equivalent existing brand keeps its
+                // display name.
+                const identity = toBrandIdentity(name);
+                if (!identity) throw new Error("A planned brand name failed validation.");
+                await tx.brand.upsert({ where: { normalizedName: identity.normalizedName }, update: {}, create: identity });
             }
 
             const current = plan.toCreate.length ? await tx.brand.findMany({ select: { id: true, name: true } }) : existing;

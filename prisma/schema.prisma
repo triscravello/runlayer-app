@@ -191,8 +191,15 @@ model GearItemVariant {
 }
 
 model Brand {
-  id   String @id @default(uuid())
+  id String @id @default(uuid())
+
+  // Display name: unique exactly as written (case-sensitive).
   name String @unique
+
+  // Brand identity: the application's normalized key (lib/ingestion/brandResolution.ts normalizeBrandKey - NFKC,
+  // trimmed, whitespace collapsed, lowercased), computed by the application on every write. The database enforces that
+  // two brands never share a key; it cannot verify that a writer computed the key correctly.
+  normalizedName String @unique @map("normalized_name")
 
   tier  String?
   style String?

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { checkTestDatabase } from "../auth/testDatabaseGuard";
+import { toBrandIdentity } from "../ingestion/brandResolution";
 
 /**
  * Saved-outfit transactions against a REAL PostgreSQL database. Skipped by default.
@@ -83,7 +84,7 @@ test(
 
             // --- fixtures ---------------------------------------------------------------------------------------
             const [userA, userB, userC] = await Promise.all(["a", "b", "c"].map((name) => prisma.user.create({ data: { email: email(name), passwordHash: "integration-test-not-a-real-hash" } })));
-            const brand = await prisma.brand.create({ data: { name: `${marker}-brand` } });
+            const brand = await prisma.brand.create({ data: toBrandIdentity(`${marker}-brand`) as NonNullable<ReturnType<typeof toBrandIdentity>> });
             const gear = await Promise.all(
                 [1, 2, 3, 4, 5, 6, 7, 8].map((n) =>
                     prisma.gearItem.create({

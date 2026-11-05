@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test, { type TestContext } from "node:test";
 import { verifyPassword } from "../../lib/auth/password";
+import { normalizeBrandKey } from "../../lib/ingestion/brandResolution";
 import type { SeedDeps, SeedPrisma } from "./context";
 import { loadGearSeedData } from "./data/gear.data";
 import { seedGearCatalog } from "./gear.seed";
@@ -25,6 +26,7 @@ type Row = Record<string, unknown> & { id: string };
 function createFakePrisma(initial: { users?: Row[]; outfits?: Row[]; gear?: Row[]; brands?: Row[] } = {}, options: { raceOnUserCreate?: boolean; failUserCreateWith?: string } = {}) {
     const calls: string[] = [];
     const brandUpsertUpdates: unknown[] = [];
+    const brandUpsertCreates: Array<{ name: string; normalizedName: string }> = [];
     const users = [...(initial.users ?? [])];
     const outfits = [...(initial.outfits ?? [])];
     const gear = [...(initial.gear ?? [])];
@@ -82,10 +84,13 @@ function createFakePrisma(initial: { users?: Row[]; outfits?: Row[]; gear?: Row[
             deleteMany: trap("savedOutfit.deleteMany"),
         },
         brand: {
-            upsert: async ({ where, update, create }: { where: { name: string }; update: unknown; create: { name: string } }) => {
+            // Brands are looked up by their unique normalized key (an existing row's key is derived from its name when the
+            // fixture does not carry one, like rows written before the key existed).
+            upsert: async ({ where, update, create }: { where: { normalizedName: string }; update: unknown; create: { name: string; normalizedName: string } }) => {
                 calls.push("brand.upsert");
                 brandUpsertUpdates.push(update);
-                const existing = brands.find((brand) => brand.name === where.name);
+                brandUpsertCreates.push(create);
+                const existing = brands.find((brand) => (brand.normalizedName ?? normalizeBrandKey(String(brand.name))) === where.normalizedName);
                 if (existing) return existing;
                 const row: Row = { id: nextId("brand"), ...create };
                 brands.push(row);
@@ -115,7 +120,7 @@ function createFakePrisma(initial: { users?: Row[]; outfits?: Row[]; gear?: Row[
         },
     };
 
-    return { prisma: prisma as unknown as SeedPrisma, calls, users, outfits, gear, brands, brandUpsertUpdates };
+    return { prisma: prisma as unknown as SeedPrisma, calls, users, outfits, gear, brands, brandUpsertUpdates, brandUpsertCreates };
 }
 
 function allowed(fake: ReturnType<typeof createFakePrisma>, env: Record<string, string | undefined> = { SEED_USER_PASSWORD: PASSWORD }) {
@@ -320,6 +325,31 @@ test("the gear seed creates the catalog on first run and changes nothing on the 
     assert.ok(fake.brandUpsertUpdates.every((update) => JSON.stringify(update) === "{}"), "brand upserts never update");
 });
 
+test("the gear seed stores every brand with the shared normalized key and reuses an equivalent existing brand", async (t) => {
+    silence(t);
+
+    // Every brand the seed creates carries the key the application computes for its display name.
+    const fresh = createFakePrisma();
+    await seedGearCatalog(allowed(fresh).deps);
+    assert.ok(fresh.brandUpsertCreates.length > 0);
+    for (const create of fresh.brandUpsertCreates) {
+        assert.equal(create.normalizedName, normalizeBrandKey(create.name), `${create.name}: stored key is the shared key`);
+        assert.equal(create.name, create.name.trim().replace(/\s+/g, " "), `${create.name}: display name is the cleaned input`);
+    }
+    assert.equal(new Set(fresh.brands.map((brand) => brand.normalizedName)).size, fresh.brands.length, "no two seeded brands share a key");
+
+    // A brand that already exists under an equivalent spelling (written before keys existed, so without one) is reused:
+    // no second row, same id, same display name.
+    const [first] = loadGearSeedData();
+    const original = first.brand === first.brand.toLowerCase() ? first.brand.toUpperCase() : first.brand.toLowerCase();
+    const existing = createFakePrisma({ brands: [{ id: "brand-existing", name: original }] });
+    await seedGearCatalog(allowed(existing).deps);
+
+    assert.equal(existing.brands.filter((brand) => normalizeBrandKey(String(brand.name)) === normalizeBrandKey(first.brand)).length, 1, "the equivalent existing brand was reused, not duplicated");
+    assert.equal(existing.brands.find((brand) => brand.id === "brand-existing")?.name, original, "its display name is untouched");
+    assert.ok(existing.gear.some((item) => item.brandId === "brand-existing"), "the seeded gear points at the existing brand");
+});
+
 test("existing catalog records and their admin edits are never overwritten or deleted", async (t) => {
     silence(t);
     const first = loadGearSeedData()[0];
@@ -389,7 +419,7 @@ test("seed sources contain no hard-coded credentials, fixed ids or overwrite pat
         assert.equal(upserts, path === "prisma/seeds/gear.seed.ts" ? 1 : 0, `${path}: unexpected upsert`);
     }
 
-    assert.match(read("prisma/seeds/gear.seed.ts"), /prisma\.brand\.upsert\(\{\s*where: \{ name \},\s*update: \{\},/, "brands are create-only");
+    assert.match(read("prisma/seeds/gear.seed.ts"), /prisma\.brand\.upsert\(\{\s*where: \{ normalizedName: identity\.normalizedName \},\s*update: \{\},\s*create: identity,/, "brands are create-only and keyed by the shared identity");
 });
 
 test("seed modules stay compatible with Node's TypeScript stripping", () => {
