@@ -165,6 +165,8 @@ Core entities:
 
 **Atomic updates.** Each create or update runs in one database transaction: the outfit's metadata and its items are written together or not at all. An update first takes a row lock on the caller's own outfit (`SELECT … FOR UPDATE`), so concurrent updates of the same outfit are applied one after another (last write wins) and can never interleave or duplicate items. The lock protects only code that follows this protocol, which is why items are written from a single function. If a referenced gear item disappears mid-request the whole change is rolled back and the API returns `409`.
 
+**Database constraints.** `outfit_items` has a unique index on `(outfit_id, gear_item_id)`, so a gear item can appear in an outfit at most once even if some writer bypasses the row-lock protocol (that case returns a `409` asking the client to retry). `saved_outfits(user_id, created_at DESC)` and `outfit_items(gear_item_id)` are indexed for the list query and for gear-delete cascades. The migration begins with a guard that stops, changing nothing, if duplicate rows already exist; it never deletes data. Detecting and, only with explicit confirmation, removing such duplicates is a separate, backed-up, reversible process described in [`prisma/maintenance/README.md`](prisma/maintenance/README.md). Run the read-only detection before applying the migration to any shared or hosted database.
+
 ### User Profile
 
 | Method | Route | Description |

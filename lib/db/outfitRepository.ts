@@ -85,11 +85,38 @@ function prismaErrorCode(error: unknown): string | null {
 }
 
 /**
- * Converts a foreign-key failure that happens when a referenced row disappears mid-transaction into a controlled,
- * fixed-message error. Anything else is returned unchanged. Messages never include client-supplied values.
+ * True only for a unique-violation (P2002) on the (outfit_id, gear_item_id) key of outfit_items. Prisma reports the
+ * violated key as `meta.target`: the column names, or the constraint name. A P2002 with no target, or on any other
+ * key, is NOT recognized here and is left to propagate unchanged.
+ */
+function isOutfitItemUniqueViolation(error: unknown): boolean {
+    if (prismaErrorCode(error) !== "P2002") return false;
+
+    const meta = (error as PrismaErrorLike).meta;
+    const target = typeof meta === "object" && meta !== null ? (meta as { target?: unknown }).target : undefined;
+
+    if (Array.isArray(target)) {
+        const fields = target.map(String);
+        return (fields.includes("outfit_id") || fields.includes("outfitId")) && (fields.includes("gear_item_id") || fields.includes("gearItemId"));
+    }
+
+    return typeof target === "string" && target.startsWith("outfit_items_");
+}
+
+/**
+ * Converts expected database failures into controlled, fixed-message errors; anything else is returned unchanged.
+ *  - P2003: a referenced row (gear item, recommendation) disappeared mid-transaction.
+ *  - P2002 on (outfit_id, gear_item_id): another writer put the same item in the same outfit. Under the row lock this
+ *    should not happen (items are de-duplicated and written by one locked path); the database constraint is the last
+ *    line of defense for a writer that bypasses the protocol.
+ * Messages never include client-supplied values, identifiers or SQL.
  */
 export function mapOutfitWriteError(error: unknown): unknown {
     if (error instanceof OutfitValidationError) return error;
+
+    if (isOutfitItemUniqueViolation(error)) {
+        return new OutfitValidationError("The kit was changed by another request. Please try again.", 409);
+    }
 
     if (prismaErrorCode(error) === "P2003") {
         const meta = (error as PrismaErrorLike).meta;

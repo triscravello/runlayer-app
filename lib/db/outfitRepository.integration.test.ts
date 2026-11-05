@@ -121,12 +121,26 @@ test(
                     await prisma.outfitItem.createMany({ data: ids.map((gearItemId) => ({ outfitId: outfit.id, gearItemId })) });
                 };
 
+                // Purely observational. Once the Phase 2C unique index exists, one of two racing writers can be rejected
+                // by the database, so the writers are settled independently and NO particular outcome is asserted:
+                // neither "both succeed", nor "a duplicate appears", nor "a writer is rejected".
                 let roundsWithDuplicates = 0;
+                let fulfilled = 0;
+                let rejected = 0;
+                let rejectedByUniqueKey = 0;
                 for (let round = 0; round < 20; round += 1) {
-                    await Promise.all([legacyReplace([g[0], g[1]]), legacyReplace([g[1], g[2]])]);
+                    const outcomes = await Promise.allSettled([legacyReplace([g[0], g[1]]), legacyReplace([g[1], g[2]])]);
+                    for (const outcome of outcomes) {
+                        if (outcome.status === "fulfilled") {
+                            fulfilled += 1;
+                        } else {
+                            rejected += 1;
+                            if ((outcome.reason as { code?: string } | undefined)?.code === "P2002") rejectedByUniqueKey += 1;
+                        }
+                    }
                     if ((await duplicatePairs(outfit.id)).length > 0) roundsWithDuplicates += 1;
                 }
-                t.diagnostic(`original pattern: ${roundsWithDuplicates}/20 concurrent rounds produced duplicate items`);
+                t.diagnostic(`original pattern: ${roundsWithDuplicates}/20 concurrent rounds produced duplicate items; writers fulfilled ${fulfilled}, rejected ${rejected} (of which by the unique key ${rejectedByUniqueKey})`);
             });
 
             await t.test("create writes the outfit and its items atomically for the authenticated owner", async () => {
@@ -286,6 +300,47 @@ test(
                 const after = await prisma.savedOutfit.findUniqueOrThrow({ where: { id: outfit.id } });
                 assert.equal(after.recommendationId, null);
             });
+
+            // Only meaningful once the Phase 2C migration (unique index on outfit_items) has been applied to this database.
+            const [{ present: uniqueIndexPresent }] = await prisma.$queryRaw<Array<{ present: boolean }>>`SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'outfit_items_outfit_id_gear_item_id_key') AS present`;
+            await t.test(
+                "the database rejects a duplicate item from a writer outside the lock protocol, and the repository maps it to the fixed 409",
+                { skip: uniqueIndexPresent ? false : "the outfit-item unique index is not in this database (apply the Phase 2C migration)" },
+                async () => {
+                    const outfit = await repo.saveOutfit({ userId: userA.id, name: "Constraint", gearItemIds: [g[0], g[1]] });
+                    const before = await snapshot(outfit.id);
+
+                    await assert.rejects(prisma.outfitItem.create({ data: { outfitId: outfit.id, gearItemId: g[0] } }), (error: unknown) => (error as { code?: string }).code === "P2002", "a raw duplicate is rejected by the database");
+
+                    // A rogue writer that skips the lock inserts the same pair just before the repository inserts its items.
+                    const rogueRunner = (rogueGearId: string): Runner => ({
+                        $transaction: (fn, options) =>
+                            prisma.$transaction(async (tx) => {
+                                const wrapped = {
+                                    savedOutfit: tx.savedOutfit,
+                                    gearItem: tx.gearItem,
+                                    recommendation: tx.recommendation,
+                                    $queryRaw: tx.$queryRaw.bind(tx),
+                                    outfitItem: {
+                                        deleteMany: (args: Parameters<typeof tx.outfitItem.deleteMany>[0]) => tx.outfitItem.deleteMany(args),
+                                        createMany: async (args: Parameters<typeof tx.outfitItem.createMany>[0]) => {
+                                            await tx.outfitItem.create({ data: { outfitId: outfit.id, gearItemId: rogueGearId } });
+                                            return tx.outfitItem.createMany(args);
+                                        },
+                                    },
+                                };
+                                return fn(wrapped as unknown as Parameters<typeof fn>[0]);
+                            }, options),
+                    });
+
+                    await assert.rejects(
+                        repo.updateSavedOutfit({ userId: userA.id, outfitId: outfit.id, name: "Rogue", gearItemIds: [g[2], g[3]] }, rogueRunner(g[2])),
+                        (error: unknown) => error instanceof repo.OutfitValidationError && error.statusCode === 409 && error.message === "The kit was changed by another request. Please try again.",
+                    );
+                    assert.equal(await snapshot(outfit.id), before, "the whole update rolled back, including the rogue insert");
+                    assert.deepEqual(await duplicatePairs(outfit.id), []);
+                },
+            );
 
             await t.test("unrelated records are untouched", async () => {
                 assert.equal(await snapshot(sentinel.id), sentinelBefore, "the unrelated user's outfit and items are byte-identical");

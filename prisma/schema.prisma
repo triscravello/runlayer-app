@@ -298,6 +298,7 @@ model SavedOutfit {
   recommendation Recommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
   OutfitItem     OutfitItem[]
 
+  @@index([userId, createdAt(sort: Desc)])
   @@map("saved_outfits")
 }
 
@@ -312,6 +313,8 @@ model OutfitItem {
   outfit   SavedOutfit @relation(fields: [outfitId], references: [id], onDelete: Cascade)
   gearItem GearItem    @relation(fields: [gearItemId], references: [id], onDelete: Cascade)
 
+  @@unique([outfitId, gearItemId])
+  @@index([gearItemId])
   @@map("outfit_items")
 }
 

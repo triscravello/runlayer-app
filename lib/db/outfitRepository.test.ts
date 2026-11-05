@@ -451,8 +451,75 @@ test("mapOutfitWriteError turns foreign-key failures into fixed messages and lea
     const otherPrisma = prismaError("P2002");
     assert.equal(mapOutfitWriteError(validation), validation);
     assert.equal(mapOutfitWriteError(other), other);
-    assert.equal(mapOutfitWriteError(otherPrisma), otherPrisma, "only P2003 is mapped");
+    assert.equal(mapOutfitWriteError(otherPrisma), otherPrisma, "a P2002 with no verifiable outfit-item target is not mapped");
     assert.equal(mapOutfitWriteError("text"), "text");
+});
+
+test("a unique violation on (outfit_id, gear_item_id) becomes a fixed 409 that exposes nothing", () => {
+    const leaky = (target: unknown) => prismaError("P2002", { modelName: "OutfitItem", target, detail: `Key (outfit_id, gear_item_id)=(${SECRET}, ${SECRET}) already exists.` });
+    const verified = [
+        leaky(["outfit_id", "gear_item_id"]),
+        leaky(["gear_item_id", "outfit_id"]),
+        leaky(["outfitId", "gearItemId"]),
+        leaky("outfit_items_outfit_id_gear_item_id_key"),
+    ];
+
+    for (const error of verified) {
+        const mapped = mapOutfitWriteError(error) as OutfitValidationError;
+        assert.ok(mapped instanceof OutfitValidationError);
+        assert.deepEqual([mapped.statusCode, mapped.message], [409, "The kit was changed by another request. Please try again."]);
+        assert.doesNotMatch(mapped.message, new RegExp(`${SECRET}|outfit_id|gear_item_id|outfit_items|prisma|invocation|do-not-leak`, "i"));
+    }
+});
+
+test("only a P2002 on the outfit-item key is mapped; other unique violations propagate untouched", () => {
+    const notMapped = [
+        prismaError("P2002", { target: ["id"] }),
+        prismaError("P2002", { target: ["name", "brand_id"] }),
+        prismaError("P2002", { target: ["outfit_id"] }),
+        prismaError("P2002", { target: ["gear_item_id", "label", "gender"] }),
+        prismaError("P2002", { target: "brands_name_key" }),
+        prismaError("P2002", { target: 5 }),
+        prismaError("P2002", {}),
+        prismaError("P2002"),
+    ];
+
+    for (const error of notMapped) assert.equal(mapOutfitWriteError(error), error, JSON.stringify((error as { meta?: unknown }).meta));
+});
+
+test("P2003 handling is unchanged and takes no part in the P2002 rule", () => {
+    const gear = mapOutfitWriteError(prismaError("P2003", { field_name: "outfit_items_gear_item_id_fkey (index)", target: ["outfit_id", "gear_item_id"] })) as OutfitValidationError;
+    const recommendation = mapOutfitWriteError(prismaError("P2003", { field_name: "saved_outfits_recommendation_id_fkey (index)" })) as OutfitValidationError;
+
+    assert.deepEqual([gear.statusCode, gear.message], [409, "A selected gear item is no longer available."]);
+    assert.deepEqual([recommendation.statusCode, recommendation.message], [404, "Recommendation not found for this user."]);
+});
+
+test("update: a duplicate-item violation from a writer outside the protocol rolls back and returns the fixed 409", async () => {
+    const fake = createFake(seeded(), { failCreateMany: prismaError("P2002", { target: ["outfit_id", "gear_item_id"], detail: SECRET }) });
+
+    await assert.rejects(
+        updateSavedOutfit({ userId: "user-a", outfitId: "outfit-a", name: "Half applied?", gearItemIds: ["g2"] }, fake.client),
+        (error: unknown) => error instanceof OutfitValidationError && error.statusCode === 409 && error.message === "The kit was changed by another request. Please try again." && !error.message.includes(SECRET),
+    );
+    assert.ok(fake.calls.includes("rollback"));
+    assert.deepEqual(fake.state().outfits, [OWNED], "metadata restored");
+    assert.deepEqual(fake.state().items, OWNED_ITEMS, "items restored");
+});
+
+test("create: a duplicate-item violation leaves no orphan outfit", async () => {
+    const fake = createFake(seeded(), { failCreateMany: prismaError("P2002", { target: ["outfit_id", "gear_item_id"] }) });
+
+    await assert.rejects(saveOutfit({ userId: "user-a", gearItemIds: ["g1"] }, fake.client), (error: unknown) => error instanceof OutfitValidationError && error.statusCode === 409);
+    assert.equal(fake.state().outfits.length, 1, "no orphan outfit");
+});
+
+test("an unrelated P2002 inside a transaction is not converted", async () => {
+    const unrelated = prismaError("P2002", { target: ["name", "brand_id"] });
+    const fake = createFake(seeded(), { failCreateMany: unrelated });
+
+    await assert.rejects(updateSavedOutfit({ userId: "user-a", outfitId: "outfit-a", gearItemIds: ["g2"] }, fake.client), (error: unknown) => error === unrelated);
+    assert.deepEqual(fake.state().items, OWNED_ITEMS, "still rolled back");
 });
 
 // --- structural guard ---------------------------------------------------------------------------------------------
