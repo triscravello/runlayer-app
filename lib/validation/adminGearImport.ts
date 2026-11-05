@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createGearItemSchema, type CreateGearItemPayload } from "@/lib/validation/adminGear";
 import type { BrandRow } from "@/lib/db/brandRepository";
+import { BRAND_FAILURE, buildBrandIndex, resolveBrandReference } from "@/lib/ingestion/brandResolution";
 
 const optionalString = z.string().trim().optional().nullable();
 const numberString = z.union([z.number(), z.string().trim()]).optional().nullable();
@@ -65,8 +66,9 @@ function formatZodIssues(error: z.ZodError) {
 }
 
 export function validateBulkGearImportRows(rawRows: unknown[], brands: BrandRow[]): GearBulkImportValidation {
-  const brandsById = new Map(brands.map((brand) => [brand.id, brand]));
-  const brandsByName = new Map(brands.map((brand) => [brand.name.toLowerCase(), brand]));
+  // Admin imports REQUIRE existing brands (policy "require-existing"): they never create one. Matching uses the
+  // same normalization as the CLI import, and a name shared by several existing brands is rejected as ambiguous.
+  const brandIndex = buildBrandIndex(brands);
   const rows: GearImportRowPreview[] = [];
   const validItems: CreateGearItemPayload[] = [];
 
@@ -81,10 +83,11 @@ export function validateBulkGearImportRows(rawRows: unknown[], brands: BrandRow[
 
     const importRow = parsed.data;
     const errors: string[] = [];
-    const matchedBrand = importRow.brandId ? brandsById.get(importRow.brandId) : importRow.brand ? brandsByName.get(importRow.brand.toLowerCase()) : null;
+    const brandOutcome = resolveBrandReference(brandIndex, { id: importRow.brandId || null, name: importRow.brand || null }, "require-existing");
+    const matchedBrand = brandOutcome.status === "resolved" ? brandIndex.byId.get(brandOutcome.brandId) : undefined;
 
-    if (!matchedBrand) {
-      errors.push(importRow.brandId || importRow.brand ? "Brand reference does not match an existing brand" : "brandId or brand is required");
+    if (brandOutcome.status === "failed") {
+      errors.push(brandOutcome.reason === BRAND_FAILURE.required ? "brandId or brand is required" : `Brand reference rejected: ${brandOutcome.reason}`);
     }
 
     const weatherSuitability = {

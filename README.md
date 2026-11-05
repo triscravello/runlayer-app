@@ -319,6 +319,16 @@ Seeding is **create-only**: an existing account (its password and profile), an e
 
 **Seed versus import.** `npm run db:seed` is **create-only**: it adds missing demo data and never modifies an existing account, profile, catalog item (including its variants and admin edits) or outfit. `scripts/importGear.ts` is an **updating** utility: for each item in `content/gear/*.json` whose name and brand match an existing item, it overwrites that item's fields and **replaces all of its variants** on every run. Both run only against a confirmed, dedicated local database and share the same safety checks (`--force` does not exist). The two catalogs currently do not overlap (78 seed items, 3 import items), so running both is additive today. To load or change a catalog in a hosted environment, use the authenticated admin import.
 
+**Brand resolution in the catalog import.** A catalog row names its brand (`brand`) and may also carry an explicit database id (`brandId`). The import never writes a brand name into `gear_items.brand_id`; every row is resolved to a real `brands.id` first:
+
+- A `brand` name is matched to an existing brand ignoring case, surrounding/repeated whitespace and Unicode compatibility forms (`nike` reuses `Nike`). If none exists, **`scripts/importGear.ts` creates it**, keeping the name as supplied (trimmed, whitespace collapsed). The authenticated admin import (`POST /api/admin/gear/import`) **never creates brands**: an unknown brand rejects that row.
+- An explicit `brandId` must be an existing brand id and never creates anything. A `brandId` combined with a `brand` name that belongs to a different brand is rejected, and a name shared by several existing brands (for example `Nike` and `NIKE`) is rejected as ambiguous.
+- Bad rows (wrong types, blank, over 100 characters, control characters) fail individually with a fixed reason; they never abort the import and never create a brand. Failure reasons are fixed strings, not raw database errors.
+- Brand lookup and creation run in one short transaction that holds a PostgreSQL advisory lock, so concurrent imports do not create duplicate brands. The lock only coordinates importers that use it: a brand created through another path (such as the admin "create brand" endpoint) does not take it, and the database's unique index on `brands.name` is case-sensitive, so two such writers could still create `Nike` and `nike`; a later import then reports that brand as ambiguous instead of guessing.
+- **Not all-or-nothing.** Brands are committed before items are written, and each gear item is then written atomically (the item and its variants together) while the batch as a whole is best-effort: a failed item is reported and does not roll back the others or the brands. Brands created for a run that later fails remain and are reused by the next run. If two imports create the same item at once, the loser re-reads the current item and updates it once; any other conflict is reported as `conflicting concurrent write`.
+
+An opt-in integration test (`lib/ingestion/importGear.integration.test.ts`) exercises this against a disposable local PostgreSQL database; see the header of that file.
+
 **Recommended workflow.** Keep seed settings out of `.env` (which may point at a hosted database). Create a git-ignored `.env.seed.local`:
 
 ```env

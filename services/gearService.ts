@@ -1,6 +1,8 @@
 // services/gearService.ts
+import { createWithRaceRecovery, safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
 import {
     createGearItem as createGearItemRecord,
+    findGearItemByNameAndBrand,
     listGearItems,
     updateGearItem as updateGearItemRecord,
     type GearItemRow,
@@ -155,10 +157,13 @@ export async function upsertGearItem(data: GearWriteInput) {
     });
 
     if (!matched) {
-        return {
-            action: "inserted" as const,
-            item: await createGearItem(normalized),
-        };
+        // If a concurrent importer created the same (name, brand) between our lookup and this create, re-read the
+        // current row and update it instead (once, and only for a verified conflict on that unique key).
+        return createWithRaceRecovery({
+            create: () => createGearItem(normalized),
+            findExisting: () => findGearItemByNameAndBrand(normalized.name, normalized.brandId),
+            update: (id) => updateGearItem(id, normalized),
+        });
     }
 
     return {
@@ -188,7 +193,8 @@ export async function bulkUpsertGearItems(items: GearWriteInput[]) {
         } catch (error) {
             failed.push({
                 name: item.name,
-                reason: error instanceof Error ? error.message : "Unknown error",
+                // Fixed, sanitized reason: raw error messages can contain query details.
+                reason: safeWriteFailureReason(error),
             });
         } 
     }

@@ -38,6 +38,14 @@ export async function listGearItems() {
     });
 }
 
+// Re-reads the current row for the (name, brandId) unique key; used to verify a concurrent-create conflict.
+export async function findGearItemByNameAndBrand(name: string, brandId: string) {
+    return prisma.gearItem.findUnique({
+        where: { name_brandId: { name, brandId } },
+        select: { id: true },
+    });
+}
+
 export async function createGearItem(input: CreateGearInput) {
     return prisma.gearItem.create({
         data: {
