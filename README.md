@@ -158,7 +158,12 @@ Core entities:
 | `GET` | `/api/outfit/save` | Get saved outfits for the current user |
 | `POST` | `/api/outfit/save` | Save an outfit |
 | `GET` | `/api/outfit/[id]` | Get one saved outfit |
+| `PUT` | `/api/outfit/[id]` | Update one saved outfit (name, description, kit type, favorite flag, gear items) |
 | `DELETE` | `/api/outfit/[id]` | Delete one saved outfit |
+
+**Request rules.** A kit must contain 1–30 distinct gear items (ids of at most 64 characters); an empty or missing list is rejected on create and update. Names are limited to 120 characters and descriptions to 1,000. The kit type must be one of `race-day`, `intervals`, `long-run`, `trail`, `rain`, `cold-weather`, `summer`, `favorites`, `training` or `custom` (`race_day` is accepted as an alias); unknown types are rejected, not coerced. Malformed JSON, a non-object body or wrongly typed fields return a controlled `400`, and error messages never echo the submitted values.
+
+**Atomic updates.** Each create or update runs in one database transaction: the outfit's metadata and its items are written together or not at all. An update first takes a row lock on the caller's own outfit (`SELECT … FOR UPDATE`), so concurrent updates of the same outfit are applied one after another (last write wins) and can never interleave or duplicate items. The lock protects only code that follows this protocol, which is why items are written from a single function. If a referenced gear item disappears mid-request the whole change is rolled back and the API returns `409`.
 
 ### User Profile
 

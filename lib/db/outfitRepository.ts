@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
+import { OUTFIT_ID_MAX_LENGTH, OUTFIT_MAX_GEAR_ITEMS, normalizeKitType, type KitType } from "@/lib/validation/outfitLimits";
 import { prisma } from "../prisma";
 
 type JsonInputValue = Prisma.InputJsonValue;
@@ -45,62 +46,129 @@ export type UpdateSavedOutfitInput = {
     gearItemIds?: string[] | null;
 };
 
-function normalizeKitType(type?: string | null): SavedKitType {
-    const normalized = type === "race_day" ? "race-day" : type;
-    if (
-        normalized === "race-day" ||
-        normalized === "intervals" ||
-        normalized === "long-run" ||
-        normalized === "trail" ||
-        normalized === "rain" ||
-        normalized === "cold-weather" || 
-        normalized === "summer" ||
-        normalized === "favorites" ||
-        normalized === "training" || 
-        normalized === "custom"
-    ) return normalized;
-    return "favorites";
+// --- Transaction plumbing -----------------------------------------------------------------------------------------
+//
+// Every outfit mutation runs inside ONE interactive transaction on the client passed in (the shared Prisma client by
+// default; tests pass a fake). Metadata and items are written together or not at all: any failure rolls both back.
+//
+// LOCKING PROTOCOL for items. Outfit items are only ever replaced through replaceOutfitItems(), which requires a
+// LockedOutfit. The only way to obtain one is lockOwnedOutfit(), which runs
+//     SELECT id FROM saved_outfits WHERE id = $outfit AND user_id = $user FOR UPDATE
+// inside the same transaction. That single statement proves ownership and makes concurrent updates of the same outfit
+// queue up, so two replacements can never interleave (delete, delete, create, create) and duplicate items.
+// Semantics stay last-write-wins: the second update simply applies after the first commits. The lock covers only
+// callers that follow this protocol, which is why it is the only code path that touches outfit_items writes.
+
+type OutfitTx = Pick<Prisma.TransactionClient, "savedOutfit" | "outfitItem" | "gearItem" | "recommendation" | "$queryRaw">;
+
+export type OutfitTransactionRunner = {
+    $transaction<T>(fn: (tx: OutfitTx) => Promise<T>, options?: { maxWait?: number; timeout?: number }): Promise<T>;
+};
+
+const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 } as const;
+
+declare const lockedBrand: unique symbol;
+type LockedOutfit = { readonly tx: OutfitTx; readonly outfitId: string; readonly [lockedBrand]: true };
+
+async function lockOwnedOutfit(tx: OutfitTx, userId: string, outfitId: string): Promise<LockedOutfit | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM saved_outfits WHERE id = ${outfitId} AND user_id = ${userId} FOR UPDATE`;
+    if (rows.length !== 1) return null;
+    return { tx, outfitId } as LockedOutfit;
 }
 
-function toUniqueGearIds(gearItemIds?: string[] | null) {
-    return [...new Set((gearItemIds ?? []).map((id) => id.trim()).filter(Boolean))];
+type PrismaErrorLike = { name?: unknown; code?: unknown; meta?: unknown };
+
+function prismaErrorCode(error: unknown): string | null {
+    const candidate = typeof error === "object" && error !== null ? (error as PrismaErrorLike) : null;
+    if (!candidate || candidate.name !== "PrismaClientKnownRequestError") return null;
+    return typeof candidate.code === "string" && /^P\d{4}$/.test(candidate.code) ? candidate.code : null;
 }
 
-async function findGearItemsOrThrow(gearItemIds?: string[] | null) {
-    const uniqueIds = toUniqueGearIds(gearItemIds);
+/**
+ * Converts a foreign-key failure that happens when a referenced row disappears mid-transaction into a controlled,
+ * fixed-message error. Anything else is returned unchanged. Messages never include client-supplied values.
+ */
+export function mapOutfitWriteError(error: unknown): unknown {
+    if (error instanceof OutfitValidationError) return error;
 
-    if (!uniqueIds) {
-        throw new OutfitValidationError("Missing gear items.", 400);
+    if (prismaErrorCode(error) === "P2003") {
+        const meta = (error as PrismaErrorLike).meta;
+        const field = String(typeof meta === "object" && meta !== null ? (meta as { field_name?: unknown }).field_name ?? "" : "");
+        if (/recommendation/i.test(field)) return new OutfitValidationError("Recommendation not found for this user.", 404);
+        if (/gear_item/i.test(field)) return new OutfitValidationError("A selected gear item is no longer available.", 409);
+        return new OutfitValidationError("A referenced record is no longer available.", 409);
     }
 
-    const gearItems = await prisma.gearItem.findMany({
-        where: { id: { in: uniqueIds } },
-        select: { id: true, category: true },
-    });
-    const foundIds = new Set(gearItems.map((gearItem) =>gearItem.id));
-    const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
-
-    if (missingIds.length) {
-        throw new OutfitValidationError(`Missing gear items: ${missingIds.join(", ")}.`, 400);
-    }
-
-    return gearItems;
+    return error;
 }
 
-async function replaceOutfitItems(outfitId: string, gearItemIds?: string[] | null) {
-    if (!gearItemIds) return;
+async function runOutfitTransaction<T>(client: OutfitTransactionRunner, work: (tx: OutfitTx) => Promise<T>): Promise<T> {
+    try {
+        return await client.$transaction(work, TRANSACTION_OPTIONS);
+    } catch (error) {
+        throw mapOutfitWriteError(error);
+    }
+}
 
-    const gearItems = await findGearItemsOrThrow(gearItemIds);
-    await prisma.outfitItem.deleteMany({ where: { outfitId } });
+// --- Validation helpers -------------------------------------------------------------------------------------------
 
-    await prisma.outfitItem.createMany({
+function resolveKitType(raw: string | null | undefined): KitType | undefined {
+    if (raw === null || raw === undefined) return undefined;
+    const kitType = normalizeKitType(raw);
+    if (!kitType) throw new OutfitValidationError("Unsupported kit type.", 400);
+    return kitType;
+}
+
+/** Trims, bounds and de-duplicates gear ids (order kept). Never echoes an id back. */
+function validateGearItemIds(gearItemIds: readonly string[]): string[] {
+    if (!Array.isArray(gearItemIds) || gearItemIds.length === 0) throw new OutfitValidationError("Select at least one gear item.", 400);
+    if (gearItemIds.length > OUTFIT_MAX_GEAR_ITEMS) throw new OutfitValidationError(`A kit can contain at most ${OUTFIT_MAX_GEAR_ITEMS} gear items.`, 400);
+
+    const ids = gearItemIds.map((id) => (typeof id === "string" ? id.trim() : ""));
+    if (ids.some((id) => id.length === 0 || id.length > OUTFIT_ID_MAX_LENGTH)) throw new OutfitValidationError("Invalid gear item id.", 400);
+
+    return [...new Set(ids)];
+}
+
+async function loadGearItems(tx: OutfitTx, ids: string[]) {
+    const found = await tx.gearItem.findMany({ where: { id: { in: ids } }, select: { id: true, category: true } });
+    const byId = new Map(found.map((gearItem) => [gearItem.id, gearItem]));
+
+    if (byId.size !== ids.length) throw new OutfitValidationError("One or more selected gear items do not exist.", 400);
+
+    return ids.map((id) => byId.get(id)!);
+}
+
+type GearItemForOutfit = Awaited<ReturnType<typeof loadGearItems>>[number];
+
+// Order-insensitive comparison of the stored gear ids with the requested (already de-duplicated) gear items.
+function isSameGearSet(storedIds: readonly string[], requested: readonly GearItemForOutfit[]): boolean {
+    const stored = new Set(storedIds);
+    return stored.size === requested.length && requested.every((gearItem) => stored.has(gearItem.id));
+}
+
+// The ONLY function that writes outfit_items. It needs a LockedOutfit, i.e. the outfit row lock must be held.
+async function replaceOutfitItems(locked: LockedOutfit, gearItems: GearItemForOutfit[]) {
+    await locked.tx.outfitItem.deleteMany({ where: { outfitId: locked.outfitId } });
+    await locked.tx.outfitItem.createMany({
         data: gearItems.map((gearItem) => ({
-            outfitId,
+            outfitId: locked.outfitId,
             gearItemId: gearItem.id,
             category: gearItem.category,
         })),
     });
 }
+
+// --- Reads --------------------------------------------------------------------------------------------------------
+
+const OUTFIT_INCLUDE = {
+    recommendation: true,
+    OutfitItem: {
+        include: {
+            gearItem: { include: { brand: true, variants: true } },
+        },
+    },
+} as const;
 
 export async function listSavedOutfitsByUserId(userId: string) {
     return prisma.savedOutfit.findMany({
@@ -122,61 +190,105 @@ export async function listSavedOutfitsByUserId(userId: string) {
 export async function getSavedOutfitById(userId: string, outfitId: string) {
     return prisma.savedOutfit.findFirst({
         where: { id: outfitId, userId },
-        include: {
-            recommendation: true,
-            OutfitItem: {
-                include: {
-                    gearItem: { include: { brand: true, variants: true } },
-                },
-            },
-        },
+        include: OUTFIT_INCLUDE,
     });
 }
 
-export async function saveOutfit(input: SaveOutfitInput) {
-    if (input.recommendationId) {
-        const recommendation = await prisma.recommendation.findFirst({
-            where: { id: input.recommendationId, userId: input.userId },
-            select: { id: true },
+function readOutfit(tx: OutfitTx, userId: string, outfitId: string) {
+    return tx.savedOutfit.findFirst({ where: { id: outfitId, userId }, include: OUTFIT_INCLUDE });
+}
+
+// --- Mutations ----------------------------------------------------------------------------------------------------
+
+/**
+ * Creates an outfit and its items atomically. Everything is validated before the first write: input shape, kit type,
+ * recommendation ownership and gear existence. A failure at any point leaves no outfit behind.
+ */
+export async function saveOutfit(input: SaveOutfitInput, client: OutfitTransactionRunner = prisma) {
+    // Pure validation first: nothing here touches the database.
+    const gearItemIds = validateGearItemIds(input.gearItemIds ?? []);
+    const kitType = resolveKitType(input.category ?? input.type) ?? "favorites";
+
+    return runOutfitTransaction(client, async (tx) => {
+        if (input.recommendationId) {
+            const recommendation = await tx.recommendation.findFirst({
+                where: { id: input.recommendationId, userId: input.userId },
+                select: { id: true },
+            });
+
+            if (!recommendation) {
+                throw new OutfitValidationError("Recommendation not found for this user.", 404);
+            }
+        }
+
+        const gearItems = await loadGearItems(tx, gearItemIds);
+
+        const savedOutfit = await tx.savedOutfit.create({
+            data: {
+                userId: input.userId,
+                recommendationId: input.recommendationId || null,
+                name: input.name ?? "Saved Kit",
+                description: input.description ?? null,
+                type: kitType,
+                isFavorite: input.isFavorite ?? false,
+            },
         });
 
-        if (!recommendation) {
-            throw new OutfitValidationError("Recommendation not found for this user.", 404);
-        }
-    }
+        // Same protocol as update: take the row lock, then replace items through the single code path.
+        const locked = await lockOwnedOutfit(tx, input.userId, savedOutfit.id);
+        if (!locked) throw new Error("Saved outfit was not visible to its own transaction.");
+        await replaceOutfitItems(locked, gearItems);
 
-    await findGearItemsOrThrow(input.gearItemIds);
-
-    const savedOutfit = await prisma.savedOutfit.create({
-        data: {
-            userId: input.userId,
-            recommendationId: input.recommendationId ?? null,
-            name: input.name ?? "Saved Kit",
-            description: input.description ?? null,
-            type: normalizeKitType(input.category ?? input.type),
-            isFavorite: input.isFavorite ?? false,
-        },
+        const created = await readOutfit(tx, input.userId, savedOutfit.id);
+        if (!created) throw new Error("Saved outfit could not be read back.");
+        return created;
     });
-
-    await replaceOutfitItems(savedOutfit.id, input.gearItemIds);
-    return getSavedOutfitById(input.userId, savedOutfit.id) ?? savedOutfit;
 }
 
-export async function updateSavedOutfit(input: UpdateSavedOutfitInput) {
-    const updated = await prisma.savedOutfit.updateMany({
-        where: { id: input.outfitId, userId: input.userId },
-        data: {
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.description !== undefined ? { description: input.description} : {}),
-            ...(input.category !== undefined || input.type !== undefined ? { type: normalizeKitType(input.category ?? input.type) } : {}),
-            ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite ?? false }: {}),
+/**
+ * Updates an owned outfit atomically (last write wins). Returns null if the outfit does not exist or belongs to
+ * someone else. Order: lock the owned row, validate every reference, then write metadata and items together.
+ */
+export async function updateSavedOutfit(input: UpdateSavedOutfitInput, client: OutfitTransactionRunner = prisma) {
+    const gearItemIds = input.gearItemIds === undefined || input.gearItemIds === null ? null : validateGearItemIds(input.gearItemIds);
+    const kitType = resolveKitType(input.category ?? input.type);
+
+    return runOutfitTransaction(client, async (tx) => {
+        const locked = await lockOwnedOutfit(tx, input.userId, input.outfitId);
+        if (!locked) return null;
+
+        // What is stored right now, read under the row lock so it cannot change before we write. It tells us what is
+        // a real change and what is a no-op.
+        const current = await tx.savedOutfit.findFirst({
+            where: { id: input.outfitId, userId: input.userId },
+            select: { name: true, description: true, type: true, isFavorite: true, OutfitItem: { select: { gearItemId: true } } },
+        });
+        if (!current) return null;
+
+        // Validate references before the first write, so a bad id never leaves a half-applied update.
+        const gearItems = gearItemIds ? await loadGearItems(tx, gearItemIds) : null;
+
+        const metadata = {
+            ...(input.name !== undefined && input.name !== current.name ? { name: input.name } : {}),
+            ...(input.description !== undefined && input.description !== current.description ? { description: input.description } : {}),
+            ...(kitType !== undefined && kitType !== current.type ? { type: kitType } : {}),
+            ...(input.isFavorite !== undefined && (input.isFavorite ?? false) !== current.isFavorite ? { isFavorite: input.isFavorite ?? false } : {}),
+        };
+        const itemsChanged = gearItems !== null && !isSameGearSet(current.OutfitItem.map((entry) => entry.gearItemId), gearItems);
+
+        // A no-op (nothing supplied, or everything supplied already matches) writes nothing and leaves updatedAt alone.
+        if (Object.keys(metadata).length === 0 && !itemsChanged) {
+            return readOutfit(tx, input.userId, input.outfitId);
         }
+
+        // One write advances updatedAt for any real change, including an item-only change (which has no metadata
+        // column to touch). It is in the same transaction as the item replacement, so a rollback restores it too.
+        await tx.savedOutfit.updateMany({ where: { id: input.outfitId, userId: input.userId }, data: { ...metadata, updatedAt: new Date() } });
+
+        if (gearItems && itemsChanged) await replaceOutfitItems(locked, gearItems);
+
+        return readOutfit(tx, input.userId, input.outfitId);
     });
-
-    if (!updated.count) return null;
-
-    await replaceOutfitItems(input.outfitId, input.gearItemIds);
-    return getSavedOutfitById(input.userId, input.outfitId);
 }
 
 export async function deleteSavedOutfitById(userId: string, outfitId: string) {
@@ -200,7 +312,7 @@ export async function createGeneratedOutfit(input: CreateRecommendationInput) {
             inputContext: input.inputContext,
             output: input.output,
             topScore: input.topScore ?? null,
-            algorithmVersion: input.algorithmVersion ?? engineVersion, 
+            algorithmVersion: input.algorithmVersion ?? engineVersion,
             engineVersion,
             generatedAt: input.generatedAt ? new Date(input.generatedAt) : undefined,
             versionMetadata: {

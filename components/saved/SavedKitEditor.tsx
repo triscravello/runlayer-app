@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { OUTFIT_MAX_GEAR_ITEMS } from "@/lib/validation/outfitLimits";
 import type { SavedKitType, SavedOutfit, UpdateSavedOutfitInput } from "@/services/savedOutfitService";
 
 export type SavedKitEditorProps = {
@@ -31,9 +32,22 @@ export function SavedKitEditor({ kit, userId, onCancel, onSave }: SavedKitEditor
     const [type, setType] = useState<SavedKitType>(kit.type ?? "custom");
     const [gearIds, setGearIds] = useState(initialGearIds);
     const [saving, setSaving] = useState(false);
+    const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+
+        const gearItemIds = [...new Set(gearIds.split(",").map((id) => id.trim()).filter(Boolean))];
+        if (gearItemIds.length === 0) {
+            setValidationMessage("A kit needs at least one gear item. Add a gear ID, or cancel to keep the kit as it is.");
+            return;
+        }
+        if (gearItemIds.length > OUTFIT_MAX_GEAR_ITEMS) {
+            setValidationMessage(`A kit can contain at most ${OUTFIT_MAX_GEAR_ITEMS} gear items.`);
+            return;
+        }
+
+        setValidationMessage(null);
         setSaving(true);
         const saved = await onSave({
             userId,
@@ -42,7 +56,7 @@ export function SavedKitEditor({ kit, userId, onCancel, onSave }: SavedKitEditor
             description,
             category: type,
             type,
-            gearItemIds: gearIds.split(",").map((id) => id.trim()).filter(Boolean),
+            gearItemIds,
         });
         setSaving(false);
         if (saved) onCancel();
@@ -74,8 +88,19 @@ export function SavedKitEditor({ kit, userId, onCancel, onSave }: SavedKitEditor
                 </div>
                 <div className="space-y-2 md:col-span-2">
                     <Label htmlFor={`kit-gear-${kit.id}`}>Gear item IDs</Label>
-                    <Input id={`kit-gear-${kit.id}`} value={gearIds} onChange={(event) => setGearIds(event.target.value)} placeholder="Comma-separated gear ids" />
+                    <Input
+                        id={`kit-gear-${kit.id}`}
+                        value={gearIds}
+                        onChange={(event) => {
+                            setGearIds(event.target.value);
+                            setValidationMessage(null);
+                        }}
+                        placeholder="Comma-separated gear ids"
+                        aria-invalid={validationMessage ? true : undefined}
+                        aria-describedby={validationMessage ? `kit-gear-error-${kit.id}` : undefined}
+                    />
                     <p className="text-xs text-muted-foreground">Add or remove persisted gear by editing comma-separated gear IDs.</p>
+                    {validationMessage ? <p id={`kit-gear-error-${kit.id}`} role="alert" className="text-sm text-red-600">{validationMessage}</p> : null}
                 </div>
             </div>
             <div className="flex gap-2">
