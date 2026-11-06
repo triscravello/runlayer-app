@@ -287,7 +287,7 @@ RECOMMENDATION_DEBUG=
 >
 > - `DATABASE_URL` is required for Prisma and PostgreSQL.
 > - `BETTER_AUTH_SECRET` signs session cookies. Under `npm run dev` (`NODE_ENV=development`) it is optional and a publicly known fallback is used. In every other environment it is required, must be at least 32 characters, and must not be the development fallback. Generate one with `openssl rand -base64 48` and use a different value per environment.
-> - **Sessions and revocation.** A session cookie holds a signed token `userId.sessionVersion.expiresAt.signature` valid for 7 days. A token is accepted only while its `sessionVersion` equals the user's stored `users.session_version`. Logging out increments that value in one atomic `UPDATE ... WHERE id = ? AND session_version = ?`, which ends **every** session of that user ("log out everywhere"); replaying an old cookie afterwards is rejected, a stale cookie cannot revoke newer sessions, and repeating a logout changes nothing. If the revocation itself fails, the cookie is still cleared but `/api/auth/logout` returns HTTP 500 instead of claiming success. Role changes still apply immediately. Earlier three-part tokens are rejected, so everyone signs in again after upgrading. **`proxy.ts` only checks the signature and expiry, so it does not establish that a session is still valid;** revocation is enforced by `requireAuth`/`requireAdmin`/`getSessionUser` on every protected page and API route. **Deployment order:** apply the `add_user_session_version` migration (`npm run db:deploy`) *before* deploying code that selects the column; to roll back, revert the code first, then optionally `ALTER TABLE "users" DROP COLUMN "session_version";`.
+> - **Sessions and revocation.** A session cookie holds a signed token `userId.sessionVersion.expiresAt.signature` valid for 7 days. A token is accepted only while its `sessionVersion` equals the user's stored `users.session_version`. Logging out increments that value in one atomic `UPDATE ... WHERE id = ? AND session_version = ?`, which ends **every** session of that user ("log out everywhere"); replaying an old cookie afterwards is rejected, a stale cookie cannot revoke newer sessions, and repeating a logout changes nothing. If the revocation itself fails, the cookie is still cleared but `/api/auth/logout` returns HTTP 500 instead of claiming success. Role changes still apply immediately. Earlier three-part tokens are rejected, so everyone signs in again after upgrading. **`proxy.ts` only checks the signature and expiry, so it does not establish that a session is still valid;** revocation is enforced by `requireAuth`/`requireAdmin`/`getSessionUser` on every protected page and API route. **Deployment order:** apply the `add_user_session_version` migration (through the guarded migration command; see the [first-deployment runbook](docs/first-deployment-runbook.md)) *before* deploying code that selects the column; to roll back, revert the code first, then optionally `ALTER TABLE "users" DROP COLUMN "session_version";`.
 > - `WEATHER_API_KEY` is the OpenWeather API key used for weather lookups.
 > - `REDIS_URL` is optional and is used only as a response cache for `POST /api/recommend`. If Redis is unavailable, RunLayer runs without the cache. It does **not** enable rate limiting.
 > - `RATE_LIMIT_BACKEND` selects the rate limiter: `memory` or `upstash`. It defaults to `memory` outside production. In production it is **required**; an unset, unknown, or incomplete value is rejected (API requests fail with an error rather than running unprotected).
@@ -310,6 +310,7 @@ RECOMMENDATION_DEBUG=
 > - If Upstash errors at runtime, the login limiter falls back to a bounded in-memory limiter, and the global and recommendation limiters fail open (requests are not throttled). Every such event is counted in the `runlayer_rate_limit_backend_events_total` metric and logged at error level, rate-limited to once a minute per limiter.
 > - Because rate limiting now defaults to `memory` in development, a high-volume local script (for example the k6 load test, whose 20 virtual users share one client IP) can receive `429` responses that it did not receive before.
 > - `LOG_LEVEL` sets the Winston log level (default `info`). `RECOMMENDATION_DEBUG=true` prints recommendation-engine diagnostics (always on in development).
+> - **Production start-up validation.** When the server starts with `NODE_ENV=production`, `instrumentation.ts` runs `validateEnv`. If the configuration is invalid (missing or weak secret, missing `DATABASE_URL` or `WEATHER_API_KEY`, unset `RATE_LIMIT_BACKEND` or `CLIENT_IP_STRATEGY`, malformed `METRICS_TOKEN`) the process prints the problems, never the values, and **exits with status 1**; it does not stay up returning errors. (Next.js binds the port before the hook runs and swallows a thrown error, so the hook exits explicitly.) It does not run in development, in tests, or during `next build`.
 > - Never commit `.env` files or real credentials, tokens, or session cookies.
 
 ## Seeding safely
@@ -346,7 +347,7 @@ SEED_USER_PASSWORD=<a strong password you choose>
 
 Then run `npm run db:seed:check` and `npm run db:seed:local`. Variables already set in your shell win over both files, and `db:seed:check` accounts for that. The check cannot verify the server's identity (that needs a connection); the seed does.
 
-**These Prisma commands are not protected by this guard:** `prisma migrate dev`, `prisma migrate reset` (which drops all data and then runs the seed) and `prisma db push` act on whatever `DATABASE_URL` is set. Always set `DATABASE_URL` explicitly for them, as above, and use `prisma migrate deploy` (non-destructive) for hosted databases. To load the catalog into a hosted environment use the authenticated admin import, not the scripts.
+**These Prisma commands are not protected by this guard:** `prisma migrate dev`, `prisma migrate reset` (which drops all data and then runs the seed) and `prisma db push` act on whatever `DATABASE_URL` is set. Always set `DATABASE_URL` explicitly for them, as above, and migrate hosted databases only through the guarded command (`npm run db:preflight`, then `npm run db:deploy` and `npm run db:deploy:execute`, described in the [first-deployment runbook](docs/first-deployment-runbook.md)), never a bare `prisma migrate deploy`. The guarded command does **not** stop someone from running the Prisma CLI directly; keep production credentials out of `.env`. To load the catalog into a hosted environment use the authenticated admin import, not the scripts.
 
 ## Scripts
 
@@ -359,13 +360,16 @@ Then run `npm run db:seed:check` and `npm run db:seed:local`. Variables already 
 | \`npm run db:seed\` | Seed using the `DATABASE_URL` in `.env`. **Refused unless that is a confirmed, dedicated local database** (a hosted `.env` is rejected). |
 | \`npm run db:seed:local\` | Seed using `.env.seed.local` (the recommended workflow below) |
 | \`npm run db:seed:check\` | Read-only report of whether the seed commands would be allowed. Makes **no database connection**. |
+| \`npm run db:preflight\` | **Read-only** evidence collection against an explicitly named target (`RUNLAYER_PREFLIGHT_TARGET_URL`; never `DATABASE_URL`). Writes a report file; changes nothing in the database. See the runbook. |
+| \`npm run db:deploy\` | **Check only.** Runs every migration guard and stops; it never migrates. Needs an explicit target, allowlist, confirmation and fresh preflight evidence. |
+| \`npm run db:deploy:execute\` | The separately authorized path: the same guards, then `prisma migrate deploy` against the approved target only. |
 | \`npm run postinstall\` | Automatically generates Prisma client after install |
 
 ## Deployment Readiness
 
 - Production build passes
 - ESLint passes
-- Test suite passes: 14/14
+- Offline test suite (`npm test`): 558 tests, 553 pass, 0 fail, 5 skipped. The 5 skipped are opt-in database suites; they pass separately against disposable local PostgreSQL 14.19 and 17.10 (see `docs/first-deployment-runbook.md`)
 - Prisma Client generates successfully
 - Redis gracefully degrades when unavailable
 - Weather, auth, recommendations, saved outfits, and history smoke tested

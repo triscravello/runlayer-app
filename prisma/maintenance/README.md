@@ -32,8 +32,9 @@ a file, ticket or chat.
    It runs as one transaction, creates `outfit_items_dedupe_backup` (and refuses to overwrite an existing one), removes
    exactly the backed-up rows and verifies the result; any failed check rolls everything back.
 5. **Re-run the detect script.** It must now report zero groups.
-6. **Apply the migration** (`prisma migrate deploy`). On a clean or remediated database the guard passes and the
-   indexes are created in one transaction.
+6. **Apply the migration** through the guarded command (`npm run db:deploy:execute`, after `npm run db:preflight`; see
+   [`docs/first-deployment-runbook.md`](../../docs/first-deployment-runbook.md)), never a bare `prisma migrate deploy`. On a clean or
+   remediated database the guard passes and the indexes are created in one transaction.
 7. Once you are satisfied, drop the backup yourself: `DROP TABLE outfit_items_dedupe_backup;`. Until then it shows up
    as an extra table if you compare the database with the Prisma schema.
 
@@ -102,7 +103,8 @@ ever changes, so every `gear_items.brand_id` reference is untouched.
 4. **If the report is clean**, go to step 6. **If it lists names the SQL backfill cannot key**, you need the JavaScript
    backfill below. **If it lists duplicate groups**, preview with `brands_merge_preview.sql` and follow the remediation plan below.
 5. Re-run steps 2 and 3 until both are clean.
-6. **Apply the migration** (`prisma migrate deploy`).
+6. **Apply the migration** through the guarded command (`npm run db:deploy:execute`, after `npm run db:preflight`; see
+   [`docs/first-deployment-runbook.md`](../../docs/first-deployment-runbook.md)).
 7. **Verify:** re-run `scripts/brandKeyReport.ts`; it must report zero stored-key mismatches and exit 0. Valid non-ASCII
    brands that the application created appear in its informational section and do not affect the exit code.
 
@@ -169,5 +171,8 @@ that touches `name` without the key.
 
 ### Tested on
 
-PostgreSQL 14 and 17 by `prisma/brandConstraints.integration.test.ts` (opt-in, local disposable servers only). It is written
-and compiled but has not been run.
+PostgreSQL 14.19 and 17.10, on disposable local databases, by `prisma/brandConstraints.integration.test.ts` and the Phase 2D
+verification (opt-in; local disposable servers only). Reported by the maintainer; the run logs are not stored in this repository.
+
+**It has not been applied to the hosted Supabase database**, and a disposable-database pass is not a rehearsal against the
+hosted data. See "Verification levels" in [`docs/first-deployment-runbook.md`](../../docs/first-deployment-runbook.md).

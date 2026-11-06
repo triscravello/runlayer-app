@@ -15,7 +15,8 @@ import { resolveImportBrands } from "../lib/ingestion/brandStore";
 import { sqlBackfillKey } from "../lib/ingestion/brandKeyAudit";
 
 /**
- * Brand identity (brands.normalized_name) against REAL PostgreSQL servers. Skipped by default; prepared, not yet run.
+ * Brand identity (brands.normalized_name) against REAL PostgreSQL servers. Skipped by default. Verified against disposable
+ * PostgreSQL 14.19 and 17.10 servers (Phase 2D, and again in Phase 3C: 6 of 6 tests on each); it has not been run against any hosted database.
  *
  * It needs a server-level connection, because it creates its own throwaway databases (and drops them afterwards):
  *
