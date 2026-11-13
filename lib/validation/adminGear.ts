@@ -52,10 +52,41 @@ const baseGearWriteSchema = z.object({
 
 export const createGearItemSchema = baseGearWriteSchema;
 
-export const updateGearItemSchema = baseGearWriteSchema.partial().refine(
-    (value) => Object.keys(value).length > 0,
-    { message: "At least one gear field is required" },
-);
+// PATCH semantics: a key that is absent means "leave the stored value alone", so none of these fields carries a default
+// (the create schema's defaults would silently reset tags, images and URLs). `null` and `[]` are explicit clears.
+// Unknown keys are rejected, at every level, rather than stripped. `id` and `externalId` are accepted so a client may echo
+// a record back, but they never count as a change; the route rejects an `id` that disagrees with the URL.
+const bareStringList = z.array(trimmedString.min(1));
+const bareNullableUrl = httpUrlSchema.nullable();
+
+const updateFieldsSchema = z.strictObject({
+    id: trimmedString.min(1).optional(),
+    externalId: trimmedString.min(1).optional(),
+    name: trimmedString.min(1).optional(),
+    brandId: trimmedString.min(1).optional(),
+    category: categorySchema.optional(),
+    priceRange: priceRangeSchema.optional(),
+    genderTarget: optionalNullableString,
+    subcategory: optionalNullableString,
+    tags: bareStringList.optional(),
+    bodyTypeFit: bareStringList.optional(),
+    imageUrl: bareNullableUrl.optional(),
+    affiliateUrl: bareNullableUrl.optional(),
+    variants: z.array(productVariantSchema.strict()).optional(),
+    weatherSuitability: weatherSuitabilitySchema.strict().optional(),
+});
+
+const NON_CHANGE_KEYS = new Set(["id", "externalId"]);
+
+function hasMeaningfulChange(value: Record<string, unknown>): boolean {
+    return Object.entries(value).some(([key, field]) => {
+        if (field === undefined || NON_CHANGE_KEYS.has(key)) return false;
+        if (key === "weatherSuitability") return Object.values(field as Record<string, unknown>).some((score) => score !== undefined);
+        return true;
+    });
+}
+
+export const updateGearItemSchema = updateFieldsSchema.refine(hasMeaningfulChange, { message: "At least one gear field is required" });
 
 export const importGearItemsSchema = z.array(createGearItemSchema).min(1, "Import payload must include at least 1 item");
 

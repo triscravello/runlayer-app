@@ -16,7 +16,7 @@ const stored = {
     },
 };
 
-test("admin PATCH without variants still succeeds: stored variant rows are re-created from their writable columns only", async () => {
+test("admin PATCH without variants leaves the stored variants (and their ids) untouched", async () => {
     const { updateGearItem } = await import("./gearService");
     updates.length = 0;
     await updateGearItem("g1", { name: "  Trail Tee 2  " });
@@ -24,7 +24,7 @@ test("admin PATCH without variants still succeeds: stored variant rows are re-cr
     assert.equal(updates.length, 1);
     const { data } = updates[0];
     assert.equal(data.name, "Trail Tee 2");
-    assert.deepEqual(data.variants, { deleteMany: {}, create: [{ label: "Default", gender: "unisex", affiliateUrl: null, imageUrl: null, price: 20, sizes: ["M"] }] });
+    assert.equal("variants" in data, false, "no variants operation is sent when the caller sent none");
     for (const forbidden of ["id", "createdAt", "updatedAt", "brand", "OutfitItem", "RecommendationItem", "gearItemId"]) assert.equal(forbidden in data, false, forbidden);
 });
 
@@ -37,4 +37,52 @@ test("admin PATCH with new variants and weather maps them explicitly", async () 
     assert.deepEqual(data.variants, { deleteMany: {}, create: [{ label: "Women", gender: "women", affiliateUrl: undefined, imageUrl: undefined, price: undefined, sizes: ["S"] }] });
     assert.equal(data.weatherHot, 0.9);
     assert.equal(data.weatherCold, null);
+});
+
+// --- PATCH-defaults regression: omitted fields survive, explicit clears apply -------------------------------------
+
+test("PATCH {name} writes the stored tags, bodyTypeFit and URLs, never defaults", async () => {
+    const { updateGearItem } = await import("./gearService");
+    updates.length = 0;
+    await updateGearItem("g1", { name: "Renamed" });
+
+    const { data } = updates[0];
+    assert.equal(data.name, "Renamed");
+    assert.deepEqual(data.tags, ["light"]);
+    assert.deepEqual(data.bodyTypeFit, []);
+    assert.equal(data.imageUrl, null);
+    assert.equal(data.affiliateUrl, null);
+    assert.equal(data.brandId, "b1");
+    for (const column of ["weatherHot", "weatherCold", "weatherRain", "weatherWind"]) assert.equal(data[column], undefined, `${column} must not be written`);
+});
+
+test("explicit clears apply to that field only", async () => {
+    const { updateGearItem } = await import("./gearService");
+    updates.length = 0;
+    await updateGearItem("g1", { tags: [], genderTarget: null });
+
+    assert.deepEqual(updates[0].data.tags, []);
+    assert.equal(updates[0].data.genderTarget, null);
+    assert.equal(updates[0].data.name, "Trail Tee");
+    assert.equal("variants" in updates[0].data, false);
+});
+
+test("a partial weatherSuitability writes only the scores that were sent", async () => {
+    const { updateGearItem } = await import("./gearService");
+    updates.length = 0;
+    await updateGearItem("g1", { weatherSuitability: { hot: 0.3 } });
+
+    const { data } = updates[0];
+    assert.equal(data.weatherHot, 0.3);
+    for (const column of ["weatherCold", "weatherRain", "weatherWind"]) assert.equal(data[column], undefined, `${column} must not be written`);
+});
+
+test("variants: [] keeps its existing meaning (Default synthesized); supplied variants replace exactly", async () => {
+    const { updateGearItem } = await import("./gearService");
+    updates.length = 0;
+    await updateGearItem("g1", { variants: [] });
+    assert.deepEqual((updates[0].data.variants as { create: Array<{ label: string }> }).create.map((variant) => variant.label), ["Default"]);
+
+    await updateGearItem("g1", { variants: [{ label: "A", gender: "men" }, { label: "B", gender: "women" }] });
+    assert.deepEqual((updates[1].data.variants as { create: Array<{ label: string }> }).create.map((variant) => variant.label), ["A", "B"]);
 });

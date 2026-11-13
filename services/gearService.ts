@@ -139,7 +139,9 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
         bodyTypeFit: normalized.bodyTypeFit,
         imageUrl: normalized.imageUrl,
         affiliateUrl: normalized.affiliateUrl,
-        variants: normalized.variants,
+        // Only rewrite variants when the caller supplied them. Otherwise the stored rows (and their ids) are left alone;
+        // `normalized.variants` would just be those same rows echoed back, or a synthesized Default.
+        variants: data.variants !== undefined ? normalized.variants : undefined,
         weatherSuitability: normalized.weatherSuitability,
     });
 }
