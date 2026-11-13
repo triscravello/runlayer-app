@@ -141,7 +141,7 @@ Core entities:
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/api/gear` | List gear items |
+| `GET` | `/api/gear` | List gear items (public, read-only) |
 | `GET` | `/api/admin/gear` | List gear items for admin management |
 | `POST` | `/api/admin/gear` | Create a gear item |
 | `GET` | `/api/admin/gear/[id]` | Get one gear item |
@@ -150,6 +150,8 @@ Core entities:
 | `POST` | `/api/admin/gear/import` | Bulk import gear items |
 | `GET` | `/api/admin/brands` | List brands |
 | `POST` | `/api/admin/brands` | Create a brand |
+
+`GET /api/gear` is public. `POST`, `PUT`, `PATCH`, and `DELETE` on `/api/gear` are disabled and return `405 Method Not Allowed` (`Allow: GET, HEAD, OPTIONS`); all supported gear writes go through the admin-guarded `/api/admin/gear` routes.
 
 ### Saved Outfits
 

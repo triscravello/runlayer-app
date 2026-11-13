@@ -1,12 +1,13 @@
 // app/api/gear/route.ts
-import { NextResponse, type NextRequest } from "next/server";
-import { withAdmin } from "@/lib/auth/api";
-import {
-    createGearItem,
-    deleteGearItem,
-    listGearItems,
-    updateGearItem,
-} from "@/lib/db/gearRepository";
+//
+// Public, read-only catalog. Gear writes live under /api/admin/gear (admin-guarded, Zod-validated).
+// The legacy write methods are disabled with a static 405: handlers take no arguments, so the request body is never
+// read, and they never call authentication or the repository. Next.js would also answer 405 for unexported methods,
+// but without an `Allow` header, and an auto-generated OPTIONS would then advertise whatever is exported.
+import { NextResponse } from "next/server";
+import { listGearItems } from "@/lib/db/gearRepository";
+
+const ALLOW = "GET, HEAD, OPTIONS";
 
 export async function GET() {
     try {
@@ -18,30 +19,15 @@ export async function GET() {
     }
 }
 
-export const POST = withAdmin(async (request: NextRequest) => {
-    const data = await request.json();
-    const newGear = await createGearItem(data);
+function methodNotAllowed() {
+    return NextResponse.json({ error: "Method not allowed" }, { status: 405, headers: { Allow: ALLOW } });
+}
 
-    return NextResponse.json(newGear, { status: 201 });
-});
+export function OPTIONS() {
+    return new Response(null, { status: 204, headers: { Allow: ALLOW } });
+}
 
-export const DELETE = withAdmin(async (request: NextRequest) => {
-    const { id } = await request.json();
-    await deleteGearItem(id);
-
-    return NextResponse.json({ message: "Gear deleted successfully" }, { status: 200 });
-});
-
-export const PUT = withAdmin(async (request: NextRequest) => {
-    const data = await request.json();
-    const updatedGear = await updateGearItem(data);
-
-    return NextResponse.json(updatedGear, { status: 200 });
-});
-
-export const PATCH = withAdmin(async (request: NextRequest) => {
-    const data = await request.json();
-    const updatedGear = await updateGearItem(data);
-
-    return NextResponse.json(updatedGear, { status: 200 });
-});
+export const POST = methodNotAllowed;
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;

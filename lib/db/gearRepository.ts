@@ -1,3 +1,4 @@
+import { Category, PriceRange, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
 import { normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
@@ -68,19 +69,129 @@ export async function createGearItem(input: CreateGearInput) {
     });
 }
 
-export async function updateGearItem(input: UpdateGearInput) {
-    const { id, weatherSuitability, ...gearData} = input;
+export type GearWriter = Pick<PrismaClient, "gearItem">;
 
-    return prisma.gearItem.update({
+/** Raised when an update payload carries a field, relation operation, or value type the repository does not support. */
+export class InvalidGearUpdateError extends Error {
+    constructor(reason: string) {
+        super(`Invalid gear update: ${reason}`);
+        this.name = "InvalidGearUpdateError";
+    }
+}
+
+const CATEGORIES: ReadonlySet<string> = new Set(Object.values(Category));
+const PRICE_RANGES: ReadonlySet<string> = new Set(Object.values(PriceRange));
+const UPDATE_KEYS: ReadonlySet<string> = new Set(["id", "name", "brandId", "genderTarget", "category", "subcategory", "priceRange", "tags", "bodyTypeFit", "imageUrl", "affiliateUrl", "variants", "weatherSuitability"]);
+const VARIANT_KEYS: ReadonlySet<string> = new Set(["label", "gender", "affiliateUrl", "imageUrl", "price", "sizes"]);
+// Read-only columns of a stored variant row. gearService.updateGearItem falls back to the row it just read when the
+// caller sends no variants, so these arrive echoed back; they are dropped (never written), unlike any other extra key.
+const VARIANT_ECHOED_COLUMNS: ReadonlySet<string> = new Set(["id", "gearItemId", "createdAt", "updatedAt"]);
+const WEATHER_KEYS: ReadonlySet<string> = new Set(["hot", "warm", "cold", "rain", "wind"]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+}
+
+function assertKnownKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>, where: string) {
+    for (const key of Object.keys(value)) {
+        if (!allowed.has(key)) throw new InvalidGearUpdateError(`unsupported field "${key}" in ${where}`);
+    }
+}
+
+function requireString(value: unknown, field: string, { nonEmpty = false } = {}): string {
+    if (typeof value !== "string" || (nonEmpty && value.trim() === "")) throw new InvalidGearUpdateError(`${field} must be ${nonEmpty ? "a non-empty " : "a "}string`);
+    return value;
+}
+
+function nullableString(value: unknown, field: string): string | null {
+    return value === null ? null : requireString(value, field);
+}
+
+function stringList(value: unknown, field: string): string[] {
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) throw new InvalidGearUpdateError(`${field} must be an array of strings`);
+    return [...value];
+}
+
+function nullableFiniteNumber(value: unknown, field: string): number | null {
+    if (value === null) return null;
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new InvalidGearUpdateError(`${field} must be a finite number or null`);
+    return value;
+}
+
+function toVariantCreateData(value: unknown, index: number) {
+    const field = `variants[${index}]`;
+    if (!isPlainObject(value)) throw new InvalidGearUpdateError(`${field} must be an object`);
+    assertKnownKeys(value, new Set([...VARIANT_KEYS, ...VARIANT_ECHOED_COLUMNS]), field);
+    return {
+        label: requireString(value.label, `${field}.label`, { nonEmpty: true }),
+        gender: requireString(value.gender, `${field}.gender`, { nonEmpty: true }),
+        affiliateUrl: value.affiliateUrl === undefined ? undefined : nullableString(value.affiliateUrl, `${field}.affiliateUrl`),
+        imageUrl: value.imageUrl === undefined ? undefined : nullableString(value.imageUrl, `${field}.imageUrl`),
+        price: value.price === undefined ? undefined : nullableFiniteNumber(value.price, `${field}.price`),
+        sizes: value.sizes === undefined ? [] : stringList(value.sizes, `${field}.sizes`),
+    };
+}
+
+/**
+ * Builds the Prisma `data` for a gear update from an explicit allowlist. Nothing from `input` is spread: every field is
+ * validated and copied by name, so relation operations (`brand`, `OutfitItem`, `RecommendationItem`, nested `variants`
+ * operators) and protected columns (`id`, `createdAt`, `updatedAt`, the `weather*` columns) can never be injected.
+ * `undefined` leaves a column unchanged; `null` clears a nullable one. Throws InvalidGearUpdateError on anything else.
+ */
+export function buildGearUpdateData(input: unknown): { id: string; data: Prisma.GearItemUpdateInput | Prisma.GearItemUncheckedUpdateInput } {
+    if (!isPlainObject(input)) throw new InvalidGearUpdateError("payload must be an object");
+    assertKnownKeys(input, UPDATE_KEYS, "payload");
+
+    const id = requireString(input.id, "id", { nonEmpty: true });
+    const data: Prisma.GearItemUncheckedUpdateInput = {};
+
+    if (input.name !== undefined) data.name = requireString(input.name, "name", { nonEmpty: true });
+    if (input.brandId !== undefined) data.brandId = requireString(input.brandId, "brandId", { nonEmpty: true });
+    if (input.genderTarget !== undefined) data.genderTarget = nullableString(input.genderTarget, "genderTarget");
+    if (input.subcategory !== undefined) data.subcategory = nullableString(input.subcategory, "subcategory");
+    if (input.imageUrl !== undefined) data.imageUrl = nullableString(input.imageUrl, "imageUrl");
+    if (input.affiliateUrl !== undefined) data.affiliateUrl = nullableString(input.affiliateUrl, "affiliateUrl");
+    if (input.tags !== undefined) data.tags = stringList(input.tags, "tags");
+    if (input.bodyTypeFit !== undefined) data.bodyTypeFit = stringList(input.bodyTypeFit, "bodyTypeFit");
+
+    if (input.category !== undefined) {
+        if (typeof input.category !== "string" || !CATEGORIES.has(input.category)) throw new InvalidGearUpdateError("category is not a supported value");
+        data.category = input.category as Category;
+    }
+    if (input.priceRange !== undefined) {
+        if (typeof input.priceRange !== "string" || !PRICE_RANGES.has(input.priceRange)) throw new InvalidGearUpdateError("priceRange is not a supported value");
+        data.priceRange = input.priceRange as PriceRange;
+    }
+
+    if (input.variants !== undefined) {
+        if (!Array.isArray(input.variants)) throw new InvalidGearUpdateError("variants must be an array");
+        // The only nested operations ever emitted are these two fixed ones, never caller-supplied operators.
+        data.variants = { deleteMany: {}, create: input.variants.map(toVariantCreateData) };
+    }
+
+    if (input.weatherSuitability !== undefined) {
+        const weather = input.weatherSuitability;
+        if (!isPlainObject(weather)) throw new InvalidGearUpdateError("weatherSuitability must be an object");
+        assertKnownKeys(weather, WEATHER_KEYS, "weatherSuitability");
+        const score = (key: string) => (weather[key] === undefined ? undefined : nullableFiniteNumber(weather[key], `weatherSuitability.${key}`));
+        // `warm` is the legacy alias of `hot`; preserved from the previous mapping.
+        data.weatherHot = score("hot") ?? score("warm");
+        data.weatherCold = score("cold");
+        data.weatherRain = score("rain");
+        data.weatherWind = score("wind");
+    }
+
+    return { id, data };
+}
+
+export async function updateGearItem(input: UpdateGearInput, client: GearWriter = prisma) {
+    const { id, data } = buildGearUpdateData(input);
+
+    return client.gearItem.update({
         where: { id },
-        data: {
-            ...gearData,
-            variants: gearData.variants ? { deleteMany: {}, create: gearData.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) } : undefined,
-            weatherHot: weatherSuitability?.hot ?? input.weatherSuitability?.warm,
-            weatherCold: weatherSuitability?.cold,
-            weatherRain: weatherSuitability?.rain,
-            weatherWind: weatherSuitability?.wind,
-        },
+        data,
     });
 }
 
