@@ -1,7 +1,7 @@
 import { Category, PriceRange, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
-import { normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
+import { containAffiliateUrl, containVariantLink, normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
 
 export type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
 
@@ -211,7 +211,9 @@ function mapGearItemForRecommendation(gearItem: GearItemRow & { variants?: GearV
             rain: gearItem.weatherRain ?? 0,
             wind: gearItem.weatherWind ?? 0,
         },
-        variants: (gearItem.variants ?? []).map((variant) => ({ ...variant, gender: normalizeProductVariantGender(variant.gender) ?? "unisex" })),
+        // Read-time containment: an unsafe stored link never leaves this mapping. Stored rows are not modified.
+        affiliateUrl: containAffiliateUrl(gearItem.affiliateUrl),
+        variants: (gearItem.variants ?? []).map((variant) => containVariantLink({ ...variant, gender: normalizeProductVariantGender(variant.gender) ?? "unisex" })),
         selectedVariant: selectProductVariant({ ...gearItem, variants: (gearItem.variants ?? []).map((variant) => ({ ...variant, gender: normalizeProductVariantGender(variant.gender) ?? "unisex" })) }),
     };
 }

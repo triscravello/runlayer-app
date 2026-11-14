@@ -6,12 +6,14 @@
 // but without an `Allow` header, and an auto-generated OPTIONS would then advertise whatever is exported.
 import { NextResponse } from "next/server";
 import { listGearItems } from "@/lib/db/gearRepository";
+import { containGearItemLinks } from "@/lib/gear/productVariant";
 
 const ALLOW = "GET, HEAD, OPTIONS";
 
 export async function GET() {
     try {
-        const gear = await listGearItems();
+        // Read-time containment only: unsafe stored affiliate links are removed from the public JSON, never from the database.
+        const gear = (await listGearItems()).map(containGearItemLinks);
         return NextResponse.json(gear, { status: 200 });
     } catch (error) {
         console.error("Error fetching gear:", error);
