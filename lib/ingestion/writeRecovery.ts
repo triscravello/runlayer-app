@@ -1,6 +1,8 @@
 // Pure helpers for gear-item writes: sanitized failure reasons and the single, verified recovery from a concurrent
 // create. No database or framework imports so they can be unit tested and used from scripts.
 
+import { InvalidGearInputError } from "../gear/inputErrors";
+
 type PrismaErrorLike = { name?: unknown; code?: unknown; meta?: unknown };
 
 function asPrismaError(error: unknown): PrismaErrorLike | null {
@@ -18,6 +20,8 @@ function knownRequestCode(error: unknown): string | null {
  * contain query arguments and other internals. Only a validated Prisma error code can appear in the output.
  */
 export function safeWriteFailureReason(error: unknown): string {
+    // A controlled validation error: a fixed reason, never its message.
+    if (error instanceof InvalidGearInputError) return "invalid input";
     const code = knownRequestCode(error);
     if (code === "P2002") return "conflicting concurrent write";
     if (code === "P2003") return "brand reference rejected by database";

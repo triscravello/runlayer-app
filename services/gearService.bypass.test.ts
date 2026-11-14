@@ -29,6 +29,9 @@ const HOSTILE: Array<[string, Record<string, unknown>]> = [
     ["category outside the enum", { category: "SHOES" }],
 ];
 
+// Malformed shapes that used to be written (as a synthesized Default variant) or to crash with a TypeError: now always refused.
+const MUST_REFUSE = new Set(["variants as raw operator object", "tags as operator", "brandId as relation object", "variant with relation field", "weather as operator", "category outside the enum"]);
+
 for (const [label, hostile] of HOSTILE) {
     test(`service direct call cannot carry ${label} into the Prisma update`, async () => {
         const { updateGearItem } = await import("./gearService");
@@ -49,5 +52,9 @@ for (const [label, hostile] of HOSTILE) {
             if (update.data.variants !== undefined) assert.deepEqual(Object.keys(update.data.variants as object).sort(), ["create", "deleteMany"]);
         }
         assert.ok(threw || updates.length === 1, "either refused or a single sanitized write");
+        if (MUST_REFUSE.has(label)) {
+            assert.equal(threw, true, "must be refused");
+            assert.equal(updates.length, 0, "and nothing is written");
+        }
     });
 }

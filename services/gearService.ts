@@ -1,4 +1,5 @@
 // services/gearService.ts
+import { InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
 import { createWithRaceRecovery, safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
 import {
     createGearItem as createGearItemRecord,
@@ -46,7 +47,27 @@ function normalizeTags(tags: string[] | undefined): string[] {
     return [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
 }
 
+/**
+ * Refuses malformed `tags` and `variants` before anything is normalized. Without this, a non-array `variants` (null, {}, a
+ * string) quietly became a synthesized Default variant that replaced the stored ones, and `tags: null` quietly cleared tags.
+ * `undefined` means "not supplied" and is fine; `[]` is a valid, intentional empty list. Field-level checks of each variant
+ * happen in the repository's shared variant mapper. Messages contain no submitted values.
+ */
+function assertWriteShape(input: unknown): asserts input is GearWriteInput {
+    if (!isPlainObject(input)) throw new InvalidGearInputError("Invalid gear input: payload must be an object");
+
+    const { tags, variants } = input;
+    if (tags !== undefined && (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string"))) {
+        throw new InvalidGearInputError("Invalid gear input: tags must be an array of strings");
+    }
+    if (variants !== undefined) {
+        if (!Array.isArray(variants)) throw new InvalidGearInputError("Invalid gear input: variants must be an array");
+        if (variants.some((variant) => !isPlainObject(variant))) throw new InvalidGearInputError("Invalid gear input: each variant must be an object");
+    }
+}
+
 function normalizeGearWriteInput(input: GearWriteInput): GearWriteInput & { slug: string } {
+    assertWriteShape(input);
     const cleanName = input.name.trim();
     const slug = slugify(`${cleanName}-${input.brandId}`);
 
@@ -117,14 +138,18 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
         throw new Error(`Gear item not found for id: ${id}`);
     }
 
+    // An explicitly supplied `undefined` means "not supplied", exactly like an omitted key. Spreading it would overwrite the
+    // stored value with undefined and silently clear tags, genderTarget or subcategory. `null` and `[]` still clear.
+    const supplied = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)) as Partial<GearWriteInput>;
+
     const normalized = normalizeGearWriteInput({
         ...target,
-        ...data,
+        ...supplied,
         id,
-        name: data.name ?? target.name,
-        brandId: data.brandId ?? target.brandId,
-        category: data.category ?? target.category,
-        priceRange: data.priceRange ?? target.priceRange,
+        name: supplied.name ?? target.name,
+        brandId: supplied.brandId ?? target.brandId,
+        category: supplied.category ?? target.category,
+        priceRange: supplied.priceRange ?? target.priceRange,
     });
 
     return updateGearItemRecord({
@@ -141,7 +166,7 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
         affiliateUrl: normalized.affiliateUrl,
         // Only rewrite variants when the caller supplied them. Otherwise the stored rows (and their ids) are left alone;
         // `normalized.variants` would just be those same rows echoed back, or a synthesized Default.
-        variants: data.variants !== undefined ? normalized.variants : undefined,
+        variants: supplied.variants !== undefined ? normalized.variants : undefined,
         weatherSuitability: normalized.weatherSuitability,
     });
 }
@@ -176,16 +201,22 @@ export async function upsertGearItem(data: GearWriteInput) {
 
 export async function bulkUpsertGearItems(items: GearWriteInput[]) {
     const deduped = new Map<string, GearWriteInput>();
+    const failed: Array<{ name: string; reason: string }> = [];
 
     for (const item of items) {
-        const normalized = normalizeGearWriteInput(item);
-        const dedupeKey = normalized.externalId || normalized.slug;
-        deduped.set(dedupeKey, normalized);
+        try {
+            const normalized = normalizeGearWriteInput(item);
+            const dedupeKey = normalized.externalId || normalized.slug;
+            deduped.set(dedupeKey, normalized);
+        } catch (error) {
+            // One malformed item is reported and skipped; it must not abort the rest of the batch. Anything else still propagates.
+            if (!(error instanceof InvalidGearInputError)) throw error;
+            failed.push({ name: typeof item?.name === "string" ? item.name : "(invalid item)", reason: safeWriteFailureReason(error) });
+        }
     }
 
     let inserted = 0;
     let updated = 0;
-    const failed: Array<{ name: string; reason: string }> = [];
 
     for (const item of deduped.values()) {
         try {

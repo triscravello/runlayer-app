@@ -1,6 +1,7 @@
 import { Category, PriceRange, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
+import { InvalidGearInputError, isPlainObject } from "../gear/inputErrors";
 import { containAffiliateUrl, containVariantLink, normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
 
 export type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
@@ -64,15 +65,15 @@ export async function createGearItem(input: CreateGearInput) {
             bodyTypeFit: input.bodyTypeFit ?? [],
             imageUrl: input.imageUrl,
             affiliateUrl: input.affiliateUrl,
-            variants: input.variants?.length ? { create: input.variants.map((variant) => ({ label: variant.label, gender: variant.gender, affiliateUrl: variant.affiliateUrl, imageUrl: variant.imageUrl, price: variant.price, sizes: variant.sizes ?? [] })) } : undefined,
+            variants: input.variants === undefined || (Array.isArray(input.variants) && input.variants.length === 0) ? undefined : { create: buildVariantCreateList(input.variants) },
         },
     });
 }
 
 export type GearWriter = Pick<PrismaClient, "gearItem">;
 
-/** Raised when an update payload carries a field, relation operation, or value type the repository does not support. */
-export class InvalidGearUpdateError extends Error {
+/** Raised when a write payload carries a field, relation operation, or value type the repository does not support. */
+export class InvalidGearUpdateError extends InvalidGearInputError {
     constructor(reason: string) {
         super(`Invalid gear update: ${reason}`);
         this.name = "InvalidGearUpdateError";
@@ -88,15 +89,9 @@ const VARIANT_KEYS: ReadonlySet<string> = new Set(["label", "gender", "affiliate
 const VARIANT_ECHOED_COLUMNS: ReadonlySet<string> = new Set(["id", "gearItemId", "createdAt", "updatedAt"]);
 const WEATHER_KEYS: ReadonlySet<string> = new Set(["hot", "warm", "cold", "rain", "wind"]);
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-    const proto = Object.getPrototypeOf(value);
-    return proto === Object.prototype || proto === null;
-}
-
 function assertKnownKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>, where: string) {
     for (const key of Object.keys(value)) {
-        if (!allowed.has(key)) throw new InvalidGearUpdateError(`unsupported field "${key}" in ${where}`);
+        if (!allowed.has(key)) throw new InvalidGearUpdateError(`unsupported field in ${where}`);
     }
 }
 
@@ -120,7 +115,8 @@ function nullableFiniteNumber(value: unknown, field: string): number | null {
     return value;
 }
 
-function toVariantCreateData(value: unknown, index: number) {
+/** Field-by-field validated Prisma `create` data for one variant. Used for both create and update, so the rules are the same. */
+export function buildVariantCreateData(value: unknown, index: number) {
     const field = `variants[${index}]`;
     if (!isPlainObject(value)) throw new InvalidGearUpdateError(`${field} must be an object`);
     assertKnownKeys(value, new Set([...VARIANT_KEYS, ...VARIANT_ECHOED_COLUMNS]), field);
@@ -132,6 +128,12 @@ function toVariantCreateData(value: unknown, index: number) {
         price: value.price === undefined ? undefined : nullableFiniteNumber(value.price, `${field}.price`),
         sizes: value.sizes === undefined ? [] : stringList(value.sizes, `${field}.sizes`),
     };
+}
+
+/** Validated `create` data for a list of variants. Anything that is not an array of plain variant objects is refused. */
+export function buildVariantCreateList(variants: unknown) {
+    if (!Array.isArray(variants)) throw new InvalidGearUpdateError("variants must be an array");
+    return variants.map(buildVariantCreateData);
 }
 
 /**
@@ -166,9 +168,8 @@ export function buildGearUpdateData(input: unknown): { id: string; data: Prisma.
     }
 
     if (input.variants !== undefined) {
-        if (!Array.isArray(input.variants)) throw new InvalidGearUpdateError("variants must be an array");
         // The only nested operations ever emitted are these two fixed ones, never caller-supplied operators.
-        data.variants = { deleteMany: {}, create: input.variants.map(toVariantCreateData) };
+        data.variants = { deleteMany: {}, create: buildVariantCreateList(input.variants) };
     }
 
     if (input.weatherSuitability !== undefined) {
