@@ -351,6 +351,24 @@ Then run `npm run db:seed:check` and `npm run db:seed:local`. Variables already 
 
 **These Prisma commands are not protected by this guard:** `prisma migrate dev`, `prisma migrate reset` (which drops all data and then runs the seed) and `prisma db push` act on whatever `DATABASE_URL` is set. Always set `DATABASE_URL` explicitly for them, as above, and migrate hosted databases only through the guarded command (`npm run db:preflight`, then `npm run db:deploy` and `npm run db:deploy:execute`, described in the [first-deployment runbook](docs/first-deployment-runbook.md)), never a bare `prisma migrate deploy`. The guarded command does **not** stop someone from running the Prisma CLI directly; keep production credentials out of `.env`. To load the catalog into a hosted environment use the authenticated admin import, not the scripts.
 
+## Testing
+
+`npm test` runs `scripts/runTests.mjs`, which loads `test-support/isolation/guard.cjs` into the test runner and every test subprocess **before any application module**. The guard exists because Prisma Client reads `DATABASE_URL` from `.env` when a client is created, and also copies every other key of that file (Redis, Upstash, Supabase, ...) into `process.env`.
+
+What the guard does for unit tests:
+
+- Replaces hosted database, Redis, Upstash, Supabase, weather and `PG*` configuration with empty values, and every key name found in `.env` with an empty value (so Prisma cannot define it afterwards). Values are never read.
+- Sets `DATABASE_URL` to an unreachable loopback address.
+- Refuses to construct a `PrismaClient` whose URL is not local, even if one is assigned after startup.
+- Throws on Node-level sockets, DNS lookups and `fetch` to anything but loopback or a unix socket.
+- Turns the opt-in integration suites off, so they skip on purpose.
+
+`lib/prisma.ts` also refuses to create a client under `node:test` when the guard is absent, so `npx tsx --test <file>` fails closed. Run single files with `npm test -- path/to/file.test.ts`.
+
+**What it does not do:** it protects configuration and Node-level network access. It cannot stop native code (the Prisma query engine, `psql`, the Prisma CLI) from opening its own sockets; for those, the unreachable `DATABASE_URL` and the constructor check are the protection. For a hard guarantee, run the suite inside an OS-level network jail (for example `sandbox-exec` on macOS).
+
+Integration tests are opt-in and local-only. `npm run test:integration` refuses to start, before anything runs, unless `RUNLAYER_ALLOW_DB_TESTS=1` and `RUNLAYER_TEST_DATABASE_URL` name a local PostgreSQL database whose name contains `test`, that differs from `DATABASE_URL`, and that carries no host-override parameters. A skipped integration test fails the run. The existing per-suite checks in `lib/auth/testDatabaseGuard.ts` still apply.
+
 ## Scripts
 
 | Command | Description |
@@ -359,6 +377,8 @@ Then run `npm run db:seed:check` and `npm run db:seed:local`. Variables already 
 | \`npm run build\` | Production build |
 | \`npm run start\` | Start production server |
 | \`npm run lint\` | Run ESLint |
+| \`npm test\` | Unit tests, run under the test-isolation guard (see [Testing](#testing)). Never touches a hosted service. |
+| \`npm run test:integration\` | Opt-in database suites against a dedicated **local** PostgreSQL only (see [Testing](#testing)). |
 | \`npm run db:seed\` | Seed using the `DATABASE_URL` in `.env`. **Refused unless that is a confirmed, dedicated local database** (a hosted `.env` is rejected). |
 | \`npm run db:seed:local\` | Seed using `.env.seed.local` (the recommended workflow below) |
 | \`npm run db:seed:check\` | Read-only report of whether the seed commands would be allowed. Makes **no database connection**. |

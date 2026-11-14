@@ -14,7 +14,8 @@
     "db:preflight": "tsx scripts/preflight.ts",
     "db:deploy": "tsx scripts/migrateGuarded.ts",
     "db:deploy:execute": "tsx scripts/migrateGuarded.ts --execute",
-    "test": "tsx --test"
+    "test": "node scripts/runTests.mjs",
+    "test:integration": "node scripts/runTests.mjs --integration"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
