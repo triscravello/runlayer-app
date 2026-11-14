@@ -31,7 +31,7 @@ test("create schema: full payload round-trips, nested defaults included", () => 
         bodyTypeFit: [],
         imageUrl: "https://example.com/i.png",
         affiliateUrl: null,
-        variants: [{ label: " Default ", gender: "men" }, { label: "W", gender: "women", affiliateUrl: " x ", imageUrl: null, price: 5, sizes: [" S "] }],
+        variants: [{ label: " Default ", gender: "men" }, { label: "W", gender: "women", affiliateUrl: "https://shop.example.com/w", imageUrl: null, price: 5, sizes: [" S "] }],
         weatherSuitability: { hot: 0.5, cold: null },
     });
     assert.deepEqual(parsed, {
@@ -49,7 +49,7 @@ test("create schema: full payload round-trips, nested defaults included", () => 
         affiliateUrl: null,
         variants: [
             { label: "Default", gender: "men", affiliateUrl: null, sizes: [] },
-            { label: "W", gender: "women", affiliateUrl: "x", imageUrl: null, price: 5, sizes: ["S"] },
+            { label: "W", gender: "women", affiliateUrl: "https://shop.example.com/w", imageUrl: null, price: 5, sizes: ["S"] },
         ],
         weatherSuitability: { hot: 0.5, cold: null },
     });

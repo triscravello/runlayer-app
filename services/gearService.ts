@@ -1,4 +1,5 @@
 // services/gearService.ts
+import { safeHttpUrl } from "@/lib/gear/externalUrl";
 import { InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
 import { createWithRaceRecovery, safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
 import {
@@ -130,6 +131,17 @@ export async function createGearItem(data: GearWriteInput) {
     });
 }
 
+/**
+ * `variants: []` replaces the variants with one synthesized Default, whose link is copied from the item-level link. When that link
+ * was NOT part of this request it is the stored one, which may predate link validation: it is not copied into the new row if it
+ * is unsafe, so the edit still succeeds. An item link the caller supplied is copied as is, so an unsafe one is refused by the
+ * repository. Explicitly supplied variants are never touched here; they are validated, not corrected.
+ */
+function variantsToWrite(supplied: Partial<GearWriteInput>, variants: GearWriteInput["variants"]) {
+    if (!Array.isArray(supplied.variants) || supplied.variants.length > 0 || supplied.affiliateUrl !== undefined) return variants;
+    return variants?.map((variant) => ({ ...variant, affiliateUrl: safeHttpUrl(variant.affiliateUrl) }));
+}
+
 export async function updateGearItem(id: string, data: Partial<GearWriteInput>) {
     const currentItems = await listGearItems();
     const target = currentItems.find((item) => item.id === id);
@@ -166,7 +178,7 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
         affiliateUrl: normalized.affiliateUrl,
         // Only rewrite variants when the caller supplied them. Otherwise the stored rows (and their ids) are left alone;
         // `normalized.variants` would just be those same rows echoed back, or a synthesized Default.
-        variants: supplied.variants !== undefined ? normalized.variants : undefined,
+        variants: supplied.variants !== undefined ? variantsToWrite(supplied, normalized.variants) : undefined,
         weatherSuitability: normalized.weatherSuitability,
     });
 }

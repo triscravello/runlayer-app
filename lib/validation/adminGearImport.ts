@@ -17,7 +17,8 @@ const importRowSchema = z.object({
   tags: z.union([z.array(z.string()), z.string()]).optional(),
   bodyTypeFit: z.union([z.array(z.string()), z.string()]).optional(),
   imageUrl: optionalString,
-  affiliateUrl: optionalString,
+  // Not trimmed: a padded, nonblank link is rejected by the shared link policy rather than quietly accepted.
+  affiliateUrl: z.string().optional().nullable(),
   weatherHot: numberString,
   weatherCold: numberString,
   weatherRain: numberString,
@@ -111,7 +112,7 @@ export function validateBulkGearImportRows(rawRows: unknown[], brands: BrandRow[
       tags: parseList(importRow.tags),
       bodyTypeFit: parseList(importRow.bodyTypeFit),
       imageUrl: importRow.imageUrl || null,
-      affiliateUrl: importRow.affiliateUrl || null,
+      affiliateUrl: importRow.affiliateUrl && importRow.affiliateUrl.trim() !== "" ? importRow.affiliateUrl : null,
       weatherSuitability: {
         hot: weatherSuitability.hot ?? undefined,
         cold: weatherSuitability.cold ?? undefined,

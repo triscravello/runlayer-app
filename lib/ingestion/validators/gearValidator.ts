@@ -1,4 +1,5 @@
 import { Category, PriceRange } from "@prisma/client";
+import { isSafeHttpUrl } from "../../gear/externalUrl";
 import { BRAND_FAILURE, checkBrandText } from "../brandResolution";
 
 const validCategories = new Set(Object.values(Category));
@@ -48,6 +49,16 @@ export function validateGearItem(input: unknown): string[] {
     for (const field of ["subcategory", "imageUrl", "affiliateUrl"] as const) {
         const value = input[field];
         if (value !== undefined && value !== null && typeof value !== "string") errors.push(`${field} must be a string`);
+    }
+
+    // The item link becomes the Default variant's link, and any variant links in the row are checked too. Blank means "no link";
+    // anything else must pass the shared policy exactly as written, so a padded nonblank value is rejected, not trimmed into validity.
+    const unsafeLink = (value: unknown) => typeof value === "string" && value.trim() !== "" && !isSafeHttpUrl(value);
+    if (unsafeLink(input.affiliateUrl)) errors.push("affiliateUrl must be an http(s) link");
+    if (Array.isArray(input.variants)) {
+        input.variants.forEach((variant, index) => {
+            if (isRecord(variant) && unsafeLink(variant.affiliateUrl)) errors.push(`variants[${index}].affiliateUrl must be an http(s) link`);
+        });
     }
 
     return errors;

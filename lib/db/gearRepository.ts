@@ -1,6 +1,7 @@
 import { Category, PriceRange, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
+import { isSafeHttpUrl } from "../gear/externalUrl";
 import { InvalidGearInputError, isPlainObject } from "../gear/inputErrors";
 import { containAffiliateUrl, containVariantLink, normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
 
@@ -104,6 +105,18 @@ function nullableString(value: unknown, field: string): string | null {
     return value === null ? null : requireString(value, field);
 }
 
+/**
+ * A variant's affiliate link as it will be stored. `undefined` leaves the column unset, `null` and a blank string mean "no link"
+ * (stored as null); anything else must pass the shared http(s) link policy or the write is refused. Nothing is sanitized.
+ */
+function variantAffiliateUrl(value: unknown, field: string): string | null | undefined {
+    if (value === undefined || value === null) return value;
+    const text = requireString(value, field);
+    if (text.trim() === "") return null;
+    if (!isSafeHttpUrl(text)) throw new InvalidGearUpdateError(`${field} must be an http(s) link`);
+    return text;
+}
+
 function stringList(value: unknown, field: string): string[] {
     if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) throw new InvalidGearUpdateError(`${field} must be an array of strings`);
     return [...value];
@@ -123,7 +136,7 @@ export function buildVariantCreateData(value: unknown, index: number) {
     return {
         label: requireString(value.label, `${field}.label`, { nonEmpty: true }),
         gender: requireString(value.gender, `${field}.gender`, { nonEmpty: true }),
-        affiliateUrl: value.affiliateUrl === undefined ? undefined : nullableString(value.affiliateUrl, `${field}.affiliateUrl`),
+        affiliateUrl: variantAffiliateUrl(value.affiliateUrl, `${field}.affiliateUrl`),
         imageUrl: value.imageUrl === undefined ? undefined : nullableString(value.imageUrl, `${field}.imageUrl`),
         price: value.price === undefined ? undefined : nullableFiniteNumber(value.price, `${field}.price`),
         sizes: value.sizes === undefined ? [] : stringList(value.sizes, `${field}.sizes`),
