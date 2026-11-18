@@ -15,6 +15,7 @@ const stored = {
 (globalThis as unknown as { prisma: unknown }).prisma = {
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
     },

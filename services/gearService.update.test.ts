@@ -12,6 +12,7 @@ const stored = {
 (globalThis as unknown as { prisma: unknown }).prisma = {
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: (typeof updates)[number]) => { updates.push(args); return { id: args.where.id }; },
     },
 };
@@ -41,19 +42,14 @@ test("admin PATCH with new variants and weather maps them explicitly", async () 
 
 // --- PATCH-defaults regression: omitted fields survive, explicit clears apply -------------------------------------
 
-test("PATCH {name} writes the stored tags, bodyTypeFit and URLs, never defaults", async () => {
+test("PATCH {name} writes only the name: no stored or default values are written for omitted fields", async () => {
     const { updateGearItem } = await import("./gearService");
     updates.length = 0;
     await updateGearItem("g1", { name: "Renamed" });
 
     const { data } = updates[0];
     assert.equal(data.name, "Renamed");
-    assert.deepEqual(data.tags, ["light"]);
-    assert.deepEqual(data.bodyTypeFit, []);
-    assert.equal(data.imageUrl, null);
-    assert.equal(data.affiliateUrl, null);
-    assert.equal(data.brandId, "b1");
-    for (const column of ["weatherHot", "weatherCold", "weatherRain", "weatherWind"]) assert.equal(data[column], undefined, `${column} must not be written`);
+    assert.deepEqual(Object.keys(data), ["name"]);
 });
 
 test("explicit clears apply to that field only", async () => {
@@ -63,8 +59,7 @@ test("explicit clears apply to that field only", async () => {
 
     assert.deepEqual(updates[0].data.tags, []);
     assert.equal(updates[0].data.genderTarget, null);
-    assert.equal(updates[0].data.name, "Trail Tee");
-    assert.equal("variants" in updates[0].data, false);
+    assert.deepEqual(Object.keys(updates[0].data).sort(), ["genderTarget", "tags"], "only the cleared fields are written");
 });
 
 test("a partial weatherSuitability writes only the scores that were sent", async () => {

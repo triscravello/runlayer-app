@@ -17,3 +17,11 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
     const proto = Object.getPrototypeOf(value);
     return proto === Object.prototype || proto === null;
 }
+
+/** Raised when a gear item targeted by an update does not exist. Carries no id, so it can be reported as is. */
+export class GearItemNotFoundError extends Error {
+    constructor() {
+        super("Gear item not found");
+        this.name = "GearItemNotFoundError";
+    }
+}

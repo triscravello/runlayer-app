@@ -9,7 +9,8 @@ function asPrismaError(error: unknown): PrismaErrorLike | null {
     return typeof error === "object" && error !== null ? (error as PrismaErrorLike) : null;
 }
 
-function knownRequestCode(error: unknown): string | null {
+/** The Prisma error code (e.g. "P2025") of a PrismaClientKnownRequestError, or null for anything else. */
+export function knownRequestCode(error: unknown): string | null {
     const candidate = asPrismaError(error);
     if (!candidate || candidate.name !== "PrismaClientKnownRequestError") return null;
     return typeof candidate.code === "string" && /^P\d{4}$/.test(candidate.code) ? candidate.code : null;

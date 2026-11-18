@@ -22,6 +22,7 @@ const stored = {
     user: { findUnique: async () => ({ id: "u1", email: "a@example.test", role: state.role, sessionVersion: state.sessionVersion, createdAt: new Date(0), updatedAt: new Date(0), profile: null }) },
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: Update) => { updates.push(args); return { id: args.where.id }; },
         delete: async () => { throw new Error("unexpected delete"); },
     },
@@ -46,9 +47,7 @@ test("an admin partial PATCH succeeds and changes only what was sent; variants a
     assert.equal(updates.length, 1);
     assert.deepEqual(updates[0].where, { id: "g1" });
     assert.equal(updates[0].data.name, "Renamed");
-    assert.deepEqual(updates[0].data.tags, ["light"]);
-    assert.equal(updates[0].data.imageUrl, "https://example.com/i.png");
-    assert.equal("variants" in updates[0].data, false);
+    assert.deepEqual(Object.keys(updates[0].data), ["name"], "sparse: only the supplied field is written, nothing is rebuilt from the stored row");
 });
 
 test("an admin can explicitly clear a nullable field and an array", async () => {

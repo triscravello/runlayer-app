@@ -49,6 +49,17 @@ export async function findGearItemByNameAndBrand(name: string, brandId: string) 
     });
 }
 
+/**
+ * Targeted lookup for the update path: existence plus only the stored values a PATCH may need (the item-level links, which a
+ * `variants: []` Default variant is built from). Replaces reading the whole catalog with its brands and variants.
+ */
+export async function findGearItemForUpdate(id: string) {
+    return prisma.gearItem.findUnique({
+        where: { id },
+        select: { id: true, affiliateUrl: true, imageUrl: true },
+    });
+}
+
 export async function createGearItem(input: CreateGearInput) {
     return prisma.gearItem.create({
         data: {
@@ -200,8 +211,23 @@ export function buildGearUpdateData(input: unknown): { id: string; data: Prisma.
     return { id, data };
 }
 
+/**
+ * Refuses an update that carries nothing to write, so it can never become an empty Prisma update (which would still bump
+ * `updatedAt`). "Something to write" mirrors the HTTP schema's rule: any field other than `id` with a value other than
+ * `undefined`, or at least one weather score that is not `undefined` (an explicit `null` counts: it is a supplied value, and
+ * `hot: null` keeps its existing no-op meaning). Non-objects are left to buildGearUpdateData to report.
+ */
+export function assertGearUpdateHasFields(input: unknown): void {
+    if (!isPlainObject(input)) return;
+    const weather = input.weatherSuitability;
+    const hasField = [...UPDATE_KEYS].some((key) => key !== "id" && key !== "weatherSuitability" && input[key] !== undefined);
+    const hasScore = isPlainObject(weather) && Object.values(weather).some((score) => score !== undefined);
+    if (!hasField && !hasScore) throw new InvalidGearUpdateError("no fields to update");
+}
+
 export async function updateGearItem(input: UpdateGearInput, client: GearWriter = prisma) {
     const { id, data } = buildGearUpdateData(input);
+    assertGearUpdateHasFields(input);
 
     return client.gearItem.update({
         where: { id },

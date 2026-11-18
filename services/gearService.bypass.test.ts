@@ -10,7 +10,7 @@ const stored = {
     tags: [], bodyTypeFit: [], imageUrl: null, affiliateUrl: null, createdAt: new Date(0), updatedAt: new Date(0), brand: { id: "b1" }, variants: [],
 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
-    gearItem: { findMany: async () => [stored], update: async (args: Update) => { updates.push(args); return { id: args.where.id }; } },
+    gearItem: { findMany: async () => [stored], findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === (stored as { id: string }).id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null), update: async (args: Update) => { updates.push(args); return { id: args.where.id }; } },
 };
 
 const ALLOWED = new Set(["name", "brandId", "genderTarget", "subcategory", "imageUrl", "affiliateUrl", "tags", "bodyTypeFit", "category", "priceRange", "variants", "weatherHot", "weatherCold", "weatherRain", "weatherWind"]);

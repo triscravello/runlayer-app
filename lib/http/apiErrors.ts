@@ -33,6 +33,20 @@ export class BadRequestError extends HttpError {
     }
 }
 
+export class NotFoundError extends HttpError {
+    constructor(message = "Not found") {
+        super(404, message, "NOT_FOUND");
+        this.name = "NotFoundError";
+    }
+}
+
+export class ConflictError extends HttpError {
+    constructor(message = "Conflict") {
+        super(409, message, "CONFLICT");
+        this.name = "ConflictError";
+    }
+}
+
 export function errorResponse(error: unknown, fallbackMessage = "Request failed") {
     if (error instanceof ZodError) {
         return NextResponse.json(

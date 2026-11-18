@@ -22,6 +22,7 @@ const snapshot = JSON.stringify(stored);
 (globalThis as unknown as { prisma: unknown }).prisma = {
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
     },
@@ -36,7 +37,7 @@ test("legacy: PATCH {name} succeeds, never touches the stored unsafe variant, an
     await updateGearItem("g1", { name: "Renamed" });
     assert.equal(updates.length, 1);
     assert.equal("variants" in updates[0].data, false, "no variants operation: stored variants and their ids are untouched");
-    assert.equal(updates[0].data.affiliateUrl, LEGACY_ITEM_URL, "the unsafe item link is carried through unchanged, not rewritten or rejected");
+    assert.equal("affiliateUrl" in updates[0].data, false, "the unsafe stored item link is neither rewritten nor rejected: it is not part of the write");
     assert.equal(JSON.stringify(stored), snapshot, "the stored objects were not mutated");
 });
 
@@ -74,7 +75,7 @@ test("variants: [] keeps its Default-variant behavior; an unsafe STORED item lin
     assert.equal(create[0].gender, "unisex");
     assert.equal(create[0].affiliateUrl, null, "legacy unsafe link dropped from the NEW row only");
     assert.equal(create[0].imageUrl, "https://e.test/i.png");
-    assert.equal(updates[0].data.affiliateUrl, LEGACY_ITEM_URL, "the item-level stored value itself is not rewritten");
+    assert.equal("affiliateUrl" in updates[0].data, false, "the item-level stored value itself is not rewritten");
 });
 
 test("variants: [] copies a safe stored item link, and a link supplied in the same request is validated, not dropped", async () => {

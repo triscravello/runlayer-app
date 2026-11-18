@@ -22,6 +22,7 @@ const stored = {
 (globalThis as unknown as { prisma: unknown }).prisma = {
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
     },
@@ -121,7 +122,7 @@ test("tags: [] clears on update; omitted tags are kept on update and default to 
     await updateGearItem("g1", { tags: [] });
     assert.deepEqual(updates[0].data.tags, []);
     await updateGearItem("g1", { name: "Renamed" });
-    assert.deepEqual(updates[1].data.tags, ["keep"]);
+    assert.equal("tags" in updates[1].data, false, "omitted tags are not written, so the stored ones are kept");
     await createGearItem({ ...NEW_ITEM });
     assert.deepEqual(creates[0].data.tags, []);
 });
@@ -147,16 +148,7 @@ test("explicitly supplied undefined is treated as omitted on update", async () =
     reset();
     await updateGearItem("g1", { name: "Renamed", tags: undefined, bodyTypeFit: undefined, genderTarget: undefined, subcategory: undefined, imageUrl: undefined, affiliateUrl: undefined, variants: undefined, weatherSuitability: undefined, category: undefined, priceRange: undefined, brandId: undefined });
     const { data } = updates[0];
-    assert.equal(data.name, "Renamed");
-    assert.deepEqual(data.tags, ["keep"]);
-    assert.deepEqual(data.bodyTypeFit, ["slim"]);
-    assert.equal(data.genderTarget, "men");
-    assert.equal(data.subcategory, "tee");
-    assert.equal(data.imageUrl, "https://e.test/i.png");
-    assert.equal(data.affiliateUrl, "https://e.test/b");
-    assert.equal(data.category, "TOP");
-    assert.equal(data.priceRange, "MID");
-    assert.equal(data.brandId, "b1");
+    assert.deepEqual(Object.keys(data), ["name"], "explicit undefined is omission: nothing but the name is written");
     assert.equal("variants" in data, false);
     for (const column of ["weatherHot", "weatherCold", "weatherRain", "weatherWind"]) assert.equal(data[column], undefined);
 });

@@ -20,6 +20,7 @@ const stored = {
     user: { findUnique: async () => ({ id: "u1", email: "a@example.test", role: "ADMIN", sessionVersion: 1, createdAt: new Date(0), updatedAt: new Date(0) }) },
     gearItem: {
         findMany: async () => [stored],
+        findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
         update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
         delete: async () => { throw new Error("unexpected delete"); },
@@ -69,7 +70,7 @@ test("PATCH legacy: {name} succeeds although the stored item link and the stored
     assert.equal(response.status, 200);
     assert.equal(updates.length, 1);
     assert.equal("variants" in updates[0].data, false);
-    assert.equal(updates[0].data.affiliateUrl, "javascript:legacy", "carried through unchanged");
+    assert.equal("affiliateUrl" in updates[0].data, false, "the unsafe stored item link is neither rewritten nor rejected: it is simply not part of the write");
 });
 
 test("PATCH legacy: variants: [] still succeeds, with a Default variant that does not inherit the unsafe stored link", async () => {

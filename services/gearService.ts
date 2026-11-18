@@ -1,10 +1,12 @@
 // services/gearService.ts
 import { safeHttpUrl } from "@/lib/gear/externalUrl";
-import { InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
+import { GearItemNotFoundError, InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
 import { createWithRaceRecovery, safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
 import {
     createGearItem as createGearItemRecord,
     findGearItemByNameAndBrand,
+    assertGearUpdateHasFields,
+    findGearItemForUpdate,
     listGearItems,
     updateGearItem as updateGearItemRecord,
     type GearItemRow,
@@ -131,56 +133,71 @@ export async function createGearItem(data: GearWriteInput) {
     });
 }
 
+type StoredLinks = { affiliateUrl: string | null; imageUrl: string | null };
+
 /**
- * `variants: []` replaces the variants with one synthesized Default, whose link is copied from the item-level link. When that link
- * was NOT part of this request it is the stored one, which may predate link validation: it is not copied into the new row if it
- * is unsafe, so the edit still succeeds. An item link the caller supplied is copied as is, so an unsafe one is refused by the
- * repository. Explicitly supplied variants are never touched here; they are validated, not corrected.
+ * `variants: []` replaces the variants with one synthesized Default, whose links are copied from the item-level links: the
+ * supplied ones, otherwise the stored ones. A stored link may predate link validation, so it is not copied into the new row
+ * when unsafe and the edit still succeeds. An item link the caller supplied is copied as is, so an unsafe one is refused by the
+ * repository. Explicitly supplied non-empty variants are never touched here; they are validated, not corrected.
  */
-function variantsToWrite(supplied: Partial<GearWriteInput>, variants: GearWriteInput["variants"]) {
-    if (!Array.isArray(supplied.variants) || supplied.variants.length > 0 || supplied.affiliateUrl !== undefined) return variants;
-    return variants?.map((variant) => ({ ...variant, affiliateUrl: safeHttpUrl(variant.affiliateUrl) }));
+function variantsForUpdate(supplied: Partial<GearWriteInput>, stored: StoredLinks): GearProductVariantInput[] | undefined {
+    const variants = supplied.variants;
+    if (variants === undefined) return undefined;
+    if (variants.length > 0) return variants;
+
+    const affiliateUrl = supplied.affiliateUrl !== undefined ? supplied.affiliateUrl : stored.affiliateUrl;
+    const imageUrl = supplied.imageUrl !== undefined ? supplied.imageUrl : stored.imageUrl;
+    return [{ label: "Default", gender: "unisex", affiliateUrl: supplied.affiliateUrl !== undefined ? affiliateUrl : safeHttpUrl(affiliateUrl), imageUrl }];
 }
 
+// Same trim-or-null rule the full-record normalizer applies to these two optional text columns; non-strings are passed through
+// so the repository's validation refuses them (never silently turned into null).
+const trimOrNull = (value: unknown) => (typeof value === "string" ? value.trim() || null : value);
+
+/**
+ * Sparse update (PATCH semantics). Only fields present in `data` with a value other than `undefined` are written; an omitted key
+ * and an explicit `undefined` both mean "leave the stored value alone", while `null` and `[]` are explicit clears. Nothing is
+ * rebuilt from the stored row, so two concurrent updates of different fields can no longer overwrite each other with stale
+ * copies. `variants` is written (whole-set replacement) only when supplied.
+ *
+ * Callers: the admin PATCH route passes exactly the fields the client sent. The importer (`upsertGearItem`) passes a complete,
+ * normalized record, so every column it intentionally supplies, including defaults such as `genderTarget: null` or `tags: []`,
+ * is still written, exactly as before.
+ *
+ * Known limitations, deliberately left for Stage 2 (optimistic concurrency / versioning; no locks, columns or migrations here):
+ *  - Stale full-form editor. components/admin/gear/GearEditor.tsx PATCHes every field it loaded (name, brandId, category,
+ *    priceRange, genderTarget, subcategory, tags, bodyTypeFit, imageUrl, affiliateUrl, weatherSuitability) on every save. Those
+ *    are all "supplied", so a form opened before another admin's edit still overwrites that edit with its stale copy of every
+ *    field it carries. Sparse writes protect only clients that send just what they changed.
+ *  - A `variants: []` Default is synthesized from links read in the lookup, so a link changed in between can be copied stale.
+ *  - Two writers of the SAME field remain last-write-wins.
+ */
 export async function updateGearItem(id: string, data: Partial<GearWriteInput>) {
-    const currentItems = await listGearItems();
-    const target = currentItems.find((item) => item.id === id);
-
-    if (!target) {
-        throw new Error(`Gear item not found for id: ${id}`);
-    }
-
-    // An explicitly supplied `undefined` means "not supplied", exactly like an omitted key. Spreading it would overwrite the
-    // stored value with undefined and silently clear tags, genderTarget or subcategory. `null` and `[]` still clear.
+    assertWriteShape(data);
     const supplied = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)) as Partial<GearWriteInput>;
 
-    const normalized = normalizeGearWriteInput({
-        ...target,
-        ...supplied,
-        id,
-        name: supplied.name ?? target.name,
-        brandId: supplied.brandId ?? target.brandId,
-        category: supplied.category ?? target.category,
-        priceRange: supplied.priceRange ?? target.priceRange,
-    });
+    // Nothing recognized to write (e.g. only unknown keys): a controlled error before any read or write. The repository enforces the same rule.
+    assertGearUpdateHasFields(supplied);
 
-    return updateGearItemRecord({
-        id,
-        name: normalized.name,
-        brandId: normalized.brandId,
-        category: normalized.category,
-        priceRange: normalized.priceRange,
-        genderTarget: normalized.genderTarget,
-        subcategory: normalized.subcategory,
-        tags: normalized.tags,
-        bodyTypeFit: normalized.bodyTypeFit,
-        imageUrl: normalized.imageUrl,
-        affiliateUrl: normalized.affiliateUrl,
-        // Only rewrite variants when the caller supplied them. Otherwise the stored rows (and their ids) are left alone;
-        // `normalized.variants` would just be those same rows echoed back, or a synthesized Default.
-        variants: supplied.variants !== undefined ? variantsToWrite(supplied, normalized.variants) : undefined,
-        weatherSuitability: normalized.weatherSuitability,
-    });
+    const stored = await findGearItemForUpdate(id);
+    if (!stored) throw new GearItemNotFoundError();
+
+    const update: Parameters<typeof updateGearItemRecord>[0] = { id };
+    if ("name" in supplied) update.name = typeof supplied.name === "string" ? supplied.name.trim() : supplied.name;
+    if ("brandId" in supplied) update.brandId = supplied.brandId;
+    if ("category" in supplied) update.category = supplied.category;
+    if ("priceRange" in supplied) update.priceRange = supplied.priceRange;
+    if ("genderTarget" in supplied) update.genderTarget = trimOrNull(supplied.genderTarget) as string | null;
+    if ("subcategory" in supplied) update.subcategory = trimOrNull(supplied.subcategory) as string | null;
+    if ("tags" in supplied) update.tags = normalizeTags(supplied.tags);
+    if ("bodyTypeFit" in supplied) update.bodyTypeFit = supplied.bodyTypeFit;
+    if ("imageUrl" in supplied) update.imageUrl = supplied.imageUrl;
+    if ("affiliateUrl" in supplied) update.affiliateUrl = supplied.affiliateUrl;
+    if ("variants" in supplied) update.variants = variantsForUpdate(supplied, stored);
+    if ("weatherSuitability" in supplied) update.weatherSuitability = supplied.weatherSuitability;
+
+    return updateGearItemRecord(update);
 }
 
 export async function upsertGearItem(data: GearWriteInput) {
