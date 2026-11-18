@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAdmin } from "@/lib/auth/api";
-import { parseGearUpdateRequest } from "@/lib/http/adminGearUpdate";
+import { parseGearUpdateRequest, splitGearUpdateBody } from "@/lib/http/adminGearUpdate";
 import { mapAdminGearWriteError } from "@/lib/http/adminGearErrors";
 import { updateGearItem } from "@/services/gearService";
 import { deleteGearItem } from "@/lib/db/gearRepository";
@@ -9,9 +9,10 @@ type GearItemRouteContext = { params: Promise<{ id: string }> };
 
 export const PATCH = withAdmin<GearItemRouteContext>(async (request: NextRequest, { params }) => {
     const { id } = await params;
-    const body = await parseGearUpdateRequest(request, id);
+    const { data, options } = splitGearUpdateBody(await parseGearUpdateRequest(request, id));
     try {
-        return NextResponse.json(await updateGearItem(id, body));
+        // The updated row, including its new `version`, is the response: the caller uses it as the next expectedVersion.
+        return NextResponse.json(options ? await updateGearItem(id, data, options) : await updateGearItem(id, data));
     } catch (error) {
         mapAdminGearWriteError(error, { conflict: true });
     }

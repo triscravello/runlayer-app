@@ -75,9 +75,15 @@ export const createGearItemSchema = baseGearWriteSchema;
 const bareStringList = z.array(trimmedString.min(1));
 const bareNullableUrl = httpUrlSchema.nullable();
 
+// Optional optimistic-concurrency token: the item's `version` exactly as the caller last read it. A plain integer in the range of the
+// 32-bit signed `gear_items.version` column; nothing is coerced (strings, null, floats, negatives and out-of-range numbers are refused).
+// It is a condition on the write, never a gear field, so it does not count as a change by itself.
+const expectedVersionSchema = z.number().int().min(0).max(2_147_483_647);
+
 const updateFieldsSchema = z.strictObject({
     id: trimmedString.min(1).optional(),
     externalId: trimmedString.min(1).optional(),
+    expectedVersion: expectedVersionSchema.optional(),
     name: trimmedString.min(1).optional(),
     brandId: trimmedString.min(1).optional(),
     category: categorySchema.optional(),
@@ -92,7 +98,7 @@ const updateFieldsSchema = z.strictObject({
     weatherSuitability: weatherSuitabilitySchema.strict().optional(),
 });
 
-const NON_CHANGE_KEYS = new Set(["id", "externalId"]);
+const NON_CHANGE_KEYS = new Set(["id", "externalId", "expectedVersion"]);
 
 function hasMeaningfulChange(value: Record<string, unknown>): boolean {
     return Object.entries(value).some(([key, field]) => {

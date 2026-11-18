@@ -101,3 +101,71 @@ test("GET /api/gear removes unsafe affiliate links from the public JSON and leav
         dataset = rows;
     }
 });
+
+// A catalog row exactly as Prisma returns it today (every column of the item, its brand and its variants), plus the internal
+// `version` counter and some hostile extras. `version` must never reach the public JSON, at any depth.
+const FULL_ROW = {
+    id: "g9", name: "Full", brandId: "b9", genderTarget: "men", category: "TOP", subcategory: "tee", priceRange: "MID", tags: ["light"],
+    weatherHot: 0.4, weatherCold: 0.1, weatherRain: null, weatherWind: 0.2, bodyTypeFit: ["slim"], imageUrl: "https://example.com/i.png",
+    affiliateUrl: "https://example.com/buy", createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-02-01T00:00:00.000Z"),
+    version: 7,
+    brand: { id: "b9", name: "Acme", normalizedName: "acme", tier: "premium", style: null, createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-02T00:00:00.000Z"), version: 3, internalNote: "brand-secret" },
+    variants: [
+        { id: "v9", gearItemId: "g9", label: "Default", gender: "unisex", affiliateUrl: "https://example.com/buy", imageUrl: null, price: 20, sizes: ["M"], createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-01T00:00:00.000Z"), version: 9, internalNote: "variant-secret" },
+    ],
+    internalNote: "item-secret",
+};
+
+function hasKeyAnywhere(value: unknown, key: string): boolean {
+    if (Array.isArray(value)) return value.some((entry) => hasKeyAnywhere(entry, key));
+    if (typeof value === "object" && value !== null) return Object.entries(value).some(([name, entry]) => name === key || hasKeyAnywhere(entry, key));
+    return false;
+}
+
+test("J. GET /api/gear never returns version (item, brand or variant level) and keeps every intended public field", async () => {
+    const route = await routePromise;
+    dataset = [FULL_ROW];
+    try {
+        const response = await route.GET();
+        assert.equal(response.status, 200);
+        const json = (await response.json()) as Array<Record<string, unknown>>;
+        assert.equal(hasKeyAnywhere(json, "version"), false, "no `version` key at any depth");
+        assert.equal(JSON.stringify(json).includes("secret"), false, "and no unlisted column leaks either: the response is an allow-list");
+
+        // Everything that was public before `version` existed is still there, with the same values.
+        const expected = JSON.parse(JSON.stringify(FULL_ROW)) as Record<string, unknown>;
+        delete expected.version; delete expected.internalNote;
+        delete (expected.brand as Record<string, unknown>).version; delete (expected.brand as Record<string, unknown>).internalNote;
+        for (const variant of expected.variants as Array<Record<string, unknown>>) { delete variant.version; delete variant.internalNote; }
+        assert.deepEqual(json[0], expected);
+    } finally {
+        dataset = rows;
+    }
+});
+
+test("J2. the public response is unchanged for rows without version: same keys, same values", async () => {
+    const route = await routePromise;
+    const legacy = JSON.parse(JSON.stringify(FULL_ROW)) as Record<string, unknown>;
+    delete legacy.version; delete legacy.internalNote;
+    delete (legacy.brand as Record<string, unknown>).version; delete (legacy.brand as Record<string, unknown>).internalNote;
+    for (const variant of legacy.variants as Array<Record<string, unknown>>) { delete variant.version; delete variant.internalNote; }
+    dataset = [legacy];
+    try {
+        assert.deepEqual(await (await route.GET()).json(), [legacy]);
+    } finally {
+        dataset = rows;
+    }
+});
+
+test("J3. a malformed variants array can not crash the public catalog or leak: junk entries are dropped, valid ones keep their order and their containment", async () => {
+    const route = await routePromise;
+    dataset = [{ id: "g7", name: "Odd", brand: { id: "b1" }, variants: [null, { id: "v1", label: "A", version: 2, affiliateUrl: "javascript:x" }, "x", { id: "v2", label: "B" }] }];
+    try {
+        const response = await route.GET();
+        assert.equal(response.status, 200);
+        const json = (await response.json()) as Array<{ variants: Array<Record<string, unknown>> }>;
+        assert.deepEqual(json[0].variants, [{ id: "v1", label: "A", affiliateUrl: null }, { id: "v2", label: "B" }]);
+    } finally {
+        dataset = rows;
+    }
+});

@@ -43,3 +43,16 @@ test("the 400 for an id conflict names no ids", async () => {
         assert.equal(JSON.stringify(body).includes("secret-other"), false);
     }
 });
+
+test("expectedVersion is accepted, is not a change by itself, and is split into options without ever becoming update data", async () => {
+    const { splitGearUpdateBody } = await import("./adminGearUpdate");
+    const body = await parseGearUpdateRequest(patch('{"name":"x","expectedVersion":3}'), "g1");
+    assert.deepEqual(body, { name: "x", expectedVersion: 3 });
+    assert.deepEqual(splitGearUpdateBody(body), { data: { name: "x" }, options: { expectedVersion: 3 } });
+    assert.deepEqual(splitGearUpdateBody({ name: "x" }), { data: { name: "x" } }, "no token: no options argument at all");
+    assert.equal("options" in splitGearUpdateBody({ name: "x" }), false);
+    for (const bad of ['{"expectedVersion":0}', '{"expectedVersion":"1","name":"x"}', '{"expectedVersion":null,"name":"x"}', '{"expectedVersion":-1,"name":"x"}', '{"expectedVersion":1.5,"name":"x"}', '{"expectedVersion":2147483648,"name":"x"}']) {
+        assert.equal(await statusOf(bad), 400, bad);
+    }
+    assert.equal(await statusOf('{"name":"x","expectedVersion":0,"bogus":1}'), 400, "unknown fields are still refused beside a token");
+});

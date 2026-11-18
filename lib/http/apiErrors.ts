@@ -41,8 +41,8 @@ export class NotFoundError extends HttpError {
 }
 
 export class ConflictError extends HttpError {
-    constructor(message = "Conflict") {
-        super(409, message, "CONFLICT");
+    constructor(message = "Conflict", code = "CONFLICT") {
+        super(409, message, code);
         this.name = "ConflictError";
     }
 }
