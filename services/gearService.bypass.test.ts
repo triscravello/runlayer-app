@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRecordingGearClient } from "../test-support/gearStoreFake";
 
 // A caller that skips the route and its Zod schema and calls the service directly (as the importer does) must still be
 // unable to push relation operations or protected columns into the Prisma update. Real service and repository; fake Prisma.
@@ -10,7 +11,8 @@ const stored = {
     tags: [], bodyTypeFit: [], imageUrl: null, affiliateUrl: null, createdAt: new Date(0), updatedAt: new Date(0), brand: { id: "b1" }, variants: [],
 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
-    gearItem: { findMany: async () => [stored], findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === (stored as { id: string }).id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null), update: async (args: Update) => { updates.push(args); return { id: args.where.id }; } },
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === (stored as { id: string }).id ? (stored as never) : null)).$transaction,
+    gearItem: { findMany: async () => [stored], findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === (stored as { id: string }).id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null) },
 };
 
 const ALLOWED = new Set(["name", "brandId", "genderTarget", "subcategory", "imageUrl", "affiliateUrl", "tags", "bodyTypeFit", "category", "priceRange", "variants", "weatherHot", "weatherCold", "weatherRain", "weatherWind"]);

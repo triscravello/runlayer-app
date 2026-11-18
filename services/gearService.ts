@@ -1,12 +1,10 @@
 // services/gearService.ts
-import { safeHttpUrl } from "@/lib/gear/externalUrl";
-import { GearItemNotFoundError, InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
+import { assertExpectedVersion, InvalidGearInputError, isPlainObject } from "@/lib/gear/inputErrors";
 import { createWithRaceRecovery, safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
 import {
     createGearItem as createGearItemRecord,
     findGearItemByNameAndBrand,
     assertGearUpdateHasFields,
-    findGearItemForUpdate,
     listGearItems,
     updateGearItem as updateGearItemRecord,
     type GearItemRow,
@@ -133,27 +131,19 @@ export async function createGearItem(data: GearWriteInput) {
     });
 }
 
-type StoredLinks = { affiliateUrl: string | null; imageUrl: string | null };
-
-/**
- * `variants: []` replaces the variants with one synthesized Default, whose links are copied from the item-level links: the
- * supplied ones, otherwise the stored ones. A stored link may predate link validation, so it is not copied into the new row
- * when unsafe and the edit still succeeds. An item link the caller supplied is copied as is, so an unsafe one is refused by the
- * repository. Explicitly supplied non-empty variants are never touched here; they are validated, not corrected.
- */
-function variantsForUpdate(supplied: Partial<GearWriteInput>, stored: StoredLinks): GearProductVariantInput[] | undefined {
-    const variants = supplied.variants;
-    if (variants === undefined) return undefined;
-    if (variants.length > 0) return variants;
-
-    const affiliateUrl = supplied.affiliateUrl !== undefined ? supplied.affiliateUrl : stored.affiliateUrl;
-    const imageUrl = supplied.imageUrl !== undefined ? supplied.imageUrl : stored.imageUrl;
-    return [{ label: "Default", gender: "unisex", affiliateUrl: supplied.affiliateUrl !== undefined ? affiliateUrl : safeHttpUrl(affiliateUrl), imageUrl }];
-}
-
 // Same trim-or-null rule the full-record normalizer applies to these two optional text columns; non-strings are passed through
 // so the repository's validation refuses them (never silently turned into null).
 const trimOrNull = (value: unknown) => (typeof value === "string" ? value.trim() || null : value);
+
+export type GearUpdateOptions = {
+    /**
+     * Optional optimistic-concurrency token (the item's `version` as the caller last read it). When supplied the update applies only
+     * if the stored version is unchanged, otherwise it fails with GearItemStaleVersionError and writes nothing. When omitted the
+     * update is unconditional, last write wins: importers (admin bulk import, CLI ingestion) and existing API callers never send one.
+     * Either way a successful update increments the stored version.
+     */
+    expectedVersion?: number;
+};
 
 /**
  * Sparse update (PATCH semantics). Only fields present in `data` with a value other than `undefined` are written; an omitted key
@@ -161,27 +151,25 @@ const trimOrNull = (value: unknown) => (typeof value === "string" ? value.trim()
  * rebuilt from the stored row, so two concurrent updates of different fields can no longer overwrite each other with stale
  * copies. `variants` is written (whole-set replacement) only when supplied.
  *
- * Callers: the admin PATCH route passes exactly the fields the client sent. The importer (`upsertGearItem`) passes a complete,
- * normalized record, so every column it intentionally supplies, including defaults such as `genderTarget: null` or `tags: []`,
- * is still written, exactly as before.
+ * Callers: the admin PATCH route passes exactly the fields the client sent (no token yet; the HTTP contract is a later stage). The
+ * importer (`upsertGearItem`) passes a complete, normalized record, so every column it intentionally supplies, including defaults such
+ * as `genderTarget: null` or `tags: []`, is still written, exactly as before, unconditionally.
  *
- * Known limitations, deliberately left for Stage 2 (optimistic concurrency / versioning; no locks, columns or migrations here):
- *  - Stale full-form editor. components/admin/gear/GearEditor.tsx PATCHes every field it loaded (name, brandId, category,
- *    priceRange, genderTarget, subcategory, tags, bodyTypeFit, imageUrl, affiliateUrl, weatherSuitability) on every save. Those
- *    are all "supplied", so a form opened before another admin's edit still overwrites that edit with its stale copy of every
- *    field it carries. Sparse writes protect only clients that send just what they changed.
- *  - A `variants: []` Default is synthesized from links read in the lookup, so a link changed in between can be copied stale.
- *  - Two writers of the SAME field remain last-write-wins.
+ * The write itself, the item lookup, variant replacement and `variants: []` Default synthesis all happen in ONE repository
+ * transaction (see gearRepository.updateGearItem); this function only validates and shapes the input, with no database access.
+ *
+ * Known limitations, deliberately left for later stages:
+ *  - Stale full-form editor. components/admin/gear/GearEditor.tsx PATCHes every field it loaded and sends no token yet, so a form
+ *    opened before another admin's edit still overwrites it until the editor sends `expectedVersion`.
+ *  - Without a token, two writers of the SAME field remain last-write-wins.
  */
-export async function updateGearItem(id: string, data: Partial<GearWriteInput>) {
+export async function updateGearItem(id: string, data: Partial<GearWriteInput>, options: GearUpdateOptions = {}) {
+    assertExpectedVersion(options.expectedVersion);
     assertWriteShape(data);
     const supplied = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)) as Partial<GearWriteInput>;
 
-    // Nothing recognized to write (e.g. only unknown keys): a controlled error before any read or write. The repository enforces the same rule.
+    // Nothing recognized to write (e.g. only unknown keys): a controlled error before any transaction. The repository enforces the same rule.
     assertGearUpdateHasFields(supplied);
-
-    const stored = await findGearItemForUpdate(id);
-    if (!stored) throw new GearItemNotFoundError();
 
     const update: Parameters<typeof updateGearItemRecord>[0] = { id };
     if ("name" in supplied) update.name = typeof supplied.name === "string" ? supplied.name.trim() : supplied.name;
@@ -194,10 +182,11 @@ export async function updateGearItem(id: string, data: Partial<GearWriteInput>) 
     if ("bodyTypeFit" in supplied) update.bodyTypeFit = supplied.bodyTypeFit;
     if ("imageUrl" in supplied) update.imageUrl = supplied.imageUrl;
     if ("affiliateUrl" in supplied) update.affiliateUrl = supplied.affiliateUrl;
-    if ("variants" in supplied) update.variants = variantsForUpdate(supplied, stored);
+    // `variants: []` is passed through: the repository turns it into a Default variant from the links it reads under the row lock.
+    if ("variants" in supplied) update.variants = supplied.variants;
     if ("weatherSuitability" in supplied) update.weatherSuitability = supplied.weatherSuitability;
 
-    return updateGearItemRecord(update);
+    return updateGearItemRecord(update, { expectedVersion: options.expectedVersion });
 }
 
 export async function upsertGearItem(data: GearWriteInput) {

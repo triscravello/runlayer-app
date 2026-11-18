@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRecordingGearClient } from "../test-support/gearStoreFake";
 
 // End-to-end through the real service and repository, with a recording fake in place of Prisma (no database).
 const updates: Array<{ where: { id: string }; data: Record<string, unknown> }> = [];
@@ -10,10 +11,10 @@ const stored = {
     variants: [{ id: "v1", gearItemId: "g1", createdAt: new Date(0), updatedAt: new Date(0), label: "Default", gender: "unisex", affiliateUrl: null, imageUrl: null, price: 20, sizes: ["M"] }],
 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === stored.id ? (stored as never) : null)).$transaction,
     gearItem: {
         findMany: async () => [stored],
         findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
-        update: async (args: (typeof updates)[number]) => { updates.push(args); return { id: args.where.id }; },
     },
 };
 

@@ -1,8 +1,8 @@
 import { Category, PriceRange, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GearItem } from "../engine/recommendationEngine";
-import { isSafeHttpUrl } from "../gear/externalUrl";
-import { InvalidGearInputError, isPlainObject } from "../gear/inputErrors";
+import { isSafeHttpUrl, safeHttpUrl } from "../gear/externalUrl";
+import { assertExpectedVersion, GearItemNotFoundError, GearItemStaleVersionError, InvalidGearInputError, isPlainObject } from "../gear/inputErrors";
 import { containAffiliateUrl, containVariantLink, normalizeProductVariantGender, selectProductVariant } from "../gear/productVariant";
 
 export type GearItemRow = Awaited<ReturnType<typeof prisma.gearItem.findMany>>[number];
@@ -49,17 +49,6 @@ export async function findGearItemByNameAndBrand(name: string, brandId: string) 
     });
 }
 
-/**
- * Targeted lookup for the update path: existence plus only the stored values a PATCH may need (the item-level links, which a
- * `variants: []` Default variant is built from). Replaces reading the whole catalog with its brands and variants.
- */
-export async function findGearItemForUpdate(id: string) {
-    return prisma.gearItem.findUnique({
-        where: { id },
-        select: { id: true, affiliateUrl: true, imageUrl: true },
-    });
-}
-
 export async function createGearItem(input: CreateGearInput) {
     return prisma.gearItem.create({
         data: {
@@ -82,7 +71,8 @@ export async function createGearItem(input: CreateGearInput) {
     });
 }
 
-export type GearWriter = Pick<PrismaClient, "gearItem">;
+/** What an update needs from the database client: an interactive transaction. */
+export type GearWriter = Pick<PrismaClient, "$transaction">;
 
 /** Raised when a write payload carries a field, relation operation, or value type the repository does not support. */
 export class InvalidGearUpdateError extends InvalidGearInputError {
@@ -225,13 +215,77 @@ export function assertGearUpdateHasFields(input: unknown): void {
     if (!hasField && !hasScore) throw new InvalidGearUpdateError("no fields to update");
 }
 
-export async function updateGearItem(input: UpdateGearInput, client: GearWriter = prisma) {
+export type GearUpdateOptions = {
+    /**
+     * Concurrency token. When supplied, the update applies only if the stored `version` still equals it (otherwise
+     * GearItemStaleVersionError). When `undefined` the update is unconditional (last write wins), as for importers.
+     * Every successful update, conditional or not, increments `version`. It is an option, never part of the item payload:
+     * a client can not write `version` directly.
+     */
+    expectedVersion?: number;
+};
+
+/**
+ * Updates one gear item in a single interactive transaction.
+ *
+ *  1. One conditional UPDATE of the parent row (`WHERE id [AND version = expected]`) setting only the supplied scalar columns plus
+ *     `version = version + 1`. It takes the row lock, which is held until commit, so a second writer waits and then re-evaluates its
+ *     own WHERE against the committed row. Variant-only edits still write the parent, so they always advance `version`.
+ *  2. count 0: the item is missing (typed not-found) or, for a conditional update only, changed since it was read (typed stale).
+ *  3. Variant writes (replace the whole set) happen inside the same transaction, after the lock is held. `variants: []` is a
+ *     Default variant built from the item's links as read NOW, under the lock: the supplied link if the request carried one,
+ *     otherwise the stored link, which is dropped when it is not a safe link. Nothing is derived from an earlier unlocked read.
+ *  4. The updated row (with its new `version`) is read and returned from inside the transaction.
+ * Any throw rolls everything back. All validation runs before the transaction opens, so invalid input costs no database access.
+ * A transaction timeout is not caught here and is never reported as a stale version.
+ *
+ * The row lock and READ COMMITTED re-evaluation are PostgreSQL behavior that unit-test fakes only model; see the Stage 2B proof plan.
+ */
+export async function updateGearItem(input: UpdateGearInput, options: GearUpdateOptions = {}, client: GearWriter = prisma) {
+    const { expectedVersion } = options;
+    assertExpectedVersion(expectedVersion);
+
     const { id, data } = buildGearUpdateData(input);
     assertGearUpdateHasFields(input);
 
-    return client.gearItem.update({
-        where: { id },
-        data,
+    const { variants: _nestedVariants, ...scalarData } = data as Prisma.GearItemUncheckedUpdateInput;
+    void _nestedVariants;
+    const variantsSupplied = input.variants !== undefined;
+    const synthesizeDefault = variantsSupplied && Array.isArray(input.variants) && input.variants.length === 0;
+    const suppliedRows = variantsSupplied && !synthesizeDefault ? buildVariantCreateList(input.variants) : undefined;
+    // A link supplied together with `variants: []` is copied into the Default as is, so it must pass the link policy now, before any write.
+    if (synthesizeDefault && input.affiliateUrl !== undefined) buildVariantCreateData({ label: "Default", gender: "unisex", affiliateUrl: input.affiliateUrl, imageUrl: null }, 0);
+
+    return client.$transaction(async (tx) => {
+        const where: Prisma.GearItemWhereInput = expectedVersion === undefined ? { id } : { id, version: expectedVersion };
+        const result = await tx.gearItem.updateMany({
+            where,
+            data: { ...(scalarData as Prisma.GearItemUncheckedUpdateManyInput), updatedAt: new Date(), version: { increment: 1 } },
+        });
+
+        if (result.count === 0) {
+            // An unconditional update can only fail because the item is gone. A conditional one is stale unless the item is gone.
+            if (expectedVersion === undefined) throw new GearItemNotFoundError();
+            const current = await tx.gearItem.findUnique({ where: { id }, select: { id: true } });
+            throw current ? new GearItemStaleVersionError() : new GearItemNotFoundError();
+        }
+        if (result.count !== 1) throw new Error("Unexpected gear item update count");
+
+        if (variantsSupplied) {
+            let rows = suppliedRows;
+            if (synthesizeDefault) {
+                const links = await tx.gearItem.findUnique({ where: { id }, select: { affiliateUrl: true, imageUrl: true } });
+                if (!links) throw new GearItemNotFoundError();
+                const affiliateUrl = input.affiliateUrl !== undefined ? links.affiliateUrl : safeHttpUrl(links.affiliateUrl);
+                rows = [buildVariantCreateData({ label: "Default", gender: "unisex", affiliateUrl, imageUrl: links.imageUrl }, 0)];
+            }
+            await tx.gearItemVariant.deleteMany({ where: { gearItemId: id } });
+            if (rows && rows.length > 0) await tx.gearItemVariant.createMany({ data: rows.map((row) => ({ ...row, gearItemId: id })) });
+        }
+
+        const updated = await tx.gearItem.findUnique({ where: { id } });
+        if (!updated) throw new GearItemNotFoundError();
+        return updated;
     });
 }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { NextRequest } from "next/server";
+import { createRecordingGearClient } from "../../test-support/gearStoreFake";
 
 // Route-level tests for PATCH /api/admin/gear/[id]: the real withAdmin -> requireAdmin -> session chain, the real parsing
 // helper, schema, service and repository. Only the edges are faked: persistence (a recording fake in place of Prisma, so
@@ -20,10 +21,10 @@ const stored = {
 
 (globalThis as unknown as { prisma: unknown }).prisma = {
     user: { findUnique: async () => ({ id: "u1", email: "a@example.test", role: state.role, sessionVersion: state.sessionVersion, createdAt: new Date(0), updatedAt: new Date(0), profile: null }) },
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === stored.id ? (stored as never) : null)).$transaction,
     gearItem: {
         findMany: async () => [stored],
         findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
-        update: async (args: Update) => { updates.push(args); return { id: args.where.id }; },
         delete: async () => { throw new Error("unexpected delete"); },
     },
 };

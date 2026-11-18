@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRecordingGearClient, type LegacyUpdateRecord } from "../../test-support/gearStoreFake";
 import { buildGearUpdateData, InvalidGearUpdateError, updateGearItem, type GearWriter } from "./gearRepository";
 
-type UpdateArgs = { where: { id: string }; data: Record<string, unknown> };
-
 function fakeWriter() {
-    const updates: UpdateArgs[] = [];
-    const writer = { gearItem: { update: async (args: UpdateArgs) => { updates.push(args); return { id: args.where.id }; } } } as unknown as GearWriter;
+    const updates: LegacyUpdateRecord[] = [];
+    const writer = createRecordingGearClient(updates) as unknown as GearWriter;
     return { writer, updates };
 }
 
@@ -28,7 +27,7 @@ const LEGIT = {
 
 test("legitimate admin update maps to the same Prisma data as before", async () => {
     const { writer, updates } = fakeWriter();
-    await updateGearItem(LEGIT as never, writer);
+    await updateGearItem(LEGIT as never, {}, writer);
 
     assert.equal(updates.length, 1);
     assert.deepEqual(updates[0].where, { id: "g1" });
@@ -84,7 +83,7 @@ const REJECTED: Array<[string, Record<string, unknown>]> = [
 for (const [label, payload] of REJECTED) {
     test(`rejected without any write: ${label}`, async () => {
         const { writer, updates } = fakeWriter();
-        await assert.rejects(updateGearItem(payload as never, writer), InvalidGearUpdateError);
+        await assert.rejects(updateGearItem(payload as never, {}, writer), InvalidGearUpdateError);
         assert.equal(updates.length, 0);
     });
 }

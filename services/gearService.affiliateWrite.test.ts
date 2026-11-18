@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { InvalidGearInputError } from "@/lib/gear/inputErrors";
 import { safeWriteFailureReason } from "@/lib/ingestion/writeRecovery";
+import { createRecordingGearClient } from "../test-support/gearStoreFake";
 
 process.env.DATABASE_URL = "postgresql://test:test@127.0.0.1:1/never"; // defense in depth; the launcher already neutralizes the real one
 
@@ -20,10 +21,10 @@ const stored = {
 };
 const snapshot = JSON.stringify(stored);
 (globalThis as unknown as { prisma: unknown }).prisma = {
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === stored.id ? (stored as never) : null)).$transaction,
     gearItem: {
         findMany: async () => [stored],
         findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
-        update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
     },
 };

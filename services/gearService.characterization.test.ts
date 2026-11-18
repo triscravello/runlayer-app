@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRecordingGearClient } from "../test-support/gearStoreFake";
 
 // Characterization of behavior the PATCH-defaults fix must NOT change: the importer's full-row upsert and the
 // `variants: []` rule. Runs the real service and repository against a recording fake in place of Prisma (no database).
@@ -13,10 +14,10 @@ const stored = {
     brand: { id: "b1", name: "Acme" }, variants: [],
 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === stored.id ? (stored as never) : null)).$transaction,
     gearItem: {
         findMany: async () => [stored],
         findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
-        update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
     },
 };

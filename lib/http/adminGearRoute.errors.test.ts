@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { NextRequest } from "next/server";
-import { createGearStore, knownRequestError, makeRow } from "../../test-support/gearStoreFake";
+import { createGearStore, deferred, knownRequestError, makeRow } from "../../test-support/gearStoreFake";
 
 // HTTP error mapping for PATCH/DELETE /api/admin/gear/[id], through the real withAdmin -> session chain, route, service and
 // repository, against the stateful in-memory fake (no database). Only 404 (missing item / Prisma P2025) and 409 (Prisma P2002 on
@@ -12,6 +12,7 @@ let store = createGearStore([]);
 const state: { cookie: string | undefined } = { cookie: undefined };
 (globalThis as unknown as { prisma: unknown }).prisma = {
     user: { findUnique: async () => ({ id: "u1", email: "a@example.test", role: "ADMIN", sessionVersion: 1, createdAt: new Date(0), updatedAt: new Date(0), profile: null }) },
+    $transaction: (fn: never) => (store.$transaction as (fn: never) => unknown)(fn),
     gearItem: new Proxy({}, { get: (_target, key) => (store.gearItem as Record<string, unknown>)[key as string] }),
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -28,6 +29,13 @@ async function call(method: "PATCH" | "DELETE", id: string, body?: string) {
 
 const reset = () => { store = createGearStore([makeRow({ id: "g1" }), makeRow({ id: "g2", name: "Other Tee" })]); };
 
+// Nothing from the request, the database or Prisma may appear in an error body.
+const LEAKS = ["Other Tee", "g1", "brand_id", "b1", "fake P2", "P2002", "P2025", "P2003", "Prisma", "constraint", "meta", "target", "stack"];
+function assertNoLeak(body: unknown, allowed: string[] = []) {
+    const text = JSON.stringify(body);
+    for (const needle of LEAKS) if (!allowed.includes(needle)) assert.equal(text.includes(needle), false, `response leaks ${needle}: ${text}`);
+}
+
 test("PATCH of a missing item is 404 with a fixed message and no id", async () => {
     reset();
     const { status, body } = await call("PATCH", "does-not-exist-123", '{"name":"x"}');
@@ -38,21 +46,24 @@ test("PATCH of a missing item is 404 with a fixed message and no id", async () =
     assert.equal(store.writes.length, 0);
 });
 
-test("PATCH whose row vanishes between lookup and write (Prisma P2025) is 404", async () => {
+test("PATCH that waits behind a DELETE and finds the item gone is 404", async () => {
     reset();
-    store.hooks.afterLookup = async () => { await store.gearItem.delete({ where: { id: "g1" } }); };
-    const { status, body } = await call("PATCH", "g1", '{"name":"x"}');
+    const held = deferred();
+    const release = deferred();
+    const blocked = deferred();
+    store.hooks.beforeDelete = async () => { held.resolve(); await release.promise; };
+    store.hooks.onBlocked = () => blocked.resolve();
+    const deleting = store.gearItem.delete({ where: { id: "g1" } });
+    await held.promise;
+    const pending = call("PATCH", "g1", '{"name":"x"}');
+    await blocked.promise;
+    release.resolve();
+    await deleting;
+    const { status, body } = await pending;
     assert.equal(status, 404);
     assert.deepEqual(body, { error: "Gear item not found", code: "NOT_FOUND" });
-    assertNoLeak(body, ["g1"]);
+    assert.equal(JSON.stringify(body).includes("P2025"), false);
 });
-
-// Nothing from the request, the database or Prisma may appear in an error body.
-const LEAKS = ["Other Tee", "g1", "brand_id", "b1", "fake P2", "P2002", "P2025", "P2003", "Prisma", "constraint", "meta", "target", "stack"];
-function assertNoLeak(body: unknown, allowed: string[] = []) {
-    const text = JSON.stringify(body);
-    for (const needle of LEAKS) if (!allowed.includes(needle)) assert.equal(text.includes(needle), false, `response leaks ${needle}: ${text}`);
-}
 
 test("PATCH that violates the (name, brand) unique key (Prisma P2002) is 409 with no database detail", async () => {
     reset();
@@ -79,7 +90,7 @@ test("other failures keep their existing responses: invalid body stays 400, othe
     assert.equal((await call("PATCH", "g1", "{}")).status, 400);
 
     const error = knownRequestError("P2003");
-    store.hooks.beforeUpdate = () => { throw error; };
+    store.hooks.afterLock = () => { throw error; };
     const failed = await call("PATCH", "g1", '{"name":"x"}');
     assert.equal(failed.status, 500);
     assert.deepEqual(failed.body, { error: "Admin request failed" });

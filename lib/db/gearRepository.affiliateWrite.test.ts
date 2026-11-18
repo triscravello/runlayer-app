@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { InvalidGearInputError } from "@/lib/gear/inputErrors";
 import { isSafeHttpUrl } from "@/lib/gear/externalUrl";
+import { createRecordingGearClient } from "../../test-support/gearStoreFake";
 
 // Only pure modules are imported statically (ES imports are hoisted above the fake below). A reserved, closed loopback URL is the
 // last line of defense; the isolation launcher already neutralizes the real one.
@@ -11,9 +12,9 @@ type Call = { where?: { id: string }; data: Record<string, unknown> };
 const creates: Call[] = [];
 const updates: Call[] = [];
 (globalThis as unknown as { prisma: unknown }).prisma = {
+    $transaction: createRecordingGearClient(updates as never).$transaction,
     gearItem: {
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
-        update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
     },
 };
 const reset = () => { creates.length = 0; updates.length = 0; };
@@ -29,7 +30,7 @@ test("the repository refuses an invalid variant link on create and on update, an
     for (const value of BAD) {
         reset();
         await assert.rejects(createGearItem({ ...ITEM, variants: [variant(value)] } as never), InvalidGearInputError, String(value).slice(0, 30));
-        await assert.rejects(updateGearItem({ id: "g1", variants: [variant(value)] } as never, { gearItem: { update: async (args: Call) => { updates.push(args); return {}; } } } as never), InvalidGearInputError);
+        await assert.rejects(updateGearItem({ id: "g1", variants: [variant(value)] } as never, {}, createRecordingGearClient(updates as never) as never), InvalidGearInputError);
         assert.equal(creates.length + updates.length, 0, String(value).slice(0, 30));
     }
 });

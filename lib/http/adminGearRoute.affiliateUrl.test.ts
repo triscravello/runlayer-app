@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { NextRequest } from "next/server";
+import { createRecordingGearClient } from "../../test-support/gearStoreFake";
 
 // Route-level affiliate-link write validation: the real withAdmin chain, Zod schema, service and repository; only persistence
 // (a recording fake) and the cookie store are faked. Same harness as adminGearRoute.test.ts. The stored item is legacy data.
@@ -18,10 +19,10 @@ const stored = {
 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
     user: { findUnique: async () => ({ id: "u1", email: "a@example.test", role: "ADMIN", sessionVersion: 1, createdAt: new Date(0), updatedAt: new Date(0) }) },
+    $transaction: createRecordingGearClient(updates as never, (id) => (id === stored.id ? (stored as never) : null)).$transaction,
     gearItem: {
         findMany: async () => [stored],
         findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, true> }) => (where.id === stored.id ? Object.fromEntries(Object.keys(select).map((key) => [key, (stored as Record<string, unknown>)[key]])) : null),
-        update: async (args: Call) => { updates.push(args); return { id: args.where?.id }; },
         create: async (args: Call) => { creates.push(args); return { id: "new" }; },
         delete: async () => { throw new Error("unexpected delete"); },
     },
