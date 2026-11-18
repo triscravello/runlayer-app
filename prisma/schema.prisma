@@ -160,6 +160,7 @@ model GearItem {
 
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @default(now()) @updatedAt @map("updated_at")
+  version            Int                  @default(0)
   OutfitItem         OutfitItem[]
   RecommendationItem RecommendationItem[]
   variants           GearItemVariant[]

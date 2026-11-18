@@ -166,6 +166,7 @@ test("a full database collects every section, and only registered statements are
         [COLUMNS_SQL]: [
             { table_name: "users", column_name: "session_version", is_nullable: "NO" },
             { table_name: "brands", column_name: "normalized_name", is_nullable: "NO" },
+            { table_name: "gear_items", column_name: "version", is_nullable: "NO" },
         ],
         [INDEXES_SQL]: currentFacts().indexes.map((indexname) => ({ indexname })),
         [HISTORY_SQL]: MIGRATIONS.migrations.map((m) => ({ migration_name: m.name, checksum: m.checksum, finished: true, rolled_back: false })),
@@ -245,6 +246,34 @@ test("a schema that disagrees with its history is blocking drift", () => {
 
     const earlyColumn = reportFor(behindFacts({ columns: [{ table: "users", column: "session_version", nullable: false }] }));
     assert.ok(earlyColumn.findings.some((finding) => finding.code === "schema_unexpected_objects" && finding.ids?.includes(MIGRATION_NAMES[7])));
+});
+
+test("the gear item version column is registered: missing or nullable after its migration is applied is drift, present before it is applied is unexpected", () => {
+    const GEAR_VERSION_MIGRATION = "20261118120000_add_gear_item_version";
+    assert.ok(MIGRATION_NAMES.includes(GEAR_VERSION_MIGRATION));
+    const base = currentFacts().columns.filter((column) => column.table !== "gear_items");
+
+    const missing = reportFor(currentFacts({ columns: base }));
+    assert.equal(missing.schema.state, "drift");
+    assert.ok(missing.findings.some((finding) => finding.code === "schema_missing_objects" && finding.ids?.includes(GEAR_VERSION_MIGRATION)));
+
+    const nullable = reportFor(currentFacts({ columns: [...base, { table: "gear_items", column: "version", nullable: true }] }));
+    assert.equal(nullable.schema.state, "drift");
+    assert.ok(nullable.findings.some((finding) => finding.code === "schema_missing_objects" && finding.ids?.includes(GEAR_VERSION_MIGRATION)));
+
+    // Everything else applied, only this migration pending, column absent: a clean "behind" that passes.
+    const pendingOnly = reportFor(currentFacts({ columns: base, history: historyFor(MIGRATION_NAMES.filter((name) => name !== GEAR_VERSION_MIGRATION)) }));
+    assert.equal(pendingOnly.schema.state, "behind");
+    assert.deepEqual(pendingOnly.findings.filter((finding) => finding.severity === "blocking"), []);
+
+    // The column already exists although the migration is pending: it would fail with "already exists".
+    const early = reportFor(currentFacts({ history: historyFor(MIGRATION_NAMES.filter((name) => name !== GEAR_VERSION_MIGRATION)) }));
+    assert.equal(early.schema.state, "drift");
+    assert.ok(early.findings.some((finding) => finding.code === "schema_unexpected_objects" && finding.ids?.includes(GEAR_VERSION_MIGRATION)));
+});
+
+test("the column catalog query asks about gear_items.version", () => {
+    assert.match(COLUMNS_SQL, /c\.relname = 'gear_items' AND a\.attname = 'version'/);
 });
 
 test("duplicate outfit items are detected and block", () => {

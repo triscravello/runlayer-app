@@ -36,6 +36,7 @@ export function currentFacts(overrides: Partial<PreflightFacts> = {}): Preflight
         columns: [
             { table: "users", column: "session_version", nullable: false },
             { table: "brands", column: "normalized_name", nullable: false },
+            { table: "gear_items", column: "version", nullable: false },
         ],
         indexes: ["outfit_items_outfit_id_gear_item_id_key", "outfit_items_gear_item_id_idx", "saved_outfits_user_id_created_at_idx", "brands_normalized_name_key"],
         history: historyFor(MIGRATION_NAMES),
@@ -57,7 +58,7 @@ export function currentFacts(overrides: Partial<PreflightFacts> = {}): Preflight
     };
 }
 
-/** The June-era schema (migrations 1 to 7 applied) with M8 to M10 still pending, and clean ASCII brands. */
+/** The June-era schema (migrations 1 to 7 applied) with M8 to M11 still pending, and clean ASCII brands. */
 export function behindFacts(overrides: Partial<PreflightFacts> = {}): PreflightFacts {
     return currentFacts({
         columns: [],

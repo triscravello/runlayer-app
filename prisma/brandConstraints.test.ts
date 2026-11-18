@@ -44,11 +44,13 @@ test("earlier migrations are byte-for-byte unchanged", () => {
     }
 });
 
-test("the brand migration is the newest and sits alone in its directory", () => {
+test("the brand migration sits alone in its directory and the only newer migration is the approved gear item version one", () => {
     const dir = `${root}prisma/migrations`;
     const names = readdirSync(dir).filter((entry) => statSync(`${dir}/${entry}`).isDirectory()).sort();
 
-    assert.equal(names.at(-1), MIGRATION_NAME);
+    // Still a strict guard: no migration may appear after the brand one except the approved, additive GearItem.version migration
+    // (Stage 2B-A, pinned and content-checked in lib/deploy/migrationFingerprint.test.ts).
+    assert.deepEqual(names.slice(names.indexOf(MIGRATION_NAME) + 1), ["20261118120000_add_gear_item_version"]);
     assert.deepEqual(readdirSync(`${dir}/${MIGRATION_NAME}`), ["migration.sql"]);
 });
 

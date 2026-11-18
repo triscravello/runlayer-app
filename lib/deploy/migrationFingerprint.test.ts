@@ -93,6 +93,10 @@ const PINNED: Record<string, string> = {
     "20261105180000_add_outfit_item_constraints_and_indexes": "c9cc1c11210f320f2a34707b212831f1ce80eb77c962920117d281f064965b32",
     "20261105200000_add_brand_normalized_name": "fe805b0f60830479cd206c0c277140b4abb90ff798db975492310e502f6fdc9a",
 };
+// Added after the pins above: the additive GearItem.version migration (Stage 2B-A). It is pinned separately so the historical
+// list stays exactly as recorded. Its whole content is asserted: one statement, additive, with a constant default so existing
+// rows read 0 and PostgreSQL 11+ adds it without rewriting the table.
+const GEAR_ITEM_VERSION = { name: "20261118120000_add_gear_item_version", checksum: "41b7f7329562ceb8f513f2a1e68463ff4449d4b3ae3dedbc5e88f68b3d6916ac" };
 const PINNED_LOCK = "693566b52c49db47a2b0901d12400aa3d710d13a49f4a2a154b80c0505ed737c";
 
 test("the repository's existing migrations are byte-for-byte unchanged", () => {
@@ -103,4 +107,17 @@ test("the repository's existing migrations are byte-for-byte unchanged", () => {
     for (const [name, checksum] of Object.entries(PINNED)) assert.equal(byName.get(name), checksum, name);
     assert.ok(set.migrations.length >= Object.keys(PINNED).length);
     assert.equal(sha256Hex(readFileSync(join(directory, "migration_lock.toml"))), PINNED_LOCK);
+});
+
+test("the GearItem.version migration is present, unchanged, and exactly the approved additive statement", () => {
+    const directory = fileURLToPath(new URL("../../prisma/migrations", import.meta.url));
+    const set = readMigrationSet(directory);
+    assert.equal(new Map(set.migrations.map((entry) => [entry.name, entry.checksum])).get(GEAR_ITEM_VERSION.name), GEAR_ITEM_VERSION.checksum);
+
+    const sql = readFileSync(join(directory, GEAR_ITEM_VERSION.name, "migration.sql"), "utf8");
+    const statements = sql.split("\n").filter((line) => line.trim() !== "" && !line.trim().startsWith("--"));
+    assert.equal(statements.length, 1, "one statement only");
+    assert.equal(statements[0].replace(/\s+/g, " ").trim(), 'ALTER TABLE "gear_items" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 0;');
+    assert.doesNotMatch(sql, /\b(DROP|DELETE|UPDATE|TRUNCATE|INDEX|CASCADE)\b/i, "additive only");
+    assert.ok(GEAR_ITEM_VERSION.name > "20261105200000_add_brand_normalized_name", "sorts after every earlier migration");
 });

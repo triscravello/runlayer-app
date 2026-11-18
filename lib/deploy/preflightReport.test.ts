@@ -30,7 +30,7 @@ test("a fresh, passing report for this target and migration set is accepted", ()
     const verdict = evaluateEvidence(JSON.parse(JSON.stringify(reportFor(behindFacts()))), check);
     assert.ok(verdict.ok);
     assert.equal(verdict.summary.schemaState, "behind");
-    assert.equal(verdict.summary.pending.length, 3);
+    assert.equal(verdict.summary.pending.length, 4, "M8 to M11 are pending in the behind fixture");
     assert.equal(verdict.summary.ageMinutes, 0);
 });
 

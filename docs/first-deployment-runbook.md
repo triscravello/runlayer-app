@@ -272,6 +272,34 @@ Use a throwaway account, and record how it is removed.
 | Step 8–10 | Application fails after a successful migration | Do **not** roll the schema back reflexively: the migrations are additive and lose no data. Fix forward, or redeploy the previous build if one exists. If a schema rollback is truly required, it is a new, reviewed migration (drop `brands_normalized_name_key` and `normalized_name`; drop the three outfit indexes; drop `users.session_version` only after reverting the code), and a restore from the step 5 backup is the last resort. |
 | Data damage suspected | | Stop writers. Restore from the verified backup into a new database, compare, and switch over deliberately. |
 
+### Step 12. The `gear_items.version` migration (Stage 2B-A): compatibility rules
+
+Migration `20261118120000_add_gear_item_version` adds one column, `ALTER TABLE "gear_items" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 0;`.
+It is a local artifact only. **No hosted rollout of it is authorized**, it has **not** been applied to any database, and, unlike the
+Phase 2D migration, it has **not** been rehearsed on a disposable PostgreSQL yet (level A for this migration is open; the offline
+checks below are all that has run). The column is registered in the preflight (`COLUMNS_SQL`, `KNOWN_OBJECTS`) and its checksum is pinned
+in `lib/deploy/migrationFingerprint.test.ts`, so the existing evidence, drift and fingerprint guards cover it like the others.
+
+Why the order matters:
+
+- **The migration must precede any application code that uses `version`.** Once the Prisma client is generated from a schema that has the
+  field, every `gear_items` read without an explicit `select` (the public catalog, the admin catalog, recommendation candidates, outfit and
+  wardrobe joins) names the column. Against a database without it those reads fail with a missing-column error (Prisma P2022), not only the
+  update path. Same rule, same reason as Step 8 for `session_version`: database first, application second.
+- **Old code can run against the new schema.** The column is additive, `NOT NULL` with a constant default, so existing rows read `0`
+  (PostgreSQL 11+ does not rewrite the table; verified majors are 14 and 17, not yet observed for this migration). A previously built client
+  does not know the column, ignores it, and inserts take the default. Nothing breaks; the only effect is that old code never increments it.
+- **Old and new writers must not coexist once version-based concurrency protection is relied on.** A writer that does not increment `version`
+  makes a browser save look fresh when it is not, which silently defeats the protection. Deploy database-first and retire old instances before
+  the editor starts sending `expectedVersion`. During any mixed window treat the protection as absent.
+- **Direct SQL writers must take part in version management.** Anything that updates `gear_items` outside the Prisma update path (a
+  maintenance or backfill script, a console session) must set `version = version + 1` in the same statement, otherwise stale browser tokens
+  stay valid across its change. None exist in the repository today (`prisma/seeds/gear.seed.ts` only creates rows; the SQL under
+  `prisma/maintenance/` does not update `gear_items`), and any new one needs review for this.
+- **`version` must not appear in public API responses.** It is an internal edit counter. The public `GET /api/gear` currently returns whole
+  rows, so after client regeneration it would include `version` unless it is removed there (and in any other public mapper). That change is
+  deliberately **not** part of this migration step; it belongs to the HTTP stage, with a test, and must land before the new client ships.
+
 ## 4. Findings and the action each one needs
 
 | Finding code | Meaning | Action |

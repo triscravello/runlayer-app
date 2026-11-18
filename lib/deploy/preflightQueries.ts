@@ -49,7 +49,8 @@ WHERE n.nspname = current_schema()
   AND a.attnum > 0
   AND NOT a.attisdropped
   AND ((c.relname = 'users' AND a.attname = 'session_version')
-    OR (c.relname = 'brands' AND a.attname = 'normalized_name'))`;
+    OR (c.relname = 'brands' AND a.attname = 'normalized_name')
+    OR (c.relname = 'gear_items' AND a.attname = 'version'))`;
 
 export const INDEXES_SQL = `SELECT indexname
 FROM pg_indexes
@@ -272,6 +273,7 @@ const KNOWN_OBJECTS: Record<string, string[]> = {
     "20261104160000_add_user_session_version": ["column:users.session_version"],
     "20261105180000_add_outfit_item_constraints_and_indexes": ["index:outfit_items_outfit_id_gear_item_id_key", "index:outfit_items_gear_item_id_idx", "index:saved_outfits_user_id_created_at_idx"],
     "20261105200000_add_brand_normalized_name": ["column:brands.normalized_name", "not_null:brands.normalized_name", "index:brands_normalized_name_key"],
+    "20261118120000_add_gear_item_version": ["column:gear_items.version", "not_null:gear_items.version"],
 };
 
 /** PostgreSQL major versions the disposable-database verification covered. */
