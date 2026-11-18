@@ -72,8 +72,9 @@ test("the stale-conflict notice is an alert, explains that the draft is kept, an
   assert.equal(/overwrite|force|save anyway|save over/i.test(markup), false, "no force-overwrite action is offered");
   assert.equal((markup.match(/<button/g) ?? []).length, 2, "and nothing else is clickable in the notice");
   // The description the buttons and the alert point at exists.
-  assert.match(markup, /aria-describedby="gear-conflict-detail"/);
-  assert.match(markup, /id="gear-conflict-detail"/);
+  const detailId = /aria-describedby="([^"]+)"/.exec(markup)?.[1];
+  assert.ok(detailId, "the alert is described by something");
+  assert.ok(markup.includes(`id="${detailId}"`), "and that description exists (its id is generated per notice, see GearEditor.a11y.test.ts)");
 });
 
 test("after Keep editing the notice stays (it is still a conflict) but only Load latest remains, and the text says saving stays off", () => {
@@ -113,10 +114,11 @@ test("errors are alerts with their own text; informational results are a polite 
   assert.equal(markup.includes("stale-conflict"), false, "a name conflict is not shown as a stale conflict");
 
   const unauthorized = notices(run(inFlightSave(), { type: "saveFinished", generation: 1, outcome: { kind: "unauthorized", status: 401 } }));
-  assert.ok(unauthorized.includes("not signed in as an administrator") && unauthorized.includes("Your edits are still in the form"));
+  assert.ok(unauthorized.includes("You&#x27;re not signed in") && unauthorized.includes("Your edits are still here"));
 
   const loaded = notices(run(stale(), { type: "reloadStarted", generation: 2, intent: "reload" }, { type: "reloadFinished", generation: 2, outcome: { kind: "loaded", item: gearItem({ version: 8 }) } }));
-  assert.match(loaded, /role="status"[^>]*data-notice="info"|data-notice="info"[^>]*role="status"/);
+  assert.match(loaded, /data-notice="info"/);
+  assert.equal(loaded.includes('role="status"'), false, "the visible info paragraph is not a second live region: the persistent sr-only region announces it");
   assert.equal(notices(createEditorState(gearItem(), "edit")), "", "nothing at all for a clean editor");
 });
 
@@ -140,4 +142,45 @@ test("the editor is wired to the state model, the dirty-state report and the in-
   assert.match(source, /getController\(\)\.save\(\)/, "Save goes through the controller");
   assert.equal(/"PATCH"|'PATCH'/.test(source), false, "the editor no longer builds its own PATCH request (DELETE and brand creation are unchanged)");
   assert.equal(/expectedVersion/.test(source), false, "the token is added only by the request layer, never by the component");
+});
+
+// --- D1: the unknown-outcome description is one exact string ---------------------------------------------------------------------
+// Next's SWC drops the whitespace after a JSX expression ("{reason} Your edits" became "reason.Your edits" in the browser) while the test
+// renderer keeps it, so a rendered-markup assertion alone cannot see that bug. These tests therefore check the COMPLETE text (not a substring)
+// and also guard the source so the description can never again depend on JSX whitespace.
+
+const RECOVERY = "Your edits are kept. Retrying sends exactly the same request, so it can't overwrite newer changes: if the first attempt was applied, the retry is rejected as a conflict. You can also check the latest version on the server.";
+const UNKNOWN_DETAIL: Record<"network" | "server" | "malformed", string> = {
+  network: `We couldn't reach the server. ${RECOVERY}`,
+  server: `The server reported a problem. ${RECOVERY}`,
+  malformed: `The server's reply couldn't be read. ${RECOVERY}`,
+};
+const decode = (html: string) => html.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/<!-- -->/g, "");
+
+test("the unknown-outcome description reads exactly: reason, one space, recovery text, for every reason", () => {
+  for (const reason of ["network", "server", "malformed"] as const) {
+    const markup = renderToStaticMarkup(createElement(GearUnknownOutcomeNotice, { busy: false, reason, onRetry: noop, onCheckLatest: noop }));
+    const detail = /<p id="([^"]+)">(.*?)<\/p>/.exec(markup);
+    assert.ok(detail, `${reason}: the description paragraph exists`);
+    const text = decode(detail[2] ?? "");
+    assert.equal(text, UNKNOWN_DETAIL[reason], `${reason}: complete text`);
+    assert.equal(/\.[A-Z]/.test(text), false, `${reason}: no sentence runs into the next`);
+    assert.equal(/ {2}/.test(text), false, `${reason}: no doubled spaces`);
+    assert.ok(markup.includes(`aria-describedby="${detail[1]}"`), `${reason}: the alert is described by that paragraph`);
+  }
+  // With no reason given the notice falls back to the network wording, still with the space.
+  const fallback = renderToStaticMarkup(createElement(GearUnknownOutcomeNotice, { busy: false, onRetry: noop, onCheckLatest: noop }));
+  assert.ok(decode(fallback).includes(UNKNOWN_DETAIL.network));
+});
+
+test("the whole unknown-outcome notice text is exactly the heading plus the description (no other words, no lost whitespace)", () => {
+  const markup = renderToStaticMarkup(createElement(GearUnknownOutcomeNotice, { busy: false, reason: "server", onRetry: noop, onCheckLatest: noop }));
+  const paragraphs = [...markup.matchAll(/<p\b[^>]*>(.*?)<\/p>/g)].map((m) => decode(m[1] ?? ""));
+  assert.deepEqual(paragraphs, ["We couldn't confirm whether your save was applied.", UNKNOWN_DETAIL.server]);
+});
+
+test("the notice source assembles the description as one string and never puts JSX text after an expression (compiler-independent whitespace)", () => {
+  const source = readFileSync(fileURLToPath(new URL("./GearEditorNotices.tsx", import.meta.url)), "utf8");
+  assert.match(source, /\{unknownOutcomeDetail\(reason\)\}/, "the description comes from the single-string helper");
+  assert.equal(/\{UNKNOWN_REASON_TEXT\[[^\]]*\]\}\s*[A-Za-z]/.test(source), false, "no JSX text follows the reason expression, so no compiler can drop the separating space");
 });

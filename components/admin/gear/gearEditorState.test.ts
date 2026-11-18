@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toFields, type EditableFields } from "./gearEditorModel";
 import type { SaveOutcome } from "./gearEditorRequests";
-import { canSave, createEditorState, editorReducer, isDirty, isLocked, liveMessage, MESSAGES, statusBadgeLabel, type EditorAction, type EditorState } from "./gearEditorState";
+import { canSave, createEditorState, editorReducer, isDirty, isLocked, liveMessage, MESSAGES, rejectedMessage, statusBadgeLabel, type EditorAction, type EditorState } from "./gearEditorState";
 import { gearItem } from "./gearEditorTestKit";
 
 const run = (state: EditorState, ...actions: EditorAction[]) => actions.reduce(editorReducer, state);
@@ -69,11 +69,12 @@ test("a stale conflict keeps the draft and the OLD token, blocks saving, and is 
 test("every other failure keeps the draft and the token, with its own status and message", () => {
   const cases: Array<[SaveOutcome, string, string | null, boolean]> = [
     [{ kind: "conflict" }, "error", MESSAGES.nameConflict, true],
-    [{ kind: "invalid" }, "error", MESSAGES.editFailed, true],
-    [{ kind: "rejected" }, "error", MESSAGES.editFailed, true],
+    [{ kind: "invalid" }, "error", MESSAGES.invalid, true],
+    [{ kind: "rejected", status: 429 }, "error", MESSAGES.rateLimited, true],
+    [{ kind: "rejected", status: 422 }, "error", rejectedMessage(422), true],
     [{ kind: "notFound" }, "missing", MESSAGES.notFound, false],
-    [{ kind: "unauthorized", status: 401 }, "unauthorized", MESSAGES.unauthorized, true],
-    [{ kind: "unauthorized", status: 403 }, "unauthorized", MESSAGES.unauthorized, true],
+    [{ kind: "unauthorized", status: 401 }, "unauthorized", MESSAGES.unauthenticated, true],
+    [{ kind: "unauthorized", status: 403 }, "unauthorized", MESSAGES.forbidden, true],
   ];
   for (const [outcome, status, message, saveable] of cases) {
     const after = run(saving(), { type: "saveFinished", generation: 1, outcome });
@@ -128,7 +129,8 @@ test("a failed, malformed, unauthorized or missing reload preserves the draft an
   for (const [outcome, status, message] of [
     [{ kind: "failed" }, "stale", MESSAGES.reloadFailed],
     [{ kind: "malformed" }, "stale", MESSAGES.reloadMalformed],
-    [{ kind: "unauthorized", status: 401 }, "stale", MESSAGES.unauthorized],
+    [{ kind: "unauthorized", status: 401 }, "stale", MESSAGES.unauthenticated],
+    [{ kind: "unauthorized", status: 403 }, "stale", MESSAGES.forbidden],
     [{ kind: "notFound" }, "missing", MESSAGES.notFound],
   ] as const) {
     const after = run(stale, { type: "reloadStarted", generation: 2, intent: "reload" }, { type: "reloadFinished", generation: 2, outcome });

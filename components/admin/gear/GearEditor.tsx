@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useId, useReducer, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Clock3, ExternalLink, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +24,7 @@ import { createEditorController, type EditorController } from "./gearEditorContr
 import { GearEditorNotices } from "./GearEditorNotices";
 import { canSave, createEditorState, editorReducer, isDirty, isLocked, liveMessage, statusBadgeLabel } from "./gearEditorState";
 import type { SavedItem } from "./gearEditorRequests";
+import { chooseFocusTarget, focusWasLost, pickFocusTarget, type FocusTarget } from "./gearEditorFocus";
 
 export type { GearEditorItem } from "./gearEditorModel";
 
@@ -83,11 +84,14 @@ function EditorSection({
   description,
   children,
   defaultOpen = true,
+  headingId,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  /** Lets content inside the section name itself after the heading (aria-labelledby). */
+  headingId?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -99,7 +103,7 @@ function EditorSection({
         className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-zinc-900/60"
       >
         <div>
-          <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+          <h3 id={headingId} className="text-sm font-semibold text-zinc-100">{title}</h3>
 
           {description ? (
             <p className="mt-1 text-xs text-zinc-500">{description}</p>
@@ -117,18 +121,24 @@ function EditorSection({
 }
 
 function FieldLabel({
-  label, 
+  label,
   hint,
+  htmlFor,
+  hintId,
 } : {
   label: string;
   hint?: string;
+  /** The id of the control this label names. */
+  htmlFor: string;
+  /** The id given to the hint, so the control can reference it with aria-describedby. */
+  hintId?: string;
 }) {
   return (
     <div className="mb-2 flex items-center justify-between gap-2">
-      <label className="text-xs font-medium text-zinc-300">{label}</label>
+      <label htmlFor={htmlFor} className="text-xs font-medium text-zinc-300">{label}</label>
 
       {hint ? (
-        <span className="text-[11px] text-zinc-500">{hint}</span>
+        <span id={hintId} className="text-[11px] text-zinc-500">{hint}</span>
       ) : null}
     </div>
   );
@@ -143,6 +153,9 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
   // item ONCE, here, together with the fields; later changes to the `item` prop (for example a catalog refresh) never touch the draft or the token.
   const [state, dispatch] = useReducer(editorReducer, undefined, () => createEditorState(item, mode));
   const fields = state.draft;
+  // Control ids are derived from one useId() per editor instance, so they are unique even if several editors render on one page.
+  const uid = useId();
+  const fid = (key: string) => `${uid}-${key}`;
   const [deleteState, setDeleteState] = useState<DeleteState>("idle");
   const [brandCreateState, setBrandCreateState] = useState<BrandCreateState>("idle");
 
@@ -171,6 +184,26 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
     }
     return controllerRef.current;
   };
+
+  // Focus restoration (see gearEditorFocus.ts). It runs only after a state TRANSITION that needs it, so it never fires on mount or while typing,
+  // and it only acts when focus was actually lost, so it never takes focus from a control the user chose.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const previousStateRef = useRef(state);
+  useEffect(() => {
+    const previous = previousStateRef.current;
+    previousStateRef.current = state;
+    const candidates = chooseFocusTarget(previous, state);
+    const root = rootRef.current;
+    if (!candidates || !root) return;
+    const active = document.activeElement;
+    // Any enabled, attached control that has focus (in this editor or anywhere else on the page) keeps it.
+    if (!focusWasLost(active ? { tagName: active.tagName, isConnected: active.isConnected, disabled: active.matches(":disabled") } : null)) return;
+    const target = pickFocusTarget(candidates, (name: FocusTarget) => {
+      const element = root.querySelector<HTMLElement>(`[data-focus="${name}"]`);
+      return element ? { isConnected: element.isConnected, disabled: element.matches(":disabled"), element } : null;
+    });
+    target?.element.focus();
+  }, [state]);
 
   const dirty = isDirty(state);
   useEffect(() => { dirtyCallbackRef.current?.(dirty); }, [dirty]);
@@ -281,7 +314,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
   }
 
   return (
-    <div className="min-w-0 space-y-4 2xl:sticky 2xl:top-6">
+    <div ref={rootRef} className="min-w-0 space-y-4 2xl:sticky 2xl:top-6">
       <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60">
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -313,29 +346,29 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
               <SectionHeader title="Basic Information" description="Primary product information stored on the selected catalog item." badge={<Badge className="border border-zinc-700 bg-zinc-950 text-zinc-300">{isCreateMode ? "New" : item?.id}</Badge>} />
 
               <div className="space-y-4">
-                <div><FieldLabel label="Gear Name" hint="Required" /><Input value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                <div><FieldLabel label="Gear Name" hint="Required" htmlFor={fid("name")} hintId={fid("name-hint")} /><Input id={fid("name")} data-focus="first-field" aria-describedby={fid("name-hint")} value={fields.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Brand" hint={selectedBrand ? `Selected: ${selectedBrand.name}` : isCreateMode ? "Required" : "Select by name"} /><select value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Select a brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select><div className="mt-3 flex gap-2"><Input value={fields.newBrandName} onChange={(event) => updateField("newBrandName", event.target.value)} placeholder="New brand name" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><Button type="button" variant="outline" onClick={handleCreateBrand} disabled={brandCreateState === "creating"} className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800">{brandCreateState === "creating" ? "Adding…" : "Add"}</Button></div><p className="mt-2 text-[11px] text-zinc-500">Brand ID is stored automatically after selecting or creating a brand.</p></div>
-                  <div><FieldLabel label="Category" /><select value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
+                  <div><FieldLabel label="Brand" hint={selectedBrand ? `Selected: ${selectedBrand.name}` : isCreateMode ? "Required" : "Select by name"} htmlFor={fid("brand")} hintId={fid("brand-hint")} /><select id={fid("brand")} aria-describedby={fid("brand-hint")} value={fields.brandId} onChange={(event) => updateField("brandId", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Select a brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select><div className="mt-3 flex gap-2"><Input id={fid("new-brand")} aria-label="New brand name" aria-describedby={fid("brand-help")} value={fields.newBrandName} onChange={(event) => updateField("newBrandName", event.target.value)} placeholder="New brand name" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><Button type="button" variant="outline" onClick={handleCreateBrand} disabled={brandCreateState === "creating"} className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800">{brandCreateState === "creating" ? "Adding…" : "Add"}</Button></div><p id={fid("brand-help")} className="mt-2 text-[11px] text-zinc-500">Brand ID is stored automatically after selecting or creating a brand.</p></div>
+                  <div><FieldLabel label="Category" htmlFor={fid("category")} /><select id={fid("category")} value={fields.category} onChange={(event) => updateField("category", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Subcategory" /><Input value={fields.subcategory} onChange={(event) => updateField("subcategory", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
-                  <div><FieldLabel label="Price range" /><select value={fields.priceRange} onChange={(event) => updateField("priceRange", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{priceRangeOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
+                  <div><FieldLabel label="Subcategory" htmlFor={fid("subcategory")} /><Input id={fid("subcategory")} value={fields.subcategory} onChange={(event) => updateField("subcategory", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /></div>
+                  <div><FieldLabel label="Price range" htmlFor={fid("price-range")} /><select id={fid("price-range")} value={fields.priceRange} onChange={(event) => updateField("priceRange", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500">{priceRangeOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel label="Gender" /><select value={fields.genderTarget} onChange={(event) => updateField("genderTarget", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Not configured</option>{genderTargetOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><p className="mt-2 text-[11px] text-zinc-500">Leave blank to preserve items without a gender target.</p></div>
+                  <div><FieldLabel label="Gender" htmlFor={fid("gender")} /><select id={fid("gender")} aria-describedby={fid("gender-help")} value={fields.genderTarget} onChange={(event) => updateField("genderTarget", event.target.value)} className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none ring-0 transition focus:border-zinc-500"><option value="">Not configured</option>{genderTargetOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><p id={fid("gender-help")} className="mt-2 text-[11px] text-zinc-500">Leave blank to preserve items without a gender target.</p></div>
                 </div>
-                <div><FieldLabel label="Description" hint="No description field exists on this item" /><textarea rows={4} value="" disabled placeholder="Missing" className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-500 outline-none" /><p className="mt-2 text-[11px] text-zinc-500">Description is unavailable because the current schema does not provide one.</p></div>
+                <div><FieldLabel label="Description" hint="No description field exists on this item" htmlFor={fid("description")} hintId={fid("description-hint")} /><textarea id={fid("description")} aria-describedby={`${fid("description-hint")} ${fid("description-help")}`} rows={4} value="" disabled placeholder="Missing" className="w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3 text-sm leading-6 text-zinc-500 outline-none" /><p id={fid("description-help")} className="mt-2 text-[11px] text-zinc-500">Description is unavailable because the current schema does not provide one.</p></div>
               </div>
             </CardContent>
           </Card>
 
           <EditorSection title="Product Links" description="Store optional shopper-facing URLs for the catalog item.">
             <div className="space-y-4">
-              <div><FieldLabel label="Primary image URL" hint="Optional http(s) URL" /><Input value={fields.imageUrl} onChange={(event) => updateField("imageUrl", event.target.value)} placeholder="https://example.com/image.jpg" className="border-zinc-700 bg-zinc-950 text-zinc-100" />{hasInvalidImageUrl ? <p className="mt-2 text-xs text-rose-300">Enter a valid http or https URL before saving.</p> : null}</div>
+              <div><FieldLabel label="Primary image URL" hint="Optional http(s) URL" htmlFor={fid("image-url")} hintId={fid("image-url-hint")} /><Input id={fid("image-url")} aria-describedby={hasInvalidImageUrl ? `${fid("image-url-hint")} ${fid("image-url-error")}` : fid("image-url-hint")} aria-invalid={hasInvalidImageUrl || undefined} value={fields.imageUrl} onChange={(event) => updateField("imageUrl", event.target.value)} placeholder="https://example.com/image.jpg" className="border-zinc-700 bg-zinc-950 text-zinc-100" />{hasInvalidImageUrl ? <p id={fid("image-url-error")} className="mt-2 text-xs text-rose-300">Enter a valid http or https URL before saving.</p> : null}</div>
               <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
                 {hasPreviewableImageUrl ? (
                   <div
@@ -402,8 +435,13 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
                     <FieldLabel
                       label="Affiliate URL"
                       hint="Optional http(s) URL"
+                      htmlFor={fid("affiliate-url")}
+                      hintId={fid("affiliate-url-hint")}
                     />
                     <Input
+                      id={fid("affiliate-url")}
+                      aria-describedby={`${fid("affiliate-url-hint")} ${fid("affiliate-url-help")}`}
+                      aria-invalid={hasInvalidAffiliateUrl || undefined}
                       value={fields.affiliateUrl}
                       onChange={(event) =>
                         updateField("affiliateUrl", event.target.value)
@@ -412,12 +450,12 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
                       className="border-zinc-700 bg-zinc-950 text-zinc-100"
                     />
                     {hasInvalidAffiliateUrl ? (
-                      <p className="mt-2 text-xs text-rose-300">
+                      <p id={fid("affiliate-url-help")} className="mt-2 text-xs text-rose-300">
                         Enter a valid URL beginning with http:// or https://
                         before saving.
                       </p>
                     ) : (
-                      <p className="mt-2 text-[11px] text-zinc-500">
+                      <p id={fid("affiliate-url-help")} className="mt-2 text-[11px] text-zinc-500">
                         Leave blank to store no affiliate link for this item.
                       </p>
                     )}
@@ -539,16 +577,16 @@ export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded
 
           <EditorSection title="Recommendation Metadata" description="Actual tags and metadata stored in this item">
             <div className="space-y-4">
-              <div><FieldLabel label="Tags" hint="Comma-separated" /><Input value={fields.tags} onChange={(event) => updateField("tags", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Missing</EmptyBadge>}</div></div>
-              <div><FieldLabel label="Body type fit" hint="Comma-separated" /><Input value={fields.bodyTypeFit} onChange={(event) => updateField("bodyTypeFit", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{bodyTypeFit.length ? bodyTypeFit.map((fit) => <Badge key={fit} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{fit}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></div>
+              <div><FieldLabel label="Tags" hint="Comma-separated" htmlFor={fid("tags")} hintId={fid("tags-hint")} /><Input id={fid("tags")} aria-describedby={fid("tags-hint")} value={fields.tags} onChange={(event) => updateField("tags", event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Missing</EmptyBadge>}</div></div>
+              <div><FieldLabel label="Body type fit" hint="Comma-separated" htmlFor={fid("body-type-fit")} hintId={fid("body-type-fit-hint")} /><Input id={fid("body-type-fit")} aria-describedby={fid("body-type-fit-hint")} value={fields.bodyTypeFit} onChange={(event) => updateField("bodyTypeFit", event.target.value)} placeholder="Not configured" className="border-zinc-700 bg-zinc-950 text-zinc-100" /><div className="mt-2 flex flex-wrap gap-2">{bodyTypeFit.length ? bodyTypeFit.map((fit) => <Badge key={fit} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{fit}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></div>
             </div>
           </EditorSection>
 
-          <EditorSection title="Weather Conditions" description="Stored weather suitability scores from 0 to 1."><div className="grid gap-4 sm:grid-cols-2">{weatherFields.map(({ key, label }) => <div key={key}><FieldLabel label={label} /><Input value={fields[key]} onChange={(event) => updateField(key, event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950" /></div>)}</div></EditorSection>
+          <EditorSection title="Weather Conditions" headingId={fid("weather-heading")} description="Stored weather suitability scores from 0 to 1."><div role="group" aria-labelledby={fid("weather-heading")} className="grid gap-4 sm:grid-cols-2">{weatherFields.map(({ key, label }) => <div key={key}><FieldLabel label={label} htmlFor={fid(key)} /><Input id={fid(key)} value={fields[key]} onChange={(event) => updateField(key, event.target.value)} placeholder="Missing" className="border-zinc-700 bg-zinc-950" /></div>)}</div></EditorSection>
 
           <EditorSection title="Intensity Compatibility" description="No separate intensity model exists; workout context can only be inferred from tags." defaultOpen={false}><div className="flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></EditorSection>
 
-          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(state.updatedAt)}</p><p>Edited by · Pending</p></div><GearEditorNotices state={state} onKeepEditing={() => dispatch({ type: "keepEditing" })} onLoadLatest={() => void getController().loadLatest("reload")} onRetry={() => void getController().retrySame()} onCheckLatest={() => void getController().loadLatest("check")} /><div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={() => void getController().save()} disabled={!canSave(state)} aria-busy={state.status === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{state.status === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button>{isCreateMode ? <Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Trash2 className="mr-2 size-4" />Delete unavailable</Button> : <Button type="button" variant="outline" onClick={handleDelete} disabled={deleteState === "deleting" || deleteState === "deleted"} className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"><Trash2 className="mr-2 size-4" />{deleteState === "deleting" ? "Deleting…" : deleteState === "deleted" ? "Deleted" : "Delete Gear"}</Button>}</div></div></CardContent></Card>
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(state.updatedAt)}</p><p>Edited by · Pending</p></div><GearEditorNotices state={state} onKeepEditing={() => dispatch({ type: "keepEditing" })} onLoadLatest={() => void getController().loadLatest("reload")} onRetry={() => void getController().retrySame()} onCheckLatest={() => void getController().loadLatest("check")} /><div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button data-focus="save" onClick={() => void getController().save()} disabled={!canSave(state)} aria-busy={state.status === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{state.status === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button>{isCreateMode ? <Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Trash2 className="mr-2 size-4" />Delete unavailable</Button> : <Button type="button" variant="outline" onClick={handleDelete} disabled={deleteState === "deleting" || deleteState === "deleted"} className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"><Trash2 className="mr-2 size-4" />{deleteState === "deleting" ? "Deleting…" : deleteState === "deleted" ? "Deleted" : "Delete Gear"}</Button>}</div></div></CardContent></Card>
         </div>
       </div>
       </fieldset>

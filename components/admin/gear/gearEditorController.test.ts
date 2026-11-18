@@ -239,7 +239,7 @@ test("authorization failures keep the draft and the token, are announced distinc
     const h = createHarness({ responses: [jsonResponse(errorBody(status === 401 ? "UNAUTHORIZED" : "FORBIDDEN"), status)] });
     h.edit("name", "Mine");
     await h.controller.save();
-    assert.deepEqual([h.state.status, h.state.message, h.state.draft.name, h.state.version, h.requests.length], ["unauthorized", MESSAGES.unauthorized, "Mine", 3, 1], String(status));
+    assert.deepEqual([h.state.status, h.state.message, h.state.draft.name, h.state.version, h.requests.length], ["unauthorized", status === 401 ? MESSAGES.unauthenticated : MESSAGES.forbidden, "Mine", 3, 1], String(status));
     assert.equal(canSave(h.state), true, "the user can sign in again and save manually");
   }
 });

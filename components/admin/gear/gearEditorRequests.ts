@@ -30,7 +30,7 @@ export type SaveOutcome =
   | { kind: "conflict" }                                        // 409 CONFLICT: another item already uses this name and brand
   | { kind: "notFound" }                                        // 404
   | { kind: "invalid" }                                         // 400
-  | { kind: "rejected" }                                        // any other 4xx
+  | { kind: "rejected"; status: number }                       // any other 4xx (the status only selects a message; the body is never read for display)
   | { kind: "unauthorized"; status: 401 | 403 }
   | { kind: "unknown"; reason: "network" | "malformed" | "server" }   // the request may or may not have been applied
   | { kind: "badVersion" };                                     // no request was made: the token is not a usable version
@@ -66,13 +66,13 @@ export async function patchGear(fetchImpl: FetchLike, itemId: string, version: u
     const code = await errorCode(response);
     if (code === "STALE_VERSION") return { kind: "stale" };
     if (code === "CONFLICT") return { kind: "conflict" };
-    return { kind: "rejected" };
+    return { kind: "rejected", status: 409 };
   }
   if (response.status === 404) return { kind: "notFound" };
   if (response.status === 400) return { kind: "invalid" };
   if (response.status === 401 || response.status === 403) return { kind: "unauthorized", status: response.status };
   if (response.status >= 500) return { kind: "unknown", reason: "server" };
-  return { kind: "rejected" };
+  return { kind: "rejected", status: response.status };
 }
 
 export type CreateOutcome =

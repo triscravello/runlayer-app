@@ -17,6 +17,9 @@ import type { CreateOutcome, LoadOutcome, SaveOutcome } from "./gearEditorReques
 
 export type EditorMode = "edit" | "create";
 
+/** Why a save's outcome is unknown. Only selects the wording of the notice; it never changes what a retry sends. */
+export type UnknownReason = "network" | "malformed" | "server";
+
 export type EditorStatus =
   | "idle"          // nothing in flight; the draft may or may not differ from the baseline (see isDirty)
   | "saving"        // a save request is in flight
@@ -68,7 +71,7 @@ export type EditorState = {
   generation: number;
   pending: PendingRequest | null;
   /** A save that was sent but whose outcome is unknown: its exact snapshot and token, kept for an identical retry. */
-  unknown: { snapshot: EditableFields; version: number } | null;
+  unknown: { snapshot: EditableFields; version: number; reason: UnknownReason } | null;
 };
 
 export const MESSAGES = {
@@ -78,13 +81,39 @@ export const MESSAGES = {
   createUnknown: "We couldn't confirm that the item was created. Check the catalog before trying again.",
   nameConflict: "Another gear item already uses this name and brand. Change the name or brand, then save again.",
   notFound: "This gear item no longer exists, so the changes can't be saved. Your edits are still in the form.",
-  unauthorized: "You are not signed in as an administrator (your session may have expired), so nothing was saved. Your edits are still in the form. Sign in again, then press Save.",
+  unauthenticated: "You're not signed in. Sign in again before saving. Your edits are still here.",
+  forbidden: "Your account doesn't have permission to save this item. Your edits are still here.",
+  invalid: "The server rejected some of these values. Check the fields and save again. Your edits are still here.",
+  rateLimited: "Too many requests right now. Wait a moment, then save again. Your edits are still here.",
   reloadFailed: "Couldn't load the latest version. Your edits are kept.",
   reloadMalformed: "The latest version couldn't be read safely, so nothing was changed. Your edits are kept.",
   loaded: "Loaded the latest version from the server. Your earlier edits were discarded.",
   adopted: "Your save had been applied. The editor now has the latest version.",
   notApplied: "The server still has the version you started from, so your save was not applied. Your edits are kept; you can save again.",
 } as const;
+
+/** 401 and 403 mean different things to the person saving, so they get different messages. */
+export const unauthorizedMessage = (status: 401 | 403) => (status === 401 ? MESSAGES.unauthenticated : MESSAGES.forbidden);
+
+/** Any other 4xx: 429 gets its own wording; the rest name the status code only (never the server's body). */
+export const rejectedMessage = (status: number) => (status === 429 ? MESSAGES.rateLimited : `The server couldn't accept this save (error ${status}). Your edits are still here.`);
+
+/** The sentence that says why the outcome of a save is unknown. It never claims the save did or did not happen. */
+export const UNKNOWN_REASON_TEXT: Record<UnknownReason, string> = {
+  network: "We couldn't reach the server.",
+  server: "The server reported a problem.",
+  malformed: "The server's reply couldn't be read.",
+};
+
+/** What the person can do after an unknown outcome. Shared by every reason. */
+const UNKNOWN_RECOVERY_TEXT = "Your edits are kept. Retrying sends exactly the same request, so it can't overwrite newer changes: if the first attempt was applied, the retry is rejected as a conflict. You can also check the latest version on the server.";
+
+/**
+ * The complete description under the unknown-outcome heading: the reason, one space, then the recovery text. It is assembled as ONE string
+ * (not as JSX text after an expression) because compilers disagree about the whitespace that follows a JSX expression: Next's SWC drops it,
+ * so "{reason} Your edits" rendered as "reason.Your edits" in the browser even though other compilers keep the space.
+ */
+export const unknownOutcomeDetail = (reason: UnknownReason): string => `${UNKNOWN_REASON_TEXT[reason]} ${UNKNOWN_RECOVERY_TEXT}`;
 
 export type EditorAction =
   | { type: "edit"; key: keyof EditableFields; value: string }
@@ -179,15 +208,17 @@ function finishSave(state: EditorState, pending: PendingRequest, outcome: SaveOu
     case "notFound":
       return { ...settled, status: "missing", message: MESSAGES.notFound, unknown: null };
     case "unauthorized":
-      return { ...settled, status: "unauthorized", message: MESSAGES.unauthorized, unknown: null };
+      return { ...settled, status: "unauthorized", message: unauthorizedMessage(outcome.status), unknown: null };
     case "unknown":
       if (state.mode === "create") return { ...settled, status: "error", message: MESSAGES.createUnknown };
       // May have been applied: keep the exact snapshot and token for an identical retry or a check of the latest state.
-      return pending.version === null ? { ...settled, status: "error", message: MESSAGES.editFailed } : { ...settled, status: "unknown", message: null, unknown: { snapshot: pending.snapshot, version: pending.version } };
+      return pending.version === null ? { ...settled, status: "error", message: MESSAGES.editFailed } : { ...settled, status: "unknown", message: null, unknown: { snapshot: pending.snapshot, version: pending.version, reason: "reason" in outcome ? outcome.reason : "network" } };
     case "badVersion":
       return { ...settled, status: "error", message: MESSAGES.versionProblem };
     case "invalid":
+      return { ...settled, status: "error", message: state.mode === "create" ? MESSAGES.createFailed : MESSAGES.invalid, unknown: null };
     case "rejected":
+      return { ...settled, status: "error", message: state.mode === "create" ? MESSAGES.createFailed : rejectedMessage(outcome.status), unknown: null };
     case "failed":
       return { ...settled, status: "error", message: state.mode === "create" ? MESSAGES.createFailed : MESSAGES.editFailed, unknown: null };
   }
@@ -220,7 +251,7 @@ function finishReload(state: EditorState, pending: PendingRequest, outcome: Load
     case "notFound":
       return { ...settled, status: "missing", message: MESSAGES.notFound, unknown: null };
     case "unauthorized":
-      return { ...settled, status: pending.returnTo, message: MESSAGES.unauthorized };
+      return { ...settled, status: pending.returnTo, message: unauthorizedMessage(outcome.status) };
     case "malformed":
       return { ...settled, status: pending.returnTo, message: MESSAGES.reloadMalformed };
     case "failed":
