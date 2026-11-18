@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GearEditor, type GearBrandOption,type GearEditorItem } from "@/components/admin/gear/GearEditor";
+import { applyOverrides, decideAddGear, decideSelect, mergeSavedGearItem, resolveSelectedItem, shouldAdoptLatest } from "@/components/admin/gear/gearEditorModel";
+import type { SavedItem } from "@/components/admin/gear/gearEditorRequests";
 import { GearFilters, type GearFilterState } from "@/components/admin/gear/GearFilters";
 import { GearTable } from "@/components/admin/gear/GearTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -60,11 +62,17 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
   const [createdItem, setCreatedItem] = useState<GearEditorItem | null>(null);
   const [brands, setBrands] = useState<GearBrandOption[]>([]);
   const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(() => new Set());
+  // Locally known newer copies of items, keyed by id: a saved item merged into its entry, or the latest server copy after "Load latest".
+  // An override is used only while its version is newer than the server item's, so a refresh can never be masked by it (applyOverrides).
+  const [overrides, setOverrides] = useState<Map<string, GearEditorItem>>(() => new Map());
+  // Whether the open editor has unsaved changes. A ref, because it is only read inside event handlers.
+  const editorDirtyRef = useRef(false);
+  const handleDirtyChange = useCallback((dirty: boolean) => { editorDirtyRef.current = dirty; }, []);
   const catalogItems = useMemo(() => {
-    const activeItems = items.filter((item) => !deletedItemIds.has(item.id));
+    const activeItems = applyOverrides(items, overrides).filter((item) => !deletedItemIds.has(item.id));
     if (!createdItem || activeItems.some((item) => item.id === createdItem.id) || deletedItemIds.has(createdItem.id)) return activeItems;
     return [createdItem, ...activeItems];
-  }, [createdItem, deletedItemIds, items]);
+  }, [createdItem, deletedItemIds, items, overrides]);
 
   const filteredItems = useMemo(
     () => catalogItems.filter((item) => matchesFilters(item, filters)),
@@ -90,6 +98,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
 
   useEffect(() => {
     const handleAddGear = () => {
+      if (decideAddGear({ dirty: editorDirtyRef.current, confirm: (message) => window.confirm(message) }) !== "switch") return;
       setIsCreating(true);
       setSelectedItemId(null);
     };
@@ -98,11 +107,35 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
     return () => window.removeEventListener(ADMIN_GEAR_ADD_EVENT, handleAddGear);
   }, []);
 
-  const selectedItem = isCreating ? null : catalogItems.find((item) => item.id === selectedItemId) ?? filteredItems[0] ?? catalogItems[0] ?? null;
+  const selectedItem = resolveSelectedItem({ isCreating, selectedItemId, catalogItems, filteredItems });
 
   const handleSelectItem = (itemId: string) => {
+    // Re-selecting the open item is not a switch; otherwise a dirty editor must be confirmed first. Declining leaves the selection (and the
+    // draft) exactly as it was. See decideSelect.
+    const decision = decideSelect(itemId, { isCreating, selectedId: selectedItem?.id ?? null, dirty: editorDirtyRef.current, confirm: (message) => window.confirm(message) });
+    if (decision !== "switch") return;
     setIsCreating(false);
     setSelectedItemId(itemId);
+  };
+
+  // A save of `itemId` succeeded. The PATCH response has no brand or variants, so it is merged into the entry with the SAME id (never into
+  // "the selected item"), keeping the entry's relations. A response that is not newer than the entry is ignored (mergeSavedGearItem).
+  const handleSaved = (itemId: string, saved: SavedItem) => {
+    const base = catalogItems.find((candidate) => candidate.id === itemId);
+    if (base) {
+      const merged = mergeSavedGearItem(base, saved, brands);
+      if (merged !== base) setOverrides((current) => new Map(current).set(itemId, merged));
+    }
+    setCreatedItem((current) => (current && current.id === itemId ? mergeSavedGearItem(current, saved, brands) : current));
+  };
+
+  // The latest server copy of `itemId` was read: it replaces what this catalog knows about that item (matched by id), unless it is OLDER than
+  // what is already known (a late response from an earlier request).
+  const handleReloaded = (itemId: string, latest: GearEditorItem) => {
+    if (latest.id !== itemId) return;
+    if (!shouldAdoptLatest(catalogItems.find((candidate) => candidate.id === itemId), latest)) return;
+    setOverrides((current) => (shouldAdoptLatest(current.get(itemId), latest) ? new Map(current).set(itemId, latest) : current));
+    setCreatedItem((current) => (current && current.id === itemId && shouldAdoptLatest(current, latest) ? latest : current));
   };
 
   const handleCreated = (created: GearEditorItem) => {
@@ -138,7 +171,7 @@ export function AdminGearCatalog({ items }: AdminGearCatalogProps) {
             <GearTable items={filteredItems} onSelectItem={handleSelectItem} />
           </CardContent>
         </Card>
-        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} onDeleted={handleDeleted} brands={brands} onBrandCreated={handleBrandCreated} />
+        <GearEditor key={isCreating ? "new" : selectedItem?.id ?? "empty"} item={selectedItem} mode={isCreating ? "create" : "edit"} onCreated={handleCreated} onSaved={handleSaved} onReloaded={handleReloaded} onDirtyChange={handleDirtyChange} onDeleted={handleDeleted} brands={brands} onBrandCreated={handleBrandCreated} />
       </section>
     </>
   );

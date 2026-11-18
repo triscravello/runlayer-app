@@ -1,34 +1,31 @@
 "use client";
 
 
-import { useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Clock3, ExternalLink, ImageOff, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-import { toDate, type SerializableDate } from "@/lib/utils/date";
+import {
+  categoryOptions,
+  formatDate,
+  genderTargetOptions,
+  hasValue,
+  isValidHttpUrl,
+  parseWeatherScore,
+  priceRangeOptions,
+  splitList,
+  weatherFields,
+  type EditableFields,
+  type GearEditorItem,
+} from "./gearEditorModel";
+import { createEditorController, type EditorController } from "./gearEditorController";
+import { GearEditorNotices } from "./GearEditorNotices";
+import { canSave, createEditorState, editorReducer, isDirty, isLocked, liveMessage, statusBadgeLabel } from "./gearEditorState";
+import type { SavedItem } from "./gearEditorRequests";
 
-export type GearEditorItem = {
-  id: string;
-  name: string;
-  brandId: string;
-  brand?: { name?: string | null } | null;
-  category: "TOP" | "BOTTOM" | "ACCESSORY";
-  priceRange: "BUDGET" | "MID" | "PREMIUM";
-  genderTarget?: string | null;
-  subcategory?: string | null;
-  tags: string[];
-  bodyTypeFit: string[];
-  imageUrl?: string | null;
-  affiliateUrl?: string | null;
-  weatherHot?: number | null;
-  weatherCold?: number | null;
-  weatherRain?: number | null;
-  weatherWind?: number | null;
-  createdAt?: SerializableDate;
-  updatedAt?: SerializableDate;
-};
+export type { GearEditorItem } from "./gearEditorModel";
 
 export type GearBrandOption = {
   id: string;
@@ -39,119 +36,19 @@ type GearEditorProps = {
   item?: GearEditorItem | null;
   mode?: "edit" | "create";
   onCreated?: (item: GearEditorItem) => void;
+  /** A save of `itemId` succeeded; `saved` is the validated PATCH response (scalar columns only, no brand or variants). */
+  onSaved?: (itemId: string, saved: SavedItem) => void;
+  /** The latest server copy of `itemId` was read by "Load latest" or "Check latest". */
+  onReloaded?: (itemId: string, item: GearEditorItem) => void;
+  /** Reports whether the draft has unsaved changes, so the catalog can confirm before switching away. */
+  onDirtyChange?: (dirty: boolean) => void;
   onDeleted?: (itemId: string) => void;
   brands?: GearBrandOption[];
   onBrandCreated?: (brand: GearBrandOption) => void;
 };
 
-type SaveState = "idle" | "saving" | "saved" | "error";
 type DeleteState = "idle" | "deleting" | "deleted" | "error";
 type BrandCreateState = "idle" | "creating" | "created" | "error";
-
-type GenderTargetOption = "MEN" | "WOMEN" | "UNISEX";
-
-type EditableFields = {
-  name: string;
-  brandId: string;
-  newBrandName: string;
-  category: GearEditorItem["category"];
-  priceRange: GearEditorItem["priceRange"];
-  genderTarget: string;
-  subcategory: string;
-  imageUrl: string;
-  affiliateUrl: string;
-  tags: string;
-  bodyTypeFit: string;
-  weatherHot: string;
-  weatherCold: string;
-  weatherRain: string;
-  weatherWind: string;
-};
-
-const categoryOptions: Array<GearEditorItem["category"]> = ["TOP", "BOTTOM", "ACCESSORY"];
-const priceRangeOptions: Array<GearEditorItem["priceRange"]> = ["BUDGET", "MID", "PREMIUM"];
-const genderTargetOptions: Array<{ value: GenderTargetOption; label: string }> = [
-  { value: "MEN", label: "Men" },
-  { value: "WOMEN", label: "Women" },
-  { value: "UNISEX", label: "Unisex" },
-];
-const allowedGenderTargets = new Set(genderTargetOptions.map((option) => option.value));
-const weatherFields = [
-  { key: "weatherHot", label: "Hot weather" },
-  { key: "weatherCold", label: "Cold weather" },
-  { key: "weatherRain", label: "Rain" },
-  { key: "weatherWind", label: "Wind" },
-] as const;
-
-function hasValue(value?: string | null) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isValidHttpUrl(value: string) {
-  if (!value.trim()) return false;
-
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function splitList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function joinList(value?: string[] | null) {
-  return value?.length ? value.join(", ") : "";
-}
-
-function normalizeGenderTarget(value?: string | null) {
-  const normalized = value?.trim().toUpperCase();
-  return normalized && allowedGenderTargets.has(normalized as GenderTargetOption) ? normalized : "";
-}
-
-function formatDate(value?: SerializableDate) {
-  const date = toDate(value);
-  if (!date) return "Pending";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function toFields(item?: GearEditorItem | null): EditableFields {
-  return {
-    name: item?.name ?? "",
-    brandId: item?.brandId ?? "",
-    newBrandName: "",
-    category: item?.category ?? "TOP",
-    priceRange: item?.priceRange ?? "MID",
-    genderTarget: normalizeGenderTarget(item?.genderTarget),
-    subcategory: item?.subcategory ?? "",
-    imageUrl: item?.imageUrl ?? "",
-    affiliateUrl: item?.affiliateUrl ?? "",
-    tags: joinList(item?.tags),
-    bodyTypeFit: joinList(item?.bodyTypeFit),
-    weatherHot: item?.weatherHot?.toString() ?? "",
-    weatherCold: item?.weatherCold?.toString() ?? "",
-    weatherRain: item?.weatherRain?.toString() ?? "",
-    weatherWind: item?.weatherWind?.toString() ?? "",
-  };
-}
-
-function parseWeatherScore(value: string) {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : null;
-}
 
 function SectionHeader({
   title,
@@ -241,14 +138,46 @@ function EmptyBadge({ children = "Missing" }: { children?: React.ReactNode }) {
   return <Badge className="border border-zinc-700 bg-zinc-900 text-zinc-400">{children}</Badge>
 }
 
-export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands = [], onBrandCreated }: GearEditorProps) {
-  const [fields, setFields] = useState<EditableFields>(() => toFields(item));
-  const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [error, setError] = useState<string | null>(null);
+export function GearEditor({ item, mode = "edit", onCreated, onSaved, onReloaded, onDirtyChange, onDeleted, brands = [], onBrandCreated }: GearEditorProps) {
+  // All draft, baseline-version, save and conflict state lives in one reducer (gearEditorState.ts). The baseline version is captured from the
+  // item ONCE, here, together with the fields; later changes to the `item` prop (for example a catalog refresh) never touch the draft or the token.
+  const [state, dispatch] = useReducer(editorReducer, undefined, () => createEditorState(item, mode));
+  const fields = state.draft;
   const [deleteState, setDeleteState] = useState<DeleteState>("idle");
   const [brandCreateState, setBrandCreateState] = useState<BrandCreateState>("idle");
 
   const isCreateMode = mode === "create";
+
+  // Refs hold the latest state and callbacks for the controller's async work; they are only read inside event handlers, never during render.
+  const stateRef = useRef(state);
+  const callbacksRef = useRef({ brands, onSaved, onReloaded, onCreated });
+  const dirtyCallbackRef = useRef(onDirtyChange);
+  useEffect(() => {
+    stateRef.current = state;
+    callbacksRef.current = { brands, onSaved, onReloaded, onCreated };
+    dirtyCallbackRef.current = onDirtyChange;
+  });
+  // The controller is created on first use, inside an event handler (never during render), so it can safely read the refs above.
+  const controllerRef = useRef<EditorController | null>(null);
+  const getController = () => {
+    if (!controllerRef.current) {
+      controllerRef.current = createEditorController({
+        getState: () => stateRef.current,
+        dispatch,
+        fetchImpl: (input, init) => fetch(input, init),
+        confirm: (message) => window.confirm(message),
+        callbacks: () => callbacksRef.current,
+      });
+    }
+    return controllerRef.current;
+  };
+
+  const dirty = isDirty(state);
+  useEffect(() => { dirtyCallbackRef.current?.(dirty); }, [dirty]);
+  useEffect(() => {
+    const report = dirtyCallbackRef;
+    return () => report.current?.(false);
+  }, []);
 
   const imageUrl = fields.imageUrl.trim();
   const affiliateUrl = fields.affiliateUrl.trim();
@@ -278,9 +207,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
   const hasInvalidAffiliateUrl = hasAffiliateUrl && !isValidHttpUrl(affiliateUrl);
 
   const updateField = (key: keyof EditableFields, value: string) => {
-    setFields((current) => ({ ...current, [key]: value }));
-    setSaveState("idle");
-    setError(null);
+    dispatch({ type: "edit", key, value });
     if (key === "newBrandName") setBrandCreateState("idle");
   };
 
@@ -288,7 +215,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
     const brandName = fields.newBrandName.trim();
     if (!brandName) {
       setBrandCreateState("error");
-      setError("Enter a brand name before creating a brand.");
+      dispatch({ type: "localInvalid", message: "Enter a brand name before creating a brand." });
       return;
     }
 
@@ -301,7 +228,6 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
     }
 
     setBrandCreateState("creating");
-    setError(null);
 
     const response = await fetch("/api/admin/brands", {
       method: "POST",
@@ -311,7 +237,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
 
     if (!response.ok) {
       setBrandCreateState("error");
-      setError("Brand creation failed. Check the brand name and try again.");
+      dispatch({ type: "localInvalid", message: "Brand creation failed. Check the brand name and try again." });
       return;
     }
 
@@ -329,7 +255,6 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
     if (!confirmed) return;
 
     setDeleteState("deleting");
-    setError(null);
 
     const response = await fetch(`/api/admin/gear/${item.id}`, {
       method: "DELETE",
@@ -337,79 +262,13 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
 
     if (!response.ok) {
       setDeleteState("error");
-      setError("Delete failed. The item may already be used by related records, or the server rejected the request.");
+      dispatch({ type: "localInvalid", message: "Delete failed. The item may already be used by related records, or the server rejected the request." });
       return;
     }
 
     setDeleteState("deleted");
     onDeleted?.(item.id);
   }
-
-  const handleSave = async () => {
-    if (!isCreateMode && !item) return;
-    if (hasInvalidImageUrl) {
-      setSaveState("error");
-      setError("Image URL must be a valid http or https URL.");
-      return;
-    }
-
-    if (hasInvalidAffiliateUrl) {
-      setSaveState("error");
-      setError("Affiliate URL must be blank or a valid http or https URL.");
-      return;
-    }
-
-    if (!fields.name.trim() || !fields.brandId.trim() || !fields.category || !fields.priceRange) {
-      setSaveState("error");
-      setError("Name, brand ID, category, and price range are required.");
-      return;
-    }
-
-    if (fields.genderTarget && !allowedGenderTargets.has(fields.genderTarget as GenderTargetOption)) {
-      setSaveState("error");
-      setError("Gender must be Men, Women, or Unisex");
-      return;
-    }
-    setSaveState("saving");
-    setError(null);
-
-    const response = await fetch(isCreateMode ? "/api/admin/gear" : `/api/admin/gear/${item?.id}`, {
-      method: isCreateMode ? "POST" : "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: fields.name,
-        brandId: fields.brandId.trim(),
-        category: fields.category,
-        priceRange: fields.priceRange,
-        genderTarget: fields.genderTarget.trim() || null,
-        subcategory: fields.subcategory.trim() || null,
-        tags,
-        bodyTypeFit,
-        imageUrl: imageUrl || null,
-        affiliateUrl: affiliateUrl || null,
-        weatherSuitability: {
-          hot: parseWeatherScore(fields.weatherHot),
-          cold: parseWeatherScore(fields.weatherCold),
-          rain: parseWeatherScore(fields.weatherRain),
-          wind: parseWeatherScore(fields.weatherWind),
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      setSaveState("error");
-      setError(isCreateMode ? "Create failed. Check the required fields and brand ID, then try again." : "Save failed. Check the item data and try again.");
-      return;
-    };
-
-    const savedItem = await response.json() as GearEditorItem;
-    const savedBrand = brands.find((brand) => brand.id === savedItem.brandId);
-    const savedItemWithBrand = savedBrand ? { ...savedItem, brand: { name: savedBrand.name } } : savedItem;
-    setSaveState("saved");
-    if (isCreateMode) {
-      onCreated?.(savedItemWithBrand);
-    }
-  };
 
   if (!item && !isCreateMode) {
     return (
@@ -427,7 +286,7 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/60">
-              {saveState === "saving" ? <Loader2 className="size-4 animate-spin text-zinc-300" /> : <Save className="size-4 text-zinc-400" />}
+              {state.status === "saving" || state.status === "reloading" ? <Loader2 className="size-4 animate-spin text-zinc-300" /> : <Save className="size-4 text-zinc-400" />}
             </div>
 
             <div>
@@ -437,11 +296,16 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
           </div>
 
           <Badge className="border border-zinc-700 bg-zinc-950 text-zinc-400">
-            {saveState === "saved" ? (isCreateMode ? "Created" : "Saved") : saveState === "saving" ? (isCreateMode ? "Creating" : "Saving") : saveState === "error" ? "Error" : isCreateMode ? "New item" : "Not synced"}
+            {statusBadgeLabel(state)}
           </Badge>
         </div>
       </Card>
 
+      {/* Politely announces save progress and results. Errors and conflicts announce themselves through their own role="alert" notices. */}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveMessage(state)}</p>
+
+      {/* While a request is in flight every control is disabled, so the draft can not change under it (and a reload can never overwrite later edits). */}
+      <fieldset disabled={isLocked(state)} className="m-0 min-w-0 border-0 p-0">
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-1">
         <div className="space-y-4">
           <Card className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm">
@@ -684,9 +548,10 @@ export function GearEditor({ item, mode = "edit", onCreated, onDeleted, brands =
 
           <EditorSection title="Intensity Compatibility" description="No separate intensity model exists; workout context can only be inferred from tags." defaultOpen={false}><div className="flex flex-wrap gap-2">{tags.length ? tags.map((tag) => <Badge key={tag} className="border border-zinc-700 bg-zinc-900 text-zinc-300">{tag}</Badge>) : <EmptyBadge>Not configured</EmptyBadge>}</div></EditorSection>
 
-          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(item?.updatedAt)}</p><p>Edited by · Pending</p></div>{error ? <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}<div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={handleSave} disabled={saveState === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{saveState === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button>{isCreateMode ? <Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Trash2 className="mr-2 size-4" />Delete unavailable</Button> : <Button type="button" variant="outline" onClick={handleDelete} disabled={deleteState === "deleting" || deleteState === "deleted"} className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"><Trash2 className="mr-2 size-4" />{deleteState === "deleting" ? "Deleting…" : deleteState === "deleted" ? "Deleted" : "Delete Gear"}</Button>}</div></div></CardContent></Card>
+          <Card className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/60 shadow-sm"><CardContent className="space-y-5 p-5"><SectionHeader title="Catalog Status" description="Track real update status and metadata readiness." /><div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-4 text-amber-300" /><div><p className="text-sm font-medium text-amber-100">{completion >= 80 ? "Metadata mostly configured" : "Needs metadata"}</p><p className="mt-1 text-xs leading-relaxed text-amber-200/70">{completion >= 80 ? "Most tracked fields are present." : "Some fields are missing or not configured."}</p></div></div></div><div className="space-y-2 text-xs text-zinc-500"><p>Last updated · {formatDate(state.updatedAt)}</p><p>Edited by · Pending</p></div><GearEditorNotices state={state} onKeepEditing={() => dispatch({ type: "keepEditing" })} onLoadLatest={() => void getController().loadLatest("reload")} onRetry={() => void getController().retrySame()} onCheckLatest={() => void getController().loadLatest("check")} /><div className="sticky bottom-0 -mx-5 -mb-5 mt-6 border-t border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-xl"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500">Save draft unavailable</Button><Button onClick={() => void getController().save()} disabled={!canSave(state)} aria-busy={state.status === "saving"} className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-white">{state.status === "saving" ? (isCreateMode ? "Creating…" : "Saving…") : isCreateMode ? "Create Gear" : "Save Changes"}</Button>{isCreateMode ? <Button variant="outline" disabled className="border-zinc-700 bg-zinc-900 text-zinc-500"><Trash2 className="mr-2 size-4" />Delete unavailable</Button> : <Button type="button" variant="outline" onClick={handleDelete} disabled={deleteState === "deleting" || deleteState === "deleted"} className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"><Trash2 className="mr-2 size-4" />{deleteState === "deleting" ? "Deleting…" : deleteState === "deleted" ? "Deleted" : "Delete Gear"}</Button>}</div></div></CardContent></Card>
         </div>
       </div>
+      </fieldset>
     </div>
   );
 }
