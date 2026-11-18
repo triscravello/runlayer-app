@@ -7,6 +7,7 @@ import { buildAlternativesByCategory, buildRecommendedOutfit, diversifyRecommend
 import { getUserProfile } from "@/lib/db/userRepository";
 import { RECOMMENDATION_ENGINE_VERSION } from "@/config/recommendationEngineVersion";
 
+import { toClientRecommendationRecord } from "@/lib/gear/clientGear";
 import { selectProductVariant } from "@/lib/gear/productVariant";
 import type { ScoredRecommendationItem, UserPreferenceInput } from "@/lib/engine/types/recommendationEngine";
 
@@ -169,11 +170,15 @@ export async function generateGearRecommendations(
 }
 
 export async function getRecommendationHistory(userId: string, options: { limit?: number; offset?: number } = {}) {
-    return listRecommendationHistoryByUserId({
+    const history = await listRecommendationHistoryByUserId({
         userId,
         take: options.limit ?? DEFAULT_HISTORY_LIMIT,
         skip: options.offset ?? 0,
     });
+
+    // The one boundary every history route shares (GET /api/recommendation, /api/recommendation/history and its plural alias): the
+    // nested gear objects are rebuilt from an allow-list, so internal columns such as `version` never reach the client.
+    return history.map(toClientRecommendationRecord);
 }
 
 export async function deleteRecommendationHistory(userId: string, recommendationId: string) {

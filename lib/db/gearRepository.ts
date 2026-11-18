@@ -295,7 +295,12 @@ export async function deleteGearItem(id: string) {
     });
 }
 
-function mapGearItemForRecommendation(gearItem: GearItemRow & { variants?: GearVariantWriteInput[] }): GearItem {
+function mapGearItemForRecommendation(row: GearItemRow & { variants?: GearVariantWriteInput[] }): GearItem {
+    // `version` is the gear row's optimistic-concurrency counter: an internal write token that no scoring input, derived property or
+    // selected variant uses. It is dropped here so it can not travel into recommendation responses or compare-page props. (This is
+    // unrelated to the recommendation engine's own versionMetadata.version.) Every other column is passed through unchanged.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to omit it
+    const { version: _gearVersion, ...gearItem } = row;
     return {
         ...gearItem,
         weatherSuitability: {
