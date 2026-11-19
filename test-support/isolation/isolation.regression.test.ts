@@ -30,9 +30,9 @@ const HOSTILE = {
     PGHOST: "pg.example.invalid",
     CUSTOM_HOSTED_SERVICE_URL: "postgresql://x:y@other.example.invalid/db",
     RUNLAYER_ALLOW_DB_TESTS: "1",
-    RUNLAYER_TEST_DATABASE_URL: "postgresql://x:y@127.0.0.1:5432/runlayer_regression_test",
+    RUNLAYER_TEST_DATABASE_URL: "postgresql://x:y@127.0.0.1:54329/runlayer_regression_test",
 };
-const VALID_INTEGRATION = { ...BASE, RUNLAYER_ALLOW_DB_TESTS: "1", RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/runlayer_regression_test" };
+const VALID_INTEGRATION = { ...BASE, RUNLAYER_ALLOW_DB_TESTS: "1", RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/runlayer_regression_test" };
 
 const run = (args: string[], env: Record<string, string>, cwd = root) => spawnSync(process.execPath, args, { cwd, env: env as NodeJS.ProcessEnv, encoding: "utf8", timeout: 120_000 });
 const report = (result: ReturnType<typeof run>) => {
@@ -101,11 +101,14 @@ test("5: dns, sockets and fetch to non-loopback destinations are blocked; loopba
 const INTEGRATION_CASES: Array<[string, Record<string, string>]> = [
     ["no opt-in flag", { ...VALID_INTEGRATION, RUNLAYER_ALLOW_DB_TESTS: "" }],
     ["no target", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "" }],
-    ["remote host", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@db.example.invalid:5432/app_test" }],
-    ["host-override parameter", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/app_test?host=db.example.invalid" }],
-    ["database name without 'test'", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/app" }],
+    ["remote host", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@db.example.invalid:54329/app_test" }],
+    ["host-override parameter", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/app_test?host=db.example.invalid" }],
+    ["database name without 'test'", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/app" }],
     ["not a PostgreSQL URL", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "mysql://u:p@127.0.0.1:3306/app_test" }],
-    ["same target as DATABASE_URL", { ...VALID_INTEGRATION, DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/runlayer_regression_test" }],
+    ["same target as DATABASE_URL", { ...VALID_INTEGRATION, DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/runlayer_regression_test" }],
+    ["default port 5432 (the real local server)", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/runlayer_regression_test" }],
+    ["no port (means 5432)", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1/runlayer_regression_test" }],
+    ["localhost on 5432", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@localhost:5432/runlayer_regression_test" }],
     ["unparsable", { ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "not a url" }],
 ];
 
@@ -139,7 +142,8 @@ test("6: a valid local integration configuration is accepted, keeps its opt-in v
 test("7: the preload's integration rules agree with the existing lib/auth/testDatabaseGuard rules (and are only stricter about host overrides)", () => {
     for (const [label, env] of [["valid", VALID_INTEGRATION] as const, ...INTEGRATION_CASES]) {
         const existing = checkTestDatabase(env).ok;
-        const expectedByNewRules = label === "host-override parameter" ? false : existing;
+        const stricterThanTheExistingGuard = label === "host-override parameter" || label.includes("5432");
+        const expectedByNewRules = stricterThanTheExistingGuard ? false : existing;
         const fresh = run([launcher, "--integration", "--dry-run"], env).status === 0;
         assert.equal(fresh, expectedByNewRules, label);
     }

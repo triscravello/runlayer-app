@@ -24,6 +24,9 @@ function checkIntegrationTarget(env) {
     if (url.searchParams.has(param)) return { ok: false, reason: "RUNLAYER_TEST_DATABASE_URL must not carry host-override parameters" };
   }
 
+  // The default PostgreSQL port is where a real local server may live. An explicit, different port is required: a URL without a port means 5432.
+  if (!url.port || Number(url.port) === 5432) return { ok: false, reason: "RUNLAYER_TEST_DATABASE_URL must name an explicit port other than 5432 (a dedicated throwaway server)" };
+
   const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
   if (!/test/i.test(database)) return { ok: false, reason: 'the test database name must contain "test"' };
 

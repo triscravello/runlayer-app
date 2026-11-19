@@ -14,6 +14,8 @@
     "db:preflight": "tsx scripts/preflight.ts",
     "db:deploy": "tsx scripts/migrateGuarded.ts",
     "db:deploy:execute": "tsx scripts/migrateGuarded.ts --execute",
+    "db:disposable:check": "tsx scripts/migrateDisposable.ts",
+    "db:disposable:migrate": "tsx scripts/migrateDisposable.ts --execute",
     "test": "node scripts/runTests.mjs",
     "test:integration": "node scripts/runTests.mjs --integration"
   },
