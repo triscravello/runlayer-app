@@ -314,3 +314,106 @@ test("the Phase 2C lifecycle keeps its original assertions (duplicate detection,
         assert.ok(source.includes(expected), `assertion text missing: ${expected}`);
     }
 });
+
+// --- Historical gear fixture (Stage G2-B2-F1) ---------------------------------------------------------------------------------------------
+// The Phase 2C lifecycle runs on a database that stops at MIGRATION_NAME, so it lacks columns the CURRENT Prisma client reads and writes
+// (gear_items.version, added by 20261118120000_add_gear_item_version, and brands.normalized_name, added by the Phase 2D migration). A Prisma
+// `gearItem.create` there fails with "The column `version` does not exist". The fixture therefore inserts gear with raw, parameterized SQL that
+// names only columns existing at that migration point. These checks are STATIC and database-free: the historical column set is derived from
+// the migration files themselves, so it cannot drift from them. They prove the fixture's shape, not run-time behavior (that needs a live run).
+
+function migrationNamesThrough(last: string): string[] {
+    return readdirSync(`${root}prisma/migrations`).filter((entry) => /^\d{14}_/.test(entry) && statSync(`${root}prisma/migrations/${entry}`).isDirectory() && entry <= last).sort();
+}
+
+/** The columns of `table` after applying the migrations up to and including `last`, and which of them must be supplied by an INSERT. */
+function historicalColumns(table: string, last: string) {
+    const columns = new Set<string>();
+    const required = new Set<string>();
+    for (const name of migrationNamesThrough(last)) {
+        const sql = read(`prisma/migrations/${name}/migration.sql`);
+        const create = new RegExp(`CREATE TABLE "${table}" \\(([\\s\\S]*?)\\n\\);`).exec(sql);
+        for (const line of create?.[1]?.split("\n") ?? []) {
+            const column = /^\s+"([A-Za-z_]+)"\s+(.+?),?\s*$/.exec(line);
+            if (!column) continue;
+            columns.add(column[1] as string);
+            if (/NOT NULL/.test(column[2] as string) && !/DEFAULT/.test(column[2] as string)) required.add(column[1] as string);
+        }
+        for (const alter of sql.matchAll(new RegExp(`ALTER TABLE "${table}"([^;]*);`, "g"))) {
+            assert.doesNotMatch(alter[1] as string, /DROP COLUMN|RENAME/, `${name}: this check does not model dropped or renamed columns of ${table}`);
+            for (const added of (alter[1] as string).matchAll(/ADD COLUMN\s+"([A-Za-z_]+)"([^,]*)/g)) {
+                columns.add(added[1] as string);
+                if (/NOT NULL/.test(added[2] as string) && !/DEFAULT/.test(added[2] as string)) required.add(added[1] as string);
+            }
+        }
+    }
+    return { columns, required };
+}
+
+/** Problems with the historical gear fixture in the lifecycle test's source (comments already stripped); empty means it is sound. */
+function inspectHistoricalGearFixture(code: string): string[] {
+    const problems: string[] = [];
+    const lifecycle = code.slice(Math.max(0, code.indexOf('await t.test("duplicates:')));
+    if (/\.(gearItem|brand)\.[A-Za-z]+\(/.test(code)) problems.push("prisma_model_api_used_on_a_historical_schema");
+
+    const inserts = [...code.matchAll(/INSERT INTO gear_items \(([^)]*)\) VALUES \(([^)]*)\)/g)];
+    if (inserts.length !== 1) return [...problems, "gear_fixture_missing_or_duplicated"];
+    const columns = (inserts[0]?.[1] ?? "").split(",").map((column) => column.trim().replace(/"/g, ""));
+    const values = (inserts[0]?.[2] ?? "").split(",").map((value) => value.trim());
+    if (columns.length !== values.length) problems.push("column_and_value_counts_differ");
+    if (new Set(columns).size !== columns.length) problems.push("duplicate_column");
+
+    const historical = historicalColumns("gear_items", "20261105180000_add_outfit_item_constraints_and_indexes");
+    for (const column of columns) if (!historical.columns.has(column)) problems.push(`column_not_in_historical_schema:${column}`);
+    for (const column of historical.required) if (!columns.includes(column)) problems.push(`required_column_missing:${column}`);
+    if (!/INSERT INTO gear_items \([^)]*\) VALUES \(\$1, \$2, \$3, /.test(code)) problems.push("id_name_and_brand_must_be_bound_parameters");
+    if (/INSERT INTO gear_items[^`]*\$\{/.test(code)) problems.push("string_interpolation_in_the_fixture_sql");
+    if (!/gear\.map\(\(item\) => client\.\$executeRawUnsafe\(`INSERT INTO gear_items[^`]*`, item\.id, item\.name, brand\.id\)\)/.test(code)) problems.push("fixture_values_not_bound");
+
+    const brandInsert = lifecycle.indexOf("INSERT INTO brands (id, name) VALUES ($1, $1)");
+    const gearInsert = lifecycle.indexOf("INSERT INTO gear_items");
+    if (brandInsert < 0 || gearInsert < brandInsert) problems.push("the_brand_row_must_exist_before_the_gear_rows");
+    return problems;
+}
+
+test("the Phase 2C lifecycle's gear fixture is raw, parameterized SQL naming only columns that exist at its migration point", () => {
+    const code = read("prisma/outfitConstraints.integration.test.ts").replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    assert.deepEqual(inspectHistoricalGearFixture(code), []);
+
+    // The point of the fixture: the migrations AFTER its stopping point add columns the current client writes, so the Prisma API cannot be used.
+    const atFixture = historicalColumns("gear_items", "20261105180000_add_outfit_item_constraints_and_indexes");
+    const atHead = historicalColumns("gear_items", "99999999999999_head");
+    assert.equal(atFixture.columns.has("version"), false, "gear_items.version does not exist at the fixture's migration point");
+    assert.equal(atHead.columns.has("version"), true, "but it does in the current migrations, which is why the Prisma client cannot create gear there");
+    assert.deepEqual([...atFixture.required].sort(), ["brand_id", "category", "id", "name", "priceRange"], "the NOT NULL columns without defaults that every insert must supply");
+    const modelColumns = /model GearItem \{([\s\S]*?)\n\}/.exec(read("prisma/schema.prisma"))?.[1] ?? "";
+    assert.match(modelColumns, /\n\s+version\s+Int\s+@default\(0\)/, "the current Prisma GearItem model includes version");
+});
+
+test("the historical gear fixture inspection has teeth: reintroducing the Prisma API or an unavailable column is detected", () => {
+    const code = read("prisma/outfitConstraints.integration.test.ts").replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    const insert = 'INSERT INTO gear_items (id, name, brand_id, category, "priceRange", tags, body_type_fit) VALUES ($1, $2, $3,';
+    assert.ok(code.includes(insert), "the expected statement is present");
+    const mutated: Array<[string, string, string]> = [
+        ["the Prisma API again", `${code}\nawait client.gearItem.create({ data: {} });`, "prisma_model_api_used_on_a_historical_schema"],
+        ["a column from a later migration", code.replace('"priceRange", tags,', '"priceRange", version, tags,'), "column_not_in_historical_schema:version"],
+        ["a missing required column", code.replace("id, name, brand_id, category,", "id, name, category,"), "required_column_missing:brand_id"],
+        ["interpolated values", code.replace("VALUES ($1, $2, $3, 'TOP'", "VALUES ($1, $2, ${3}, 'TOP'"), "string_interpolation_in_the_fixture_sql"],
+        ["no fixture at all", code.replace(/await Promise\.all\(gear\.map[^\n]*\n/, ""), "gear_fixture_missing_or_duplicated"],
+        ["the gear before the brand", code.replace("INSERT INTO brands (id, name) VALUES ($1, $1)", "INSERT INTO brands (id, name) VALUES ($1, $1) /* moved */").replace(/(const brand = [^\n]*\n)\s*await client\.\$executeRawUnsafe\(`INSERT INTO brands[^\n]*\n/, "$1"), "the_brand_row_must_exist_before_the_gear_rows"],
+    ];
+    for (const [label, source, problem] of mutated) assert.ok(inspectHistoricalGearFixture(source).includes(problem), `${label}: expected ${problem}, got ${inspectHistoricalGearFixture(source).join(", ") || "nothing"}`);
+});
+
+test("the Phase 2C lifecycle keeps its scenario: same migration scope, same maintenance scripts, same Prisma operations, no fewer assertions", () => {
+    const code = read("prisma/outfitConstraints.integration.test.ts");
+    const lifecycle = code.slice(code.indexOf('await t.test("duplicates:'));
+    // Counts recorded when the fixture was corrected; the correction itself adds and removes none. Fewer would mean an assertion was dropped.
+    assert.ok((lifecycle.match(/assert\./g) ?? []).length >= 44, "assertions in the lifecycle subtest");
+    assert.ok((lifecycle.match(/psql\(/g) ?? []).length >= 10, "maintenance-script runs in the lifecycle subtest");
+    assert.ok((lifecycle.match(/prisma\(/g) ?? []).length >= 4, "Prisma CLI operations in the lifecycle subtest");
+    for (const expected of ['["migrate", "deploy"]', '["migrate", "resolve", "--rolled-back", MIGRATION_NAME]', "outfit_items_detect_duplicates.sql", "outfit_items_dedupe_preview.sql", "outfit_items_dedupe.sql", "outfit_items_dedupe_restore.sql", "confirm_dedupe", "confirm_restore", "NEW_INDEXES", "client.user.create", "client.savedOutfit.create", "client.outfitItem.createMany"]) {
+        assert.ok(lifecycle.includes(expected), `missing from the lifecycle: ${expected}`);
+    }
+    assert.ok(lifecycle.includes("const [g1, g2, g3] = gear.map((item) => item.id);"), "the fixture still hands the same three gear ids to the scenario");
+});

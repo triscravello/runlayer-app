@@ -190,11 +190,14 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
 
             // --- Fixtures: three duplicate groups plus legitimate single rows (including the same gear in other outfits).
             const user = await client.user.create({ data: { email: `c2-${suffix}@example.invalid`, passwordHash: "not-a-real-hash" } });
-            // Raw SQL, because this database is deliberately at the Phase 2C schema: brands has no normalized_name column yet
-            // (the Phase 2D migration adds it later), and the Prisma client now writes that column.
+            // Raw SQL, because this database is deliberately at the Phase 2C schema and the current Prisma client reads and writes columns
+            // that do not exist here yet: brands.normalized_name (added by the Phase 2D migration) and gear_items.version (added by
+            // 20261118120000_add_gear_item_version). Each statement names only columns that exist at this migration point, and every value is a
+            // bound parameter; the ids are generated here (Prisma generated them client-side) and created_at/updated_at use their defaults.
             const brand = { id: `c2-brand-${suffix}` };
             await client.$executeRawUnsafe(`INSERT INTO brands (id, name) VALUES ($1, $1)`, brand.id);
-            const gear = await Promise.all(["g1", "g2", "g3"].map((label) => client.gearItem.create({ data: { name: `c2-${label}-${suffix}`, brandId: brand.id, category: "TOP", priceRange: "MID", tags: [], bodyTypeFit: [] } })));
+            const gear = ["g1", "g2", "g3"].map((label) => ({ id: randomUUID(), name: `c2-${label}-${suffix}` }));
+            await Promise.all(gear.map((item) => client.$executeRawUnsafe(`INSERT INTO gear_items (id, name, brand_id, category, "priceRange", tags, body_type_fit) VALUES ($1, $2, $3, 'TOP', 'MID', '{}', '{}')`, item.id, item.name, brand.id)));
             const outfits = await Promise.all(["o1", "o2", "o3"].map((label) => client.savedOutfit.create({ data: { userId: user.id, name: `c2-${label}-${suffix}`, type: "custom" } })));
             const [g1, g2, g3] = gear.map((item) => item.id);
             const [o1, o2, o3] = outfits.map((item) => item.id);
