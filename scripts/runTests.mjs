@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const guard = join(root, "test-support", "isolation", "guard.cjs");
-const { checkIntegrationTarget } = require("../test-support/isolation/target.cjs");
+const { checkAmbientNodeOptions, checkIntegrationTarget, checkRunnerAgreement } = require("../test-support/isolation/target.cjs");
 
 const args = process.argv.slice(2);
 const integration = args.includes("--integration");
@@ -40,6 +40,19 @@ if (integration) {
         console.error(`npm run test:integration refused: ${check.reason}. Nothing was started and no connection was made.`);
         process.exit(2);
     }
+    // The suites' target must be the SAME database the disposable-migration wrapper validated (host, port and database name), and the
+    // wrapper's expected data directory must be named, so each suite can confirm what actually answers. Codes only; no URL is printed.
+    const agreement = checkRunnerAgreement(process.env);
+    if (!agreement.ok) {
+        console.error(`npm run test:integration refused: ${agreement.code} (RUNLAYER_DISPOSABLE_URL and RUNLAYER_DISPOSABLE_DATA_DIR from \`npm run db:disposable:check\` must agree with RUNLAYER_TEST_DATABASE_URL). Nothing was started and no connection was made.`);
+        process.exit(2);
+    }
+    // Other code must not be loaded ahead of the guard: no ambient --require/--import/--loader preloads.
+    const ambient = checkAmbientNodeOptions(process.env.NODE_OPTIONS);
+    if (!ambient.ok) {
+        console.error(`npm run test:integration refused: ${ambient.code} (unset NODE_OPTIONS). Nothing was started and no connection was made.`);
+        process.exit(2);
+    }
 }
 
 const targets = integration && files.length === 0 ? integrationFiles() : files;
@@ -49,17 +62,25 @@ if (integration && targets.length === 0) {
 }
 
 if (dryRun) {
-    console.log(JSON.stringify({ profile: integration ? "integration" : "unit", files: targets.length, guard: relative(root, guard) }));
+    const plan = { profile: integration ? "integration" : "unit", files: targets.length, guard: relative(root, guard) };
+    if (integration) Object.assign(plan, { concurrency: 1, agreedTarget: checkRunnerAgreement(process.env).key });
+    console.log(JSON.stringify(plan));
     process.exit(0);
 }
 
 const env = {
     ...process.env,
+    ...(integration ? { RUNLAYER_TEST_EXPECTED_DATA_DIR: checkRunnerAgreement(process.env).dataDirectory } : {}),
     RUNLAYER_TEST_PROFILE: integration ? "integration" : "unit",
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ""}--require ${JSON.stringify(guard)}`,
 };
+if (integration) {
+    // The wrapper's variables served their purpose (validated above); the test processes must not see them.
+    for (const name of Object.keys(env)) if (name.startsWith("RUNLAYER_DISPOSABLE_")) delete env[name];
+}
 const tsx = require.resolve("tsx/cli");
-const child = spawn(process.execPath, [tsx, "--test", ...targets], { cwd: root, env, stdio: ["inherit", "pipe", "inherit"] });
+// Integration suites share one database and several count unrelated rows or sessions: they run strictly one file at a time.
+const child = spawn(process.execPath, [tsx, "--test", ...(integration ? ["--test-concurrency=1"] : []), ...targets], { cwd: root, env, stdio: ["inherit", "pipe", "inherit"] });
 
 let output = "";
 child.stdout.on("data", (chunk) => {

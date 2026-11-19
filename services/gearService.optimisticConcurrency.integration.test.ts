@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { resolveTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { combineFailures, runMarkerCleanup } from "../test-support/isolation/markerCleanup";
+import { expectedDataDirectoryFromEnv, expectedIdentityFor, verifyConnectedIdentity, type ConnectedFacts } from "../test-support/isolation/connectedIdentity";
 
 /**
  * Optimistic concurrency (Stage 2B) against a REAL PostgreSQL database. Skipped by default; NOT part of the offline suite.
@@ -13,8 +15,16 @@ import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
  * migrations and never touches DATABASE_URL's database):
  *
  *   RUNLAYER_ALLOW_DB_TESTS=1 \
- *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/runlayer_proof_test \
+ *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/runlayer_<name>_test \
+ *   RUNLAYER_DISPOSABLE_URL=<the same host, port and database> \
+ *   RUNLAYER_DISPOSABLE_DATA_DIR=<the disposable cluster's canonical data directory> \
  *   node scripts/runTests.mjs --integration services/gearService.optimisticConcurrency.integration.test.ts
+ *
+ * The target must be a literal loopback IP on an explicit port that is not 5432 or 6543, with a database name matching
+ * runlayer_..._test_... (never `localhost`). The runner also requires RUNLAYER_DISPOSABLE_URL to name the same database and passes the
+ * wrapper's data directory on as RUNLAYER_TEST_EXPECTED_DATA_DIR; run without the runner, set that variable yourself, because every
+ * suite checks the live server's database, port, address AND data directory before it writes anything. With RUNLAYER_ALLOW_DB_TESTS=1
+ * an invalid target FAILS loudly before any connection; without it the suite skips. See README "Testing".
  *
  * Safeguards: the shared guard (lib/auth/testDatabaseGuard.ts: explicit opt-in, local host, database name contains "test", differs
  * from DATABASE_URL); this file additionally refuses port 5432 (where a real local server may live) and asks the server it reached
@@ -26,7 +36,7 @@ import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
  * started through the normal client so it really blocks inside PostgreSQL, and the test waits until pg_stat_activity shows a
  * backend waiting on a lock before releasing the first one.
  */
-const check = checkTestDatabase(process.env);
+const check = resolveTestDatabase(process.env);
 // Opt-in progress trace to stderr (RUNLAYER_TEST_TRACE=1): the test reporter prints a subtest only after its parent finishes, so this is the way to see where a run is stuck.
 const trace = (message: string) => { if (process.env.RUNLAYER_TEST_TRACE) process.stderr.write(`[trace ${new Date().toISOString().slice(11, 23)}] ${message}\n`); };
 
@@ -141,8 +151,15 @@ test(
         const within = <T,>(promise: Promise<T>, what: string, ms = 15_000) => Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timed out waiting for ${what}`)), ms).unref())]);
         const settle = <T,>(promise: Promise<T>) => promise.then((value) => ({ ok: value }), (error: unknown) => ({ error }));
 
-        // Cleanup runs only once the server has been positively identified, so a wrong target is never sent a delete.
+        // Cleanup runs only once the server has been positively identified, AND identified again right before it, so a wrong target is never sent a delete.
+        // Re-run before ANY cleanup: a check made when the suite started says nothing about the server that answers now.
+        const verifyIdentity = () =>
+            verifyConnectedIdentity(
+                async () => (await prisma.$queryRaw<ConnectedFacts[]>`select current_database() as db, inet_server_port() as port, host(inet_server_addr()) as addr, current_setting('data_directory') as "dataDirectory"`)[0] as ConnectedFacts,
+                expectedIdentityFor(check.url, expectedDataDirectoryFromEnv(process.env)),
+            );
         let verified = false;
+        let primaryFailure: unknown;
         try {
             trace("connected; checking target");
             // --- Read-only target check, before anything is written ----------------------------------------------------------
@@ -152,6 +169,8 @@ test(
             assert.notEqual(Number(reached.port), 5432, "never the default port, where a real local server may live");
             assert.ok(reached.addr === "127.0.0.1" || reached.addr === "::1", "the server was reached over loopback");
             assert.equal(reached.isolation, "read committed", "the default isolation level is READ COMMITTED, which the design assumes");
+            // Live identity check, including the data directory, before anything is written or deleted.
+            await verifyIdentity();
             verified = true;
             t.diagnostic(`PostgreSQL ${reached.version} on loopback, port ${reached.port}, database ${reached.db}, isolation ${reached.isolation}`);
 
@@ -443,13 +462,23 @@ test(
             // Nothing may be left waiting on a lock, and nothing outside this test's marker may have changed.
             await waitUntilNoneBlocked();
             assert.deepEqual(await unrelated(), unrelatedBefore, "unrelated rows are untouched");
+        } catch (error) {
+            primaryFailure = error;
+            throw error;
         } finally {
-            if (verified) {
+            // Marker cleanup runs only after the server verifies AGAIN. A refusal or failure is reported next to the test's own failure, never instead of it.
+            let cleanupFailure: unknown;
+            try {
+                await runMarkerCleanup({ marker, verified, verify: verifyIdentity, deletions: [
                 // Only this run's own rows: the marker is a fresh random prefix.
-                await prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } });
-                await prisma.brand.deleteMany({ where: { name: { startsWith: marker } } });
+                () => prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } }),
+                () => prisma.brand.deleteMany({ where: { name: { startsWith: marker } } }),
+                ] });
+            } catch (error) {
+                cleanupFailure = error;
             }
             await prisma.$disconnect();
+            if (cleanupFailure) throw combineFailures(primaryFailure, cleanupFailure);
         }
     },
 );

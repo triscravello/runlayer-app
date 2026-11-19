@@ -346,10 +346,15 @@ test("the importer's transaction and advisory-lock behavior is preserved", () =>
 test("the opt-in brand integration test is gated by the shared local-database guard", () => {
     const source = read("prisma/brandConstraints.integration.test.ts");
 
-    assert.match(source, /checkTestDatabase\(process\.env\)/);
+    assert.match(source, /resolveTestDatabase\(process\.env\)/);
     assert.match(source, /const skipReason = !check\.ok \?/);
     assert.match(source, /\{ skip: skipReason \}/);
-    assert.match(source, /DROP DATABASE IF EXISTS/);
+    // Scratch databases are created and dropped only through the verified manager (exact names, live identity re-checked), never by raw SQL here.
+    assert.match(source, /createScratchDatabaseManager\(/);
+    assert.match(source, /scratch\.finish\(\)/);
+    assert.doesNotMatch(source, /\$executeRawUnsafe\(`(?:DROP|CREATE) DATABASE/, "no raw database creation or deletion in the suite itself");
+    assert.doesNotMatch(source, /\.\.\.process\.env/, "no environment is spread into a child process");
+    assert.doesNotMatch(source, /spawnSync\(process\.execPath/, "the Prisma CLI is run only through runPrismaCli");
     const assignments = [...source.matchAll(/process\.env\.DATABASE_URL\s*=\s*([^;]+);/g)].map((match) => match[1].trim());
     assert.ok(assignments.every((value) => value.startsWith("check.url")), "DATABASE_URL is only ever set to the guarded test URL");
 });

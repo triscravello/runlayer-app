@@ -3,7 +3,8 @@
 // reach a real host. Assertions are on booleans and categories; nothing here prints or compares a real URL or credential.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -32,7 +33,14 @@ const HOSTILE = {
     RUNLAYER_ALLOW_DB_TESTS: "1",
     RUNLAYER_TEST_DATABASE_URL: "postgresql://x:y@127.0.0.1:54329/runlayer_regression_test",
 };
-const VALID_INTEGRATION = { ...BASE, RUNLAYER_ALLOW_DB_TESTS: "1", RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/runlayer_regression_test" };
+const VALID_INTEGRATION = {
+    ...BASE,
+    RUNLAYER_ALLOW_DB_TESTS: "1",
+    RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:54329/runlayer_regression_test",
+    // What `npm run db:disposable:check` validated: the same database, and the data directory the suites will confirm.
+    RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.1:54329/runlayer_regression_test",
+    RUNLAYER_DISPOSABLE_DATA_DIR: "/tmp/scratch/pgdata",
+};
 
 const run = (args: string[], env: Record<string, string>, cwd = root) => spawnSync(process.execPath, args, { cwd, env: env as NodeJS.ProcessEnv, encoding: "utf8", timeout: 120_000 });
 const report = (result: ReturnType<typeof run>) => {
@@ -139,13 +147,13 @@ test("6: a valid local integration configuration is accepted, keeps its opt-in v
     assert.deepEqual(report(run(["--require", guard, "-e", script], { ...VALID_INTEGRATION, RUNLAYER_TEST_PROFILE: "integration" })), { allow: "1", hasTarget: true, appHost: "127.0.0.1", profile: "integration", remoteBlocked: true });
 });
 
-test("7: the preload's integration rules agree with the existing lib/auth/testDatabaseGuard rules (and are only stricter about host overrides)", () => {
+test("7: the launcher, the preload and lib/auth/testDatabaseGuard apply ONE rule set: they accept and refuse exactly the same targets", () => {
     for (const [label, env] of [["valid", VALID_INTEGRATION] as const, ...INTEGRATION_CASES]) {
         const existing = checkTestDatabase(env).ok;
-        const stricterThanTheExistingGuard = label === "host-override parameter" || label.includes("5432");
-        const expectedByNewRules = stricterThanTheExistingGuard ? false : existing;
         const fresh = run([launcher, "--integration", "--dry-run"], env).status === 0;
-        assert.equal(fresh, expectedByNewRules, label);
+        assert.equal(fresh, existing, label);
+        const preload = run(["--require", guard, "-e", "console.log('STARTED')"], { ...env, RUNLAYER_TEST_PROFILE: "integration" }).status === 0;
+        assert.equal(preload, existing, `preload: ${label}`);
     }
 });
 
@@ -197,4 +205,96 @@ test("8: a skipped integration test makes the integration launcher exit nonzero;
         assert.equal(result.status, 0, (result.stdout ?? "").slice(-300));
         assert.match(result.stdout ?? "", /^# skipped 0$/m);
     });
+});
+
+// --- G2-A2-I: runner-to-wrapper identity, ambient preloads, sequential execution, direct execution ------------------------------------------------
+
+const dryRun = (env: Record<string, string>) => run([launcher, "--integration", "--dry-run"], env);
+const refusedBy = (env: Record<string, string>, code: RegExp) => {
+    const result = dryRun(env);
+    assert.equal(result.status, 2, `accepted: ${code}`);
+    assert.match(result.stderr ?? "", code);
+    assert.equal(result.stdout ?? "", "");
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, /u:p@|127\.0\.0\.1:54329|runlayer_regression_test/, "no URL, credential or database name is printed");
+};
+
+test("9: the runner refuses, before launching anything, unless the wrapper's target and the suites' target are the same valid database", () => {
+    const plan = JSON.parse(dryRun(VALID_INTEGRATION).stdout) as { concurrency: number; agreedTarget: string };
+    assert.equal(plan.concurrency, 1, "integration suites run strictly one file at a time");
+    assert.equal(plan.agreedTarget, "127.0.0.1:54329/runlayer_regression_test", "only host, port and database are reported, never credentials");
+
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "" }, /wrapper_target_missing/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "postgresql://u@localhost:54329/runlayer_regression_test" }, /wrapper_target_invalid/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.1:5432/runlayer_regression_test" }, /wrapper_target_invalid/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.1:54330/runlayer_regression_test" }, /wrapper_test_target_mismatch/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.2:54329/runlayer_regression_test" }, /wrapper_test_target_mismatch/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.1:54329/runlayer_other_test" }, /wrapper_test_target_mismatch/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_DATA_DIR: "" }, /wrapper_data_dir_missing/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_DATA_DIR: "pgdata" }, /wrapper_data_dir_not_absolute/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_DISPOSABLE_DATA_DIR: "/tmp/a/../pgdata" }, /wrapper_data_dir_ambiguous/);
+    refusedBy({ ...VALID_INTEGRATION, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1:6543/runlayer_regression_test", RUNLAYER_DISPOSABLE_URL: "postgresql://u@127.0.0.1:6543/runlayer_regression_test" }, /pooler/);
+});
+
+test("9: integration mode refuses an ambient preload in NODE_OPTIONS instead of preserving it, and still allows harmless options", () => {
+    const dir = mkdtempSync(join(tmpdir(), "runlayer-preload-"));
+    try {
+        const harmless = join(dir, "noop.cjs");
+        writeFileSync(harmless, "// does nothing\n");
+        for (const options of [`--require ${harmless}`, `-r ${harmless}`, `--import ${harmless}`, `--loader ${harmless}`, `--max-old-space-size=2048 --require=${harmless}`]) {
+            refusedBy({ ...VALID_INTEGRATION, NODE_OPTIONS: options }, /node_options_preload_present/);
+        }
+        assert.equal(dryRun({ ...VALID_INTEGRATION, NODE_OPTIONS: "--max-old-space-size=2048" }).status, 0, "a harmless option is allowed");
+        assert.equal(run([launcher, "--dry-run"], { ...BASE, NODE_OPTIONS: `--require ${harmless}` }).status, 0, "ordinary unit-test behavior is unchanged");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("9: the test processes never see the wrapper's variables, get the validated data directory, and the integration files run one at a time", () => {
+    const fake = (name: string) => `import test from "node:test";
+import { appendFileSync } from "node:fs";
+test("fake ${name}", async () => {
+    const log = process.env.FAKE_LOG as string;
+    appendFileSync(log, "start-${name}\\n");
+    appendFileSync(log, "env-${name} " + JSON.stringify({ wrapperVariables: Object.keys(process.env).filter((key) => key.startsWith("RUNLAYER_DISPOSABLE_")), dataDirectory: process.env.RUNLAYER_TEST_EXPECTED_DATA_DIR, concurrencyArg: process.execArgv.concat(process.argv).filter((arg) => arg.startsWith("--test-concurrency")) }) + "\\n");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    appendFileSync(log, "end-${name}\\n");
+});
+`;
+    const logDir = mkdtempSync(join(tmpdir(), "runlayer-fake-log-"));
+    const log = join(logDir, "events.log");
+    try {
+        withFakeProject({ "a.integration.test.ts": fake("a"), "b.integration.test.ts": fake("b") }, (dir) => {
+            const result = run([join(dir, "scripts", "runTests.mjs"), "--integration"], { ...VALID_INTEGRATION, FAKE_LOG: log }, dir);
+            assert.equal(result.status, 0, `${(result.stdout ?? "").slice(-400)}${(result.stderr ?? "").slice(-300)}`);
+        });
+        const lines = readFileSync(log, "utf8").trim().split("\n");
+        const events = lines.filter((line) => /^(start|end)-/.test(line));
+        assert.deepEqual(events.map((line) => line.replace(/-[ab]$/, "")), ["start", "end", "start", "end"], `files must not interleave: ${events.join(", ")}`);
+        assert.equal(events[0]?.slice(-1), events[1]?.slice(-1), "each file finishes before the next one starts");
+        for (const line of lines.filter((entry) => entry.startsWith("env-"))) {
+            const report = JSON.parse(line.slice(line.indexOf("{"))) as { wrapperVariables: string[]; dataDirectory: string };
+            assert.deepEqual(report.wrapperVariables, [], "RUNLAYER_DISPOSABLE_* is stripped from the test processes");
+            assert.equal(report.dataDirectory, "/tmp/scratch/pgdata", "the wrapper's validated data directory is passed on under the test-side name");
+        }
+    } finally {
+        rmSync(logDir, { recursive: true, force: true });
+    }
+});
+
+const tsxCli = createRequire(import.meta.url).resolve("tsx/cli");
+const directRun = (file: string, env: Record<string, string>) => spawnSync(process.execPath, [tsxCli, "--test", file], { cwd: root, env: env as NodeJS.ProcessEnv, encoding: "utf8", timeout: 120_000 });
+
+test("10: running an integration file DIRECTLY (no launcher, no preload) refuses an invalid target loudly before any connection; not opted in, it skips", () => {
+    // Every target below is unreachable or invalid by construction, so even a broken guard could not touch a real server.
+    const suite = "prisma/brandConstraints.integration.test.ts";
+    for (const url of ["postgresql://u:p@localhost:54997/runlayer_x_test", "postgresql://u:p@127.0.0.1:54997/app_test", "postgresql://u:p@127.0.0.1/runlayer_x_test", "postgresql://u:p@127.1:54997/runlayer_x_test", "postgresql://u:p@db.example.invalid:54997/runlayer_x_test", "postgresql://u:p@127.0.0.1:6543/runlayer_x_test"]) {
+        const result = directRun(suite, { ...BASE, RUNLAYER_ALLOW_DB_TESTS: "1", RUNLAYER_TEST_DATABASE_URL: url });
+        assert.notEqual(result.status, 0, `a direct run must fail: ${url.replace(/:p@/, ":<>@")}`);
+        assert.match(`${result.stdout}${result.stderr}`, /integration tests refused/, url.replace(/:p@/, ":<>@"));
+        assert.doesNotMatch(`${result.stdout}${result.stderr}`, /:p@|example\.invalid/, "no URL echoed");
+    }
+    const skipped = directRun(suite, { ...BASE, RUNLAYER_TEST_DATABASE_URL: "postgresql://u:p@localhost:5432/anything" });
+    assert.equal(skipped.status, 0, `${skipped.stdout}${skipped.stderr}`.slice(-400));
+    assert.match(skipped.stdout, /^# skipped 1$/m, "without the opt-in the suite skips safely, before any connection");
 });

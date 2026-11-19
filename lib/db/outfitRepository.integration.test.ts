@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { checkTestDatabase } from "../auth/testDatabaseGuard";
+import { resolveTestDatabase } from "../auth/testDatabaseGuard";
+import { combineFailures, runMarkerCleanup } from "../../test-support/isolation/markerCleanup";
+import { expectedDataDirectoryFromEnv, expectedIdentityFor, verifyConnectedIdentity, type ConnectedFacts } from "../../test-support/isolation/connectedIdentity";
 import { toBrandIdentity } from "../ingestion/brandResolution";
 
 /**
@@ -11,15 +13,23 @@ import { toBrandIdentity } from "../ingestion/brandResolution";
  * applies migrations and never touches DATABASE_URL's database):
  *
  *   RUNLAYER_ALLOW_DB_TESTS=1 \
- *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/runlayer_outfit_test \
- *   npx tsx --test lib/db/outfitRepository.integration.test.ts
+ *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/runlayer_<name>_test \
+ *   RUNLAYER_DISPOSABLE_URL=<the same host, port and database> \
+ *   RUNLAYER_DISPOSABLE_DATA_DIR=<the disposable cluster's canonical data directory> \
+ *   node scripts/runTests.mjs --integration lib/db/outfitRepository.integration.test.ts
+ *
+ * The target must be a literal loopback IP on an explicit port that is not 5432 or 6543, with a database name matching
+ * runlayer_..._test_... (never `localhost`). The runner also requires RUNLAYER_DISPOSABLE_URL to name the same database and passes the
+ * wrapper's data directory on as RUNLAYER_TEST_EXPECTED_DATA_DIR; run without the runner, set that variable yourself, because every
+ * suite checks the live server's database, port, address AND data directory before it writes anything. With RUNLAYER_ALLOW_DB_TESTS=1
+ * an invalid target FAILS loudly before any connection; without it the suite skips. See README "Testing".
  *
  * Safeguards (lib/auth/testDatabaseGuard.ts): explicit opt-in, local host only, database name must contain "test",
  * and it must differ from DATABASE_URL. Before anything is written the test also asks the server it reached for its
  * database name and port. Every row it creates carries a unique marker and only those rows are deleted; rows without
  * the marker are counted and snapshotted before and after to prove unrelated records are left alone.
  */
-const check = checkTestDatabase(process.env);
+const check = resolveTestDatabase(process.env);
 
 test(
     "saved outfit transactions against a real PostgreSQL database",
@@ -75,12 +85,18 @@ test(
                 }, options),
         });
 
+        // Re-run before ANY cleanup: a check made when the suite started says nothing about the server that answers now.
+        const verifyIdentity = () =>
+            verifyConnectedIdentity(
+                async () => (await prisma.$queryRaw<ConnectedFacts[]>`select current_database() as db, inet_server_port() as port, host(inet_server_addr()) as addr, current_setting('data_directory') as "dataDirectory"`)[0] as ConnectedFacts,
+                expectedIdentityFor(check.url, expectedDataDirectoryFromEnv(process.env)),
+            );
+        let verified = false;
+        let primaryFailure: unknown;
         try {
-            // Read-only target check before anything is written.
-            const target = new URL(check.url);
-            const [reached] = await prisma.$queryRaw<Array<{ db: string; port: number | null }>>`select current_database() as db, inet_server_port() as port`;
-            assert.equal(reached.db, decodeURIComponent(target.pathname.replace(/^\//, "")), "connected to the intended database");
-            assert.equal(Number(reached.port), Number(target.port || 5432), "connected to the intended server port");
+            // Live identity check (database, port, loopback address AND data directory) before anything is written.
+            await verifyIdentity();
+            verified = true;
 
             // --- fixtures ---------------------------------------------------------------------------------------
             const [userA, userB, userC] = await Promise.all(["a", "b", "c"].map((name) => prisma.user.create({ data: { email: email(name), passwordHash: "integration-test-not-a-real-hash" } })));
@@ -347,11 +363,23 @@ test(
                 assert.equal(await snapshot(sentinel.id), sentinelBefore, "the unrelated user's outfit and items are byte-identical");
                 assert.deepEqual(await unrelatedCounts(), unrelatedBefore, "no unrelated users, outfits, items or gear were added or removed");
             });
+        } catch (error) {
+            primaryFailure = error;
+            throw error;
         } finally {
-            await prisma.user.deleteMany({ where: { email: { startsWith: marker } } });
-            await prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } });
-            await prisma.brand.deleteMany({ where: { name: { startsWith: marker } } });
+            // Marker cleanup runs only after the server verifies AGAIN. A refusal or failure is reported next to the test's own failure, never instead of it.
+            let cleanupFailure: unknown;
+            try {
+                await runMarkerCleanup({ marker, verified, verify: verifyIdentity, deletions: [
+                () => prisma.user.deleteMany({ where: { email: { startsWith: marker } } }),
+                () => prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } }),
+                () => prisma.brand.deleteMany({ where: { name: { startsWith: marker } } }),
+                ] });
+            } catch (error) {
+                cleanupFailure = error;
+            }
             await prisma.$disconnect();
+            if (cleanupFailure) throw combineFailures(primaryFailure, cleanupFailure);
         }
     },
 );

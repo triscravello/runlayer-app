@@ -7,7 +7,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { resolveTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { expectedDataDirectoryFromEnv, expectedIdentityFor, verifyConnectedIdentity, type ConnectedFacts } from "../test-support/isolation/connectedIdentity";
+import { assertScratchUrl, buildPsqlEnvironment, runPrismaCli } from "../test-support/isolation/prismaChild";
+import { combineFailures } from "../test-support/isolation/markerCleanup";
+import { createScratchDatabaseManager } from "../test-support/isolation/scratchDatabase";
 import { isBrandUniqueConflict } from "../lib/db/brandErrors";
 import { auditBrands } from "../lib/ingestion/brandKeyAudit";
 import { normalizeBrandKey } from "../lib/ingestion/brandResolution";
@@ -21,8 +25,16 @@ import { sqlBackfillKey } from "../lib/ingestion/brandKeyAudit";
  * It needs a server-level connection, because it creates its own throwaway databases (and drops them afterwards):
  *
  *   RUNLAYER_ALLOW_DB_TESTS=1 \
- *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/runlayer_brands_test \
- *   npx tsx --test prisma/brandConstraints.integration.test.ts
+ *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/runlayer_<name>_test \
+ *   RUNLAYER_DISPOSABLE_URL=<the same host, port and database> \
+ *   RUNLAYER_DISPOSABLE_DATA_DIR=<the disposable cluster's canonical data directory> \
+ *   node scripts/runTests.mjs --integration prisma/brandConstraints.integration.test.ts
+ *
+ * The target must be a literal loopback IP on an explicit port that is not 5432 or 6543, with a database name matching
+ * runlayer_..._test_... (never `localhost`). The runner also requires RUNLAYER_DISPOSABLE_URL to name the same database and passes the
+ * wrapper's data directory on as RUNLAYER_TEST_EXPECTED_DATA_DIR; run without the runner, set that variable yourself, because every
+ * suite checks the live server's database, port, address AND data directory before it writes anything. With RUNLAYER_ALLOW_DB_TESTS=1
+ * an invalid target FAILS loudly before any connection; without it the suite skips. See README "Testing".
  *
  * The URL is checked by lib/auth/testDatabaseGuard.ts (opt-in, local host only, database name contains "test", differs
  * from DATABASE_URL). Every database this test creates is named "<that database>_br_<label>_<random>", so it also contains
@@ -42,7 +54,7 @@ import { sqlBackfillKey } from "../lib/ingestion/brandKeyAudit";
  * equivalent names end with one row; the new index is usable; and a rollback restores the previous shape.
  */
 const root = fileURLToPath(new URL("../", import.meta.url));
-const check = checkTestDatabase(process.env);
+const check = resolveTestDatabase(process.env);
 const psqlPath = process.env.RUNLAYER_TEST_PSQL?.trim() || "psql";
 const prismaCli = `${root}node_modules/prisma/build/index.js`;
 const psqlAvailable = spawnSync(psqlPath, ["--version"], { encoding: "utf8" }).status === 0;
@@ -75,17 +87,27 @@ test("brand identity migration against real PostgreSQL", { skip: skipReason }, a
     const adminUrl = check.url;
     const adminDatabase = decodeURIComponent(new URL(adminUrl).pathname.replace(/^\//, ""));
     const suffix = randomUUID().replace(/-/g, "").slice(0, 8);
-    const created: string[] = [];
     const workdirs: string[] = [];
     const admin = new PrismaClient({ datasources: { db: { url: adminUrl } } });
     const clients: PrismaClient[] = [];
 
+    // Every administrative step is gated on the live identity of the server (database, port, loopback address AND data directory),
+    // on an exact scratch-name derivation, and on this run's own bookkeeping; see test-support/isolation/scratchDatabase.ts.
+    const expectedIdentity = expectedIdentityFor(adminUrl, expectedDataDirectoryFromEnv(process.env));
+    const verifyIdentity = () => verifyConnectedIdentity(async () => (await admin.$queryRaw<ConnectedFacts[]>`select current_database() as db, inet_server_port() as port, host(inet_server_addr()) as addr, current_setting('data_directory') as "dataDirectory"`)[0] as ConnectedFacts, expectedIdentity);
+    const scratch = createScratchDatabaseManager({
+        baseDatabase: adminDatabase,
+        kind: "br",
+        suffix,
+        verifyIdentity,
+        admin: {
+            execute: (sql) => admin.$executeRawUnsafe(sql),
+            listDatabases: async () => (await admin.$queryRaw<Array<{ datname: string }>>`select datname from pg_database where not datistemplate`).map((row) => row.datname),
+        },
+    });
+
     async function createScratchDatabase(label: string) {
-        const name = `${adminDatabase}_br_${label}_${suffix}`.toLowerCase();
-        assert.match(name, /^[a-z0-9_]+$/, "database name is a safe identifier");
-        assert.match(name, /test/, "scratch database names contain 'test'");
-        await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
-        created.push(name);
+        const name = await scratch.create(label);
         const url = withDatabase(adminUrl, name);
         const client = new PrismaClient({ datasources: { db: { url } } });
         clients.push(client);
@@ -107,21 +129,18 @@ test("brand identity migration against real PostgreSQL", { skip: skipReason }, a
         return dir;
     }
 
-    function prisma(dir: string, databaseUrl: string, args: string[], withSchema = true) {
-        const result = spawnSync(process.execPath, [prismaCli, ...args, ...(withSchema ? ["--schema", join(dir, "prisma", "schema.prisma")] : [])], {
-            cwd: dir,
-            env: { ...process.env, DATABASE_URL: databaseUrl, CHECKPOINT_DISABLE: "1", PRISMA_HIDE_UPDATE_MESSAGE: "1" },
-            encoding: "utf8",
-        });
-        return { status: result.status, output: redact(`${result.stdout}\n${result.stderr}`) };
+    // The ONLY way this suite runs the Prisma CLI: validated, allowlisted environment, child guard, approved operations only.
+    function prisma(dir: string, databaseUrl: string, args: string[]) {
+        return runPrismaCli({ baseUrl: adminUrl, databaseUrl, workdir: dir, args: [...args, "--schema", join(dir, "prisma", "schema.prisma")] });
     }
 
     function psql(databaseUrl: string, script: string) {
+        assertScratchUrl(adminUrl, databaseUrl);
         const target = new URL(databaseUrl);
         const result = spawnSync(
             psqlPath,
             ["-X", "-q", "-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=1", "-h", target.hostname.replace(/^\[|\]$/g, ""), "-p", target.port || "5432", "-U", decodeURIComponent(target.username), "-d", decodeURIComponent(target.pathname.slice(1)), "-f", `${root}prisma/maintenance/${script}`],
-            { env: { ...process.env, PGPASSWORD: decodeURIComponent(target.password) }, encoding: "utf8" },
+            { env: buildPsqlEnvironment(decodeURIComponent(target.password)), encoding: "utf8" },
         );
         return { status: result.status, lines: result.stdout.split("\n").map((line) => line.trim()).filter(Boolean), output: redact(`${result.stdout}\n${result.stderr}`) };
     }
@@ -139,11 +158,10 @@ test("brand identity migration against real PostgreSQL", { skip: skipReason }, a
     const insertGear = (client: PrismaClient, id: string, name: string, brandId: string) =>
         client.$executeRawUnsafe(`INSERT INTO gear_items (id, name, brand_id, category, "priceRange", tags, body_type_fit) VALUES ($1, $2, $3, 'TOP', 'MID', '{}', '{}')`, id, name, brandId);
 
+    let primaryFailure: unknown;
     try {
         const [server] = await admin.$queryRaw<Array<{ version: string; db: string; port: number | null }>>`select current_setting('server_version') as version, current_database() as db, inet_server_port() as port`;
-        const target = new URL(adminUrl);
-        assert.equal(server.db, adminDatabase, "connected to the intended database");
-        assert.equal(Number(server.port), Number(target.port || 5432), "connected to the intended server port");
+        await verifyIdentity();
         t.diagnostic(`PostgreSQL server_version ${server.version}`);
         assert.ok(Number(server.version.split(".")[0]) >= 14, "PostgreSQL 14 or newer");
 
@@ -171,26 +189,18 @@ test("brand identity migration against real PostgreSQL", { skip: skipReason }, a
         await t.test("the Prisma schema and the migrations agree (no drift); a candidate CHECK constraint is recorded as a diagnostic", async () => {
             const shadow = await createScratchDatabase("shadow");
             const dir = buildWorkdir(() => true);
-            const diff = spawnSync(process.execPath, [prismaCli, "migrate", "diff", "--from-migrations", join(dir, "prisma", "migrations"), "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--shadow-database-url", shadow.url, "--exit-code"], {
-                cwd: dir,
-                env: { ...process.env, DATABASE_URL: shadow.url, CHECKPOINT_DISABLE: "1" },
-                encoding: "utf8",
-            });
-            assert.equal(diff.status, 0, redact(`${diff.stdout}\n${diff.stderr}`));
+            const diff = runPrismaCli({ baseUrl: adminUrl, databaseUrl: shadow.url, workdir: dir, args: ["migrate", "diff", "--from-migrations", join(dir, "prisma", "migrations"), "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--shadow-database-url", shadow.url, "--exit-code"] });
+            assert.equal(diff.status, 0, diff.output);
 
             // Experiment (never asserted): does Prisma report a CHECK constraint on a live database as drift?
             const live = await createScratchDatabase("check");
             assert.equal(prisma(dir, live.url, ["migrate", "deploy"]).status, 0);
-            const fromLive = () => spawnSync(process.execPath, [prismaCli, "migrate", "diff", "--from-url", live.url, "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--exit-code"], {
-                cwd: dir,
-                env: { ...process.env, DATABASE_URL: live.url, CHECKPOINT_DISABLE: "1" },
-                encoding: "utf8",
-            });
+            const fromLive = () => runPrismaCli({ baseUrl: adminUrl, databaseUrl: live.url, workdir: dir, args: ["migrate", "diff", "--from-url", live.url, "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--exit-code"] });
             assert.equal(fromLive().status, 0, "baseline: a live database that matches the schema reports no difference (the method works)");
 
             await live.client.$executeRawUnsafe(`ALTER TABLE brands ADD CONSTRAINT brands_normalized_name_shape_check CHECK (normalized_name <> '' AND char_length(normalized_name) <= 100 AND normalized_name = btrim(normalized_name) AND position('  ' in normalized_name) = 0)`);
             const withCheck = fromLive();
-            t.diagnostic(`candidate CHECK constraint: prisma migrate diff exit code ${withCheck.status} (0 = not reported as drift, 2 = reported as drift); first output line: ${redact(`${withCheck.stdout}${withCheck.stderr}`).split("\n").find((line) => line.trim()) ?? "(none)"}`);
+            t.diagnostic(`candidate CHECK constraint: prisma migrate diff exit code ${withCheck.status} (0 = not reported as drift, 2 = reported as drift); first output line: ${withCheck.output.split("\n").find((line) => line.trim()) ?? "(none)"}`);
         });
 
         await t.test("lifecycle: census, exact audit and preview agree and change nothing; each guard refuses with a visible message; recovery; migration; keys; uniqueness; rollback", async () => {
@@ -391,13 +401,21 @@ test("brand identity migration against real PostgreSQL", { skip: skipReason }, a
             assert.equal(again.name, "Display Keeper");
             assert.equal(again.tier, "premium");
         });
+    } catch (error) {
+        primaryFailure = error;
+        throw error;
     } finally {
         await Promise.all(clients.map((client) => client.$disconnect().catch(() => undefined)));
-        for (const name of created) {
-            await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`).catch(() => undefined);
+        // Drops only the databases this run created (exact names, identity re-verified) and REPORTS any failure or leftover.
+        let cleanupFailure: unknown;
+        try {
+            await scratch.finish();
+        } catch (error) {
+            cleanupFailure = error;
         }
         await admin.$disconnect();
         for (const dir of workdirs) rmSync(dir, { recursive: true, force: true });
+        if (cleanupFailure) throw combineFailures(primaryFailure, cleanupFailure);
     }
 
     // Inserts a post-migration brand row WITH an explicit key.

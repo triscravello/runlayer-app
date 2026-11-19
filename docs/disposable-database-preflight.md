@@ -111,3 +111,30 @@ checked by table names only, not columns, indexes or constraints.
 - **There is no in-code jail self-test.** Nothing in the wrapper detects that it is running outside a jail; the canary described above was run by hand.
 - **Raw Prisma commands bypass everything here.** `npx prisma migrate deploy`, `migrate reset`, `db push` and the like remain possible and unguarded
   against any `DATABASE_URL`; only `npm run db:disposable:*` is protected.
+
+## Integration suites against a wrapper-prepared database (Stage G2-A2-I: implemented and tested OFFLINE only)
+
+The six opt-in suites (`*.integration.test.ts`) are meant to run against the cluster this wrapper validated. The pieces below were added and are
+covered by offline tests; **no live run of the integration suites has been performed** (that is a separate, later stage).
+
+- **One target policy.** `test-support/isolation/target.cjs` applies the same rules as `parseDisposableTarget` (literal loopback IP, explicit port
+  at least 1024 and never 5432/6543, `runlayer_..._test_...` names, only `schema=public` and `connect_timeout`). A table test
+  (`targetAgreement.test.ts`) runs both over thousands of host/port/name/query combinations and fails if they ever disagree.
+- **Runner-to-wrapper agreement.** `npm run test:integration` requires `RUNLAYER_DISPOSABLE_URL` and `RUNLAYER_TEST_DATABASE_URL` to name the same
+  host, port and database and requires `RUNLAYER_DISPOSABLE_DATA_DIR`. Neither variable is derived from the other: the operator (or the G2-B script) sets
+  both from one value. The runner then strips `RUNLAYER_DISPOSABLE_*`, passes the data directory on as `RUNLAYER_TEST_EXPECTED_DATA_DIR`, refuses an
+  ambient `--require`/`--import`/`--loader` in `NODE_OPTIONS`, and runs the files one at a time.
+- **Live identity.** Each suite verifies the connected server's database, port, loopback address and data directory (`connectedIdentity.ts`) before any
+  write or administrative statement; a matching URL alone is never accepted as evidence.
+- **Direct execution.** `resolveTestDatabase` throws, before any connection, when `RUNLAYER_ALLOW_DB_TESTS=1` and the target is invalid; without the
+  opt-in the suites skip.
+- **Child isolation.** `guard.cjs` is unchanged (every process it loads into still gets the unreachable sentinel `DATABASE_URL`). The Prisma CLI children
+  of the two constraint suites instead run without it, through `prismaChild.ts` and `child-guard.cjs`, which accept exactly one narrow configuration
+  (base target + derived scratch database + the exact `NODE_OPTIONS` + approved `prisma migrate` operations + no other connection variable).
+- **Scratch databases.** Created and dropped only by `scratchDatabase.ts` (exact derived name, identity re-verified before every `CREATE` and `DROP`,
+  only this run's databases, failures and leftovers reported).
+
+**Not established.** The environment allowlist for the Prisma CLI child (`PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`) and the child guard's refusal of any
+Node-level hostname lookup have not been exercised against the real Prisma CLI; a live stage may show that another variable is needed, and that is a
+reviewed change to the allowlist, not a broader environment. The native Prisma engines and `psql` are outside every Node-level hook: the manual
+`sandbox-exec` jail remains mandatory, and DNS still resolves inside it.

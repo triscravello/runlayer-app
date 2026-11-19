@@ -7,7 +7,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { resolveTestDatabase } from "../lib/auth/testDatabaseGuard";
+import { expectedDataDirectoryFromEnv, expectedIdentityFor, verifyConnectedIdentity, type ConnectedFacts } from "../test-support/isolation/connectedIdentity";
+import { assertScratchUrl, buildPsqlEnvironment, runPrismaCli } from "../test-support/isolation/prismaChild";
+import { combineFailures } from "../test-support/isolation/markerCleanup";
+import { createScratchDatabaseManager } from "../test-support/isolation/scratchDatabase";
 
 /**
  * Lifecycle of the Phase 2C outfit-item constraint migration against REAL PostgreSQL servers. Skipped by default.
@@ -15,8 +19,16 @@ import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
  * It needs a server-level connection, because it creates its own throwaway databases (and drops them afterwards):
  *
  *   RUNLAYER_ALLOW_DB_TESTS=1 \
- *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/runlayer_constraints_test \
- *   npx tsx --test prisma/outfitConstraints.integration.test.ts
+ *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/runlayer_<name>_test \
+ *   RUNLAYER_DISPOSABLE_URL=<the same host, port and database> \
+ *   RUNLAYER_DISPOSABLE_DATA_DIR=<the disposable cluster's canonical data directory> \
+ *   node scripts/runTests.mjs --integration prisma/outfitConstraints.integration.test.ts
+ *
+ * The target must be a literal loopback IP on an explicit port that is not 5432 or 6543, with a database name matching
+ * runlayer_..._test_... (never `localhost`). The runner also requires RUNLAYER_DISPOSABLE_URL to name the same database and passes the
+ * wrapper's data directory on as RUNLAYER_TEST_EXPECTED_DATA_DIR; run without the runner, set that variable yourself, because every
+ * suite checks the live server's database, port, address AND data directory before it writes anything. With RUNLAYER_ALLOW_DB_TESTS=1
+ * an invalid target FAILS loudly before any connection; without it the suite skips. See README "Testing".
  *
  * The URL is checked by lib/auth/testDatabaseGuard.ts (opt-in, local host only, database name contains "test", differs
  * from DATABASE_URL). Every database this test creates is named "<that database>_c2_<random>", so it also contains
@@ -38,7 +50,7 @@ import { checkTestDatabase } from "../lib/auth/testDatabaseGuard";
  * indexes are usable; and a rollback (dropping the indexes) restores the previous index set.
  */
 const root = fileURLToPath(new URL("../", import.meta.url));
-const check = checkTestDatabase(process.env);
+const check = resolveTestDatabase(process.env);
 const psqlPath = process.env.RUNLAYER_TEST_PSQL?.trim() || "psql";
 const prismaCli = `${root}node_modules/prisma/build/index.js`;
 const psqlAvailable = spawnSync(psqlPath, ["--version"], { encoding: "utf8" }).status === 0;
@@ -62,17 +74,27 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
     const adminUrl = check.url;
     const adminDatabase = decodeURIComponent(new URL(adminUrl).pathname.replace(/^\//, ""));
     const suffix = randomUUID().replace(/-/g, "").slice(0, 8);
-    const created: string[] = [];
     const workdirs: string[] = [];
     const admin = new PrismaClient({ datasources: { db: { url: adminUrl } } });
     const clients: PrismaClient[] = [];
 
+    // Every administrative step is gated on the live identity of the server (database, port, loopback address AND data directory),
+    // on an exact scratch-name derivation, and on this run's own bookkeeping; see test-support/isolation/scratchDatabase.ts.
+    const expectedIdentity = expectedIdentityFor(adminUrl, expectedDataDirectoryFromEnv(process.env));
+    const verifyIdentity = () => verifyConnectedIdentity(async () => (await admin.$queryRaw<ConnectedFacts[]>`select current_database() as db, inet_server_port() as port, host(inet_server_addr()) as addr, current_setting('data_directory') as "dataDirectory"`)[0] as ConnectedFacts, expectedIdentity);
+    const scratch = createScratchDatabaseManager({
+        baseDatabase: adminDatabase,
+        kind: "c2",
+        suffix,
+        verifyIdentity,
+        admin: {
+            execute: (sql) => admin.$executeRawUnsafe(sql),
+            listDatabases: async () => (await admin.$queryRaw<Array<{ datname: string }>>`select datname from pg_database where not datistemplate`).map((row) => row.datname),
+        },
+    });
+
     async function createScratchDatabase(label: string) {
-        const name = `${adminDatabase}_c2_${label}_${suffix}`.toLowerCase();
-        assert.match(name, /^[a-z0-9_]+$/, "database name is a safe identifier");
-        assert.match(name, /test/, "scratch database names contain 'test'");
-        await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
-        created.push(name);
+        const name = await scratch.create(label);
         const url = withDatabase(adminUrl, name);
         const client = new PrismaClient({ datasources: { db: { url } } });
         clients.push(client);
@@ -94,22 +116,19 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
         return dir;
     }
 
+    // The ONLY way this suite runs the Prisma CLI: validated, allowlisted environment, child guard, approved operations only.
     function prisma(dir: string, databaseUrl: string, args: string[]) {
-        const result = spawnSync(process.execPath, [prismaCli, ...args, "--schema", join(dir, "prisma", "schema.prisma")], {
-            cwd: dir,
-            env: { ...process.env, DATABASE_URL: databaseUrl, CHECKPOINT_DISABLE: "1", PRISMA_HIDE_UPDATE_MESSAGE: "1" },
-            encoding: "utf8",
-        });
-        return { status: result.status, output: redact(`${result.stdout}\n${result.stderr}`) };
+        return runPrismaCli({ baseUrl: adminUrl, databaseUrl, workdir: dir, args: [...args, "--schema", join(dir, "prisma", "schema.prisma")] });
     }
 
     function psql(databaseUrl: string, script: string, vars: Record<string, string> = {}) {
+        assertScratchUrl(adminUrl, databaseUrl);
         const target = new URL(databaseUrl);
         const result = spawnSync(
             psqlPath,
             ["-X", "-q", "-A", "-t", "-F", "|", "-h", target.hostname.replace(/^\[|\]$/g, ""), "-p", target.port || "5432", "-U", decodeURIComponent(target.username), "-d", decodeURIComponent(target.pathname.slice(1)),
                 ...Object.entries(vars).flatMap(([key, value]) => ["-v", `${key}=${value}`]), "-f", `${root}prisma/maintenance/${script}`],
-            { env: { ...process.env, PGPASSWORD: decodeURIComponent(target.password) }, encoding: "utf8" },
+            { env: buildPsqlEnvironment(decodeURIComponent(target.password)), encoding: "utf8" },
         );
         const lines = result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
         return { status: result.status, lines, output: redact(`${result.stdout}\n${result.stderr}`) };
@@ -121,11 +140,10 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
     const countRows = async (client: PrismaClient, table: string) => Number((await client.$queryRawUnsafe<Array<{ n: number }>>(`SELECT count(*)::int AS n FROM "${table}"`))[0].n);
     const tableExists = async (client: PrismaClient, table: string) => (await client.$queryRawUnsafe<Array<{ t: string | null }>>(`SELECT to_regclass('public.${table}')::text AS t`))[0].t !== null;
 
+    let primaryFailure: unknown;
     try {
         const [server] = await admin.$queryRaw<Array<{ version: string; db: string; port: number | null }>>`select current_setting('server_version') as version, current_database() as db, inet_server_port() as port`;
-        const target = new URL(adminUrl);
-        assert.equal(server.db, adminDatabase, "connected to the intended database");
-        assert.equal(Number(server.port), Number(target.port || 5432), "connected to the intended server port");
+        await verifyIdentity();
         t.diagnostic(`PostgreSQL server_version ${server.version}`);
         assert.ok(Number(server.version.split(".")[0]) >= 14, "PostgreSQL 14 or newer");
 
@@ -154,13 +172,9 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
         await t.test("the Prisma schema and the migrations agree (no drift)", async () => {
             const { url } = await createScratchDatabase("shadow");
             const dir = buildWorkdir(() => true);
-            const result = spawnSync(process.execPath, [prismaCli, "migrate", "diff", "--from-migrations", join(dir, "prisma", "migrations"), "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--shadow-database-url", url, "--exit-code"], {
-                cwd: dir,
-                env: { ...process.env, DATABASE_URL: url, CHECKPOINT_DISABLE: "1" },
-                encoding: "utf8",
-            });
+            const result = runPrismaCli({ baseUrl: adminUrl, databaseUrl: url, workdir: dir, args: ["migrate", "diff", "--from-migrations", join(dir, "prisma", "migrations"), "--to-schema-datamodel", join(dir, "prisma", "schema.prisma"), "--shadow-database-url", url, "--exit-code"] });
 
-            assert.equal(result.status, 0, redact(`${result.stdout}\n${result.stderr}`));
+            assert.equal(result.status, 0, result.output);
         });
 
         await t.test("duplicates: detection, refusal, remediation, restore, migration, constraint, indexes, rollback", async () => {
@@ -312,12 +326,20 @@ test("outfit constraint migration lifecycle against real PostgreSQL", { skip: sk
             assert.equal(await md5(client), afterMigration, "rolling back the indexes loses no data");
             t.diagnostic(`lifecycle database: ${name.replace(suffix, "<id>")}`);
         });
+    } catch (error) {
+        primaryFailure = error;
+        throw error;
     } finally {
         await Promise.all(clients.map((client) => client.$disconnect().catch(() => undefined)));
-        for (const name of created) {
-            await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`).catch(() => undefined);
+        // Drops only the databases this run created (exact names, identity re-verified) and REPORTS any failure or leftover.
+        let cleanupFailure: unknown;
+        try {
+            await scratch.finish();
+        } catch (error) {
+            cleanupFailure = error;
         }
         await admin.$disconnect();
         for (const dir of workdirs) rmSync(dir, { recursive: true, force: true });
+        if (cleanupFailure) throw combineFailures(primaryFailure, cleanupFailure);
     }
 });

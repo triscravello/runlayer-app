@@ -4,7 +4,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { checkTestDatabase } from "../auth/testDatabaseGuard";
+import { resolveTestDatabase } from "../auth/testDatabaseGuard";
+import { combineFailures, runMarkerCleanup } from "../../test-support/isolation/markerCleanup";
+import { expectedDataDirectoryFromEnv, expectedIdentityFor, verifyConnectedIdentity, type ConnectedFacts } from "../../test-support/isolation/connectedIdentity";
 import { BRAND_FAILURE, toBrandIdentity } from "./brandResolution";
 import { resolveImportBrands } from "./brandStore";
 import { importGear } from "./importGear";
@@ -17,15 +19,23 @@ import { parseGearJsonFiles } from "./parsers/jsonGearParser";
  * applies migrations and never touches DATABASE_URL's database):
  *
  *   RUNLAYER_ALLOW_DB_TESTS=1 \
- *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/runlayer_import_test \
- *   npx tsx --test lib/ingestion/importGear.integration.test.ts
+ *   RUNLAYER_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/runlayer_<name>_test \
+ *   RUNLAYER_DISPOSABLE_URL=<the same host, port and database> \
+ *   RUNLAYER_DISPOSABLE_DATA_DIR=<the disposable cluster's canonical data directory> \
+ *   node scripts/runTests.mjs --integration lib/ingestion/importGear.integration.test.ts
+ *
+ * The target must be a literal loopback IP on an explicit port that is not 5432 or 6543, with a database name matching
+ * runlayer_..._test_... (never `localhost`). The runner also requires RUNLAYER_DISPOSABLE_URL to name the same database and passes the
+ * wrapper's data directory on as RUNLAYER_TEST_EXPECTED_DATA_DIR; run without the runner, set that variable yourself, because every
+ * suite checks the live server's database, port, address AND data directory before it writes anything. With RUNLAYER_ALLOW_DB_TESTS=1
+ * an invalid target FAILS loudly before any connection; without it the suite skips. See README "Testing".
  *
  * Safeguards (lib/auth/testDatabaseGuard.ts): explicit opt-in, local host only, database name must contain "test",
  * and it must differ from DATABASE_URL. Before anything is written the test also asks the server it reached for its
  * database name and port. Every row it creates carries a unique marker prefix and only those rows are deleted.
  * Rows without the marker are counted before and after to prove the import leaves unrelated data alone.
  */
-const check = checkTestDatabase(process.env);
+const check = resolveTestDatabase(process.env);
 
 test(
     "catalog import against a real PostgreSQL database",
@@ -69,12 +79,18 @@ test(
             items: await prisma.gearItem.count({ where: { NOT: { name: { startsWith: marker } } } }),
         });
 
+        // Re-run before ANY cleanup: a check made when the suite started says nothing about the server that answers now.
+        const verifyIdentity = () =>
+            verifyConnectedIdentity(
+                async () => (await prisma.$queryRaw<ConnectedFacts[]>`select current_database() as db, inet_server_port() as port, host(inet_server_addr()) as addr, current_setting('data_directory') as "dataDirectory"`)[0] as ConnectedFacts,
+                expectedIdentityFor(check.url, expectedDataDirectoryFromEnv(process.env)),
+            );
+        let verified = false;
+        let primaryFailure: unknown;
         try {
-            // Read-only target check before anything is written.
-            const target = new URL(check.url);
-            const [reached] = await prisma.$queryRaw<Array<{ db: string; port: number | null }>>`select current_database() as db, inet_server_port() as port`;
-            assert.equal(reached.db, decodeURIComponent(target.pathname.replace(/^\//, "")), "connected to the intended database");
-            assert.equal(Number(reached.port), Number(target.port || 5432), "connected to the intended server port");
+            // Live identity check (database, port, loopback address AND data directory) before anything is written.
+            await verifyIdentity();
+            verified = true;
 
             // Unrelated catalog records that must survive every import untouched.
             const sentinelBrand = await prisma.brand.create({ data: brandData(nameOf("sentinel-brand")) });
@@ -218,11 +234,23 @@ test(
                 assert.equal(await snapshotSentinel(), sentinelBefore, "sentinel brand, item and variants are byte-identical");
                 assert.deepEqual(await unrelatedCounts(), unrelatedBefore, "no unrelated brands or items were added or removed");
             });
+        } catch (error) {
+            primaryFailure = error;
+            throw error;
         } finally {
-            await prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } });
-            await prisma.brand.deleteMany({ where: { name: { startsWith: marker } } });
+            // Marker cleanup runs only after the server verifies AGAIN. A refusal or failure is reported next to the test's own failure, never instead of it.
+            let cleanupFailure: unknown;
+            try {
+                await runMarkerCleanup({ marker, verified, verify: verifyIdentity, deletions: [
+                () => prisma.gearItem.deleteMany({ where: { name: { startsWith: marker } } }),
+                () => prisma.brand.deleteMany({ where: { name: { startsWith: marker } } }),
+                ] });
+            } catch (error) {
+                cleanupFailure = error;
+            }
             await prisma.$disconnect();
             await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+            if (cleanupFailure) throw combineFailures(primaryFailure, cleanupFailure);
         }
     },
 );

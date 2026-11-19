@@ -265,11 +265,14 @@ test("maintenance: no file contains a connection string or credential", () => {
 test("the opt-in lifecycle integration test is gated by the shared local-database guard", () => {
     const source = read("prisma/outfitConstraints.integration.test.ts");
 
-    assert.match(source, /checkTestDatabase\(process\.env\)/);
+    assert.match(source, /resolveTestDatabase\(process\.env\)/);
     assert.match(source, /const skipReason = !check\.ok \?/, "the skip reason starts from the guard result");
     assert.match(source, /\{ skip: skipReason \}/, "the test is skipped unless every precondition holds");
     assert.match(source, /database name contains "test"|name contains "test"/, "the scratch-database naming rule is documented");
-    assert.match(source, /DROP DATABASE IF EXISTS/, "it cleans up the databases it created");
+    assert.match(source, /createScratchDatabaseManager\(/, "scratch databases come from the verified manager");
+    assert.match(source, /scratch\.finish\(\)/, "it cleans up (and reports on) the databases it created");
+    assert.doesNotMatch(source, /\$executeRawUnsafe\(`(?:DROP|CREATE) DATABASE/, "no raw database creation or deletion in the suite itself");
+    assert.doesNotMatch(source, /spawnSync\(process\.execPath/, "the Prisma CLI is run only through runPrismaCli");
     const assignments = [...source.matchAll(/process\.env\.DATABASE_URL\s*=\s*([^;]+);/g)].map((match) => match[1].trim());
     assert.ok(assignments.length >= 1, "it pins the app's DATABASE_URL to the test URL");
     assert.ok(assignments.every((value) => value.startsWith("check.url")), "DATABASE_URL is only ever set to the guarded test URL");
